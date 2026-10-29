@@ -44,8 +44,7 @@ def parse_site_geometry(value: object) -> Polygon:
 
 def serialize_site_geometry(polygon: Polygon) -> PolygonGeoJSON:
     """Serialize closed rings, dropping exact adjacent duplicates without rounding."""
-    _validate_polygon(polygon)
-    canonical = _canonicalize(polygon)
+    canonical = normalize_polygon(polygon)
     return {
         "type": "Polygon",
         "coordinates": [
@@ -53,6 +52,12 @@ def serialize_site_geometry(polygon: Polygon) -> PolygonGeoJSON:
             for ring in [canonical.exterior, *canonical.interiors]
         ],
     }
+
+
+def normalize_polygon(polygon: Polygon) -> Polygon:
+    """Validate and canonically order a positive 2D polygon without repairing it."""
+    _validate_polygon(polygon)
+    return _canonicalize(polygon)
 
 
 def site_area_m2(polygon: Polygon) -> float:

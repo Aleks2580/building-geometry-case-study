@@ -2,7 +2,7 @@
 
 > The application currently provides the health endpoint, configuration, async
 > database-pool plumbing, sample sites, a tested TypeScript frontend scaffold, and
-> the pure site geometry foundation described below. Massing, persistence, and
+> pure site geometry, setbacks, and component selection. Massing, persistence, and
 > visualization functionality in this design remains planned.
 
 ## Problem interpretation
@@ -116,10 +116,12 @@ construction is a domain outcome.
 
 #### Implemented site geometry foundation
 
-`app/geometry/site.py` exposes three pure functions through `app.geometry`:
+`app/geometry/site.py` exposes pure functions through `app.geometry`:
 `parse_site_geometry` returns a normalized Shapely `Polygon`,
 `serialize_site_geometry` returns a typed `PolygonGeoJSON` dictionary, and
-`site_area_m2` measures exterior area minus holes. A Shapely polygon is the domain
+`site_area_m2` measures exterior area minus holes. `normalize_polygon` validates
+and applies the same canonicalization to directly supplied polygons, including
+generated setback components. A Shapely polygon is the domain
 value; no separate geometry wrapper, HTTP model, or database dependency is needed.
 `InvalidSiteGeometry` carries a message and input path for later transport translation.
 
@@ -162,8 +164,7 @@ results across different engine versions are not guaranteed.
 Tests close copies of the supplied open vertex-list fixtures before parsing, checking
 rectangle, L-shaped, and notched areas of 1000, 900, and 860 m² respectively. Additional
 cases cover holes, invalid topology/coordinates, tiny positive sites, deterministic
-ordering, and exact coordinate/area preservation through JSON round trips. Setbacks
-and component selection are not implemented by this foundation.
+ordering, and exact coordinate/area preservation through JSON round trips.
 
 ### Setbacks and floor limits
 
@@ -178,6 +179,53 @@ breaking ties by lexicographic bounding box then normalized serialized coordinat
 The response includes component count, retained/discarded area, and selection
 diagnostics. Rejecting every split would discard useful sites; using every component
 would introduce multi-building allocation.
+
+#### Implemented setbacks and component selection
+
+`app/geometry/setbacks.py` implements `calculate_setback(site, setback_m)` as a pure
+function returning a frozen `SetbackResult`. The site is validated before buffering;
+the distance must be a finite, non-negative numeric value, excluding booleans and
+numeric strings. Invalid distances raise `InvalidSetback`. Zero setback bypasses
+`buffer(0)` to preserve the foundation's canonical representation, including distinct
+collinear vertices. Positive distances use the mitred inward buffer above.
+
+The result keeps the complete Shapely Polygon/MultiPolygon and a separate selected
+Polygon. It reports original site area, total buildable area, selected area, component
+count, and discarded area in square metres; retained area aliases selected area.
+Discarded area sums unselected components directly to avoid losing tiny components
+through subtraction. An empty result contains an empty Polygon, selected geometry
+`None`, zero buildable/selected/retained/discarded areas, and zero components. The
+original site area remains available.
+
+`select_largest_component` accepts valid positive-area Polygon candidates and ignores
+empty polygons. Components use exact descending computed area, then ascending bounds,
+then canonical numeric coordinate arrays. Comparison tolerance does not turn unequal
+areas into ties or discard positive components. `normalize_polygon` and
+`serialize_site_geometry` supply the existing normalization policy for every component.
+`serialize_buildable_geometry` emits a Polygon or MultiPolygon dictionary with parts
+in the same deterministic order; empty regions serialize as `None`. Buildable
+geometry retains every strictly positive measured component, with no minimum area
+cutoff.
+
+Diagnostics use stable code, severity, and message fields:
+`EMPTY_BUILDABLE_REGION` (`info`) and `BUILDABLE_REGION_SPLIT` (`warning`). They describe
+geometry outcomes without introducing massing feasibility statuses. Invalid generated
+geometry, non-finite measurements, or invariant failures raise errors rather than
+being converted into empty-region diagnostics. Area conservation and non-growth use
+the centralized comparison tolerance described below and implemented in
+`app/geometry/tolerances.py`; they do not modify returned geometry. Nonempty output
+must satisfy `site.covers(buildable)`, which permits shared boundary points. Any
+spatial escape is an invariant failure regardless of its area; an outside-area
+threshold alone cannot bound displacement. No containment relaxation is applied.
+
+The pinned GEOS 3.14.1 engine can collapse or reshape extremely thin regions before
+their ideal mathematical area reaches zero. For a 20 × 10 m rectangle and a 4.99995 m
+setback, it returns a valid contained triangle of approximately 0.000500005 m² rather
+than the ideal thin rectangle of approximately 0.00100001 m². A unit square inset by
+0.499995 m returns empty despite an ideal positive area near 1e-10 m². Tests preserve
+positive output below the comparison tolerance and verify ordinary analytical inset
+geometry. These near-collapse results are reported as produced by GEOS, without
+snapping, a custom repair, or a claim of exact mathematical erosion at every scale.
 
 Let `N = maximum_permitted_floor_count`: use `floor(max_height_m / floor_to_floor_m)`
 for height alone, `max_floors` for count alone, or their minimum for both. Never round
