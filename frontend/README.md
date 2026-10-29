@@ -1,12 +1,14 @@
 # Frontend — building geometry case study
 
-Minimal Vite + React (plain JS). It boots, calls the backend health check, and
-gives you an empty canvas to build the visualization in.
+Minimal Vite + React with strict TypeScript. It boots, calls the backend health
+check, and gives you an empty canvas to build the visualization in.
 
 ## Getting started
 
+Use Node.js 20.19+, 22.13+, or a newer supported LTS release.
+
 ```bash
-npm install
+npm ci
 npm run dev        # http://localhost:5173
 ```
 
@@ -15,8 +17,9 @@ The backend base URL defaults to `http://localhost:8000`; override with
 
 ## What's here / what's yours
 
-- `src/api.js` — tiny fetch client (only `getHealth` so far).
-- `src/App.jsx` — shows backend health + a placeholder canvas marked `TODO`.
+- `src/api.ts` — tiny fetch client with runtime validation of the health response.
+- `src/App.tsx` — shows backend health + a placeholder canvas marked `TODO`.
+- `src/vite-env.d.ts` — types the optional `VITE_API_BASE` environment variable.
 
 You own the visualization: render the site, buildable footprint, massing, and
 metrics, and let the user create / branch / navigate saved options (the decision
@@ -27,6 +30,33 @@ tree). Rendering approach is your call (2D SVG/canvas, 3D, …) — justify it i
 
 ```bash
 npm run dev        # dev server
-npm run build      # production build
+npm run typecheck  # strict TypeScript validation
+npm run lint       # ESLint checks
+npm run test       # run automated tests once
+npm run build      # typecheck, then production build
 npm run preview    # preview the build
 ```
+
+ESLint uses a flat configuration with TypeScript, React Hooks, and React Refresh
+rules. Generated files and dependencies are excluded.
+
+Vitest and React Testing Library cover the health API and its loading, success,
+and error UI states. Tests use jsdom and stub only the fetch boundary; no running
+backend is required. Test files and setup are included in TypeScript checks.
+
+Vite 6 and Vitest 4 share `vite.config.js`. Their minimum versions include
+development-tooling security fixes. Jest DOM stays on 6.9 to retain Node 20 support.
+
+## Docker development
+
+From the repository root, start the complete development stack:
+
+```bash
+docker compose up --build -d
+docker compose ps
+```
+
+Open `http://localhost:5173` and verify that the page displays
+`Backend health: healthy`. The backend health endpoint is
+`http://localhost:8000/api/v1/health`. The frontend container runs the Vite
+development server; `npm run build` produces the production bundle.

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getHealth } from "./api.js";
+import { getHealth } from "./api";
 
 export default function App() {
   const [health, setHealth] = useState("checking…");
@@ -7,7 +7,10 @@ export default function App() {
   useEffect(() => {
     getHealth()
       .then((data) => setHealth(data.status))
-      .catch((err) => setHealth(`unreachable (${err.message})`));
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        setHealth(`unreachable (${message})`);
+      });
   }, []);
 
   return (
