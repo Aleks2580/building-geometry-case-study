@@ -1,5 +1,10 @@
 """Pure planar geometry operations, independent of HTTP and persistence."""
 
+from app.geometry.footprints import (
+    FootprintLimits,
+    InvalidFootprintLimits,
+    calculate_footprint_area_upper_bound,
+)
 from app.geometry.setbacks import (
     Diagnostic,
     InvalidSetback,
@@ -20,12 +25,15 @@ from app.geometry.site import (
 
 __all__ = [
     "Diagnostic",
+    "FootprintLimits",
+    "InvalidFootprintLimits",
     "InvalidSetback",
     "InvalidSiteGeometry",
     "MultiPolygonGeoJSON",
     "PolygonGeoJSON",
     "SetbackResult",
     "calculate_setback",
+    "calculate_footprint_area_upper_bound",
     "normalize_polygon",
     "parse_site_geometry",
     "select_largest_component",
