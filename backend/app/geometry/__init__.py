@@ -1,23 +1,17 @@
-"""Building-geometry domain — THIS IS WHERE THE CASE STUDY LIVES.
+"""Pure planar geometry operations, independent of HTTP and persistence."""
 
-The module is intentionally empty. You decide the shape: the domain types
-(site, constraints, massing, option), the algorithm, and the API contract.
+from app.geometry.site import (
+    InvalidSiteGeometry,
+    PolygonGeoJSON,
+    parse_site_geometry,
+    serialize_site_geometry,
+    site_area_m2,
+)
 
-A sketch of the problem (not a spec — make your own calls and write them down
-in docs/DESIGN.md):
-
-  - Input: a 2D site polygon (planar coordinates, metres) + a set of constraints
-    (setbacks, max height / floor count, floor-to-floor height, site coverage or
-    max footprint, optional GFA / floor-area-ratio target).
-  - Compute: inset the polygon by the setback -> buildable footprint; stack floor
-    plates within the height/area limits; report metrics (footprint area, GFA,
-    floor count) and feasibility. Handle degenerate / infeasible inputs.
-  - Persist: save a result as an "option", and let users branch alternative
-    options from an existing one (see app/db.py — async psycopg pool, raw SQL,
-    define your own model types). The saved options form a tree.
-
-Sample inputs live in ../data/sites/. Suggested next steps:
-  - add `app/geometry/massing.py` for the algorithm,
-  - add model types + SQL (and your schema) + an `app/v1/routes/massing.py` router,
-  - and tests under ../tests/.
-"""
+__all__ = [
+    "InvalidSiteGeometry",
+    "PolygonGeoJSON",
+    "parse_site_geometry",
+    "serialize_site_geometry",
+    "site_area_m2",
+]
