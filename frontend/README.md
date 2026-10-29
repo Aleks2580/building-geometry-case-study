@@ -1,12 +1,12 @@
 # Frontend — building geometry case study
 
-Minimal Vite + React (plain JS). It boots, calls the backend health check, and
-gives you an empty canvas to build the visualization in.
+Minimal Vite + React with strict TypeScript. It boots, calls the backend health
+check, and gives you an empty canvas to build the visualization in.
 
 ## Getting started
 
 ```bash
-npm install
+npm ci
 npm run dev        # http://localhost:5173
 ```
 
@@ -15,8 +15,9 @@ The backend base URL defaults to `http://localhost:8000`; override with
 
 ## What's here / what's yours
 
-- `src/api.js` — tiny fetch client (only `getHealth` so far).
-- `src/App.jsx` — shows backend health + a placeholder canvas marked `TODO`.
+- `src/api.ts` — tiny fetch client with runtime validation of the health response.
+- `src/App.tsx` — shows backend health + a placeholder canvas marked `TODO`.
+- `src/vite-env.d.ts` — types the optional `VITE_API_BASE` environment variable.
 
 You own the visualization: render the site, buildable footprint, massing, and
 metrics, and let the user create / branch / navigate saved options (the decision
@@ -27,6 +28,7 @@ tree). Rendering approach is your call (2D SVG/canvas, 3D, …) — justify it i
 
 ```bash
 npm run dev        # dev server
-npm run build      # production build
+npm run typecheck  # strict TypeScript validation
+npm run build      # typecheck, then production build
 npm run preview    # preview the build
 ```
