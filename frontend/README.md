@@ -44,5 +44,19 @@ Vitest and React Testing Library cover the health API and its loading, success,
 and error UI states. Tests use jsdom and stub only the fetch boundary; no running
 backend is required. Test files and setup are included in TypeScript checks.
 
-Vite 6 and Vitest 4 share the configuration above. Their minimum versions include
+Vite 6 and Vitest 4 share `vite.config.js`. Their minimum versions include
 development-tooling security fixes. Jest DOM stays on 6.9 to retain Node 20 support.
+
+## Docker development
+
+From the repository root, start the complete development stack:
+
+```bash
+docker compose up --build -d
+docker compose ps
+```
+
+Open `http://localhost:5173` and verify that the page displays
+`Backend health: healthy`. The backend health endpoint is
+`http://localhost:8000/api/v1/health`. The frontend container runs the Vite
+development server; `npm run build` produces the production bundle.
