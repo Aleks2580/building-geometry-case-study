@@ -7,8 +7,9 @@
 > validated design preferences, preferred footprint construction, preference-aware
 > massing metrics, validated GFA targets, target-driven floor selection, and target
 > assessment. A typed massing preview API now exposes the domain result through
-> explicit application mapping. Persistence, option APIs, alternatives, and
-> visualization remain planned.
+> explicit application mapping. PostgreSQL migrations, immutable root option saves,
+> retrieval, and summary listing are implemented. Branching, tree traversal,
+> comparison, alternatives, and visualization remain planned.
 
 ## Problem interpretation
 
@@ -114,8 +115,9 @@ flowchart LR
 Transport owns Pydantic contracts, versioning, and error translation; no geometry or
 SQL. `app.application.massing.preview_massing` parses site input, calls the existing
 preference-aware domain service, and explicitly maps the result to JSON-compatible
-values without importing Pydantic or FastAPI. Save, branch, tree, and comparison
-use cases remain planned.
+values without importing Pydantic or FastAPI. The root-save application use case
+persists the server-computed preview with schema and algorithm metadata. Branch,
+tree, and comparison use cases remain planned.
 Pure domain services separate polygon operations from massing rules: `app.geometry`
 owns polygons, while `app.massing.floors` owns scalar floor-limit rules and
 `app.massing.defaults` orchestrates the current default result over those geometry
@@ -544,50 +546,47 @@ configuration rows. More normalization reduces duplication and improves analytic
 but adds joins and version coordination. Small immutable snapshots favor self-contained
 reads, with application validation and schema versions for nested invariants.
 
-```sql
-CREATE TABLE schema_migrations (
-    version text PRIMARY KEY,
-    checksum text NOT NULL,
-    applied_at timestamptz NOT NULL DEFAULT now()
-);
+The implemented schema is defined by the numbered SQL migration
+[`001_create_options.sql`](../backend/app/sql/migrations/001_create_options.sql).
+`options` stores UUID identity and optional parent foreign key, name, positive schema
+version, algorithm version, JSONB configuration/result snapshots, feasibility status,
+and a timezone-aware creation timestamp. The parent foreign key restricts deletion;
+indexes cover parent lookup and deterministic creation-time/UUID listing. A database
+check requires the indexed status to agree with the result's feasibility status.
 
-CREATE TABLE options (
-    id uuid PRIMARY KEY,
-    parent_id uuid REFERENCES options(id) ON DELETE RESTRICT,
-    name text,
-    schema_version integer NOT NULL,
-    algorithm_version text NOT NULL,
-    site_geometry jsonb NOT NULL,
-    hard_constraints jsonb NOT NULL,
-    preferences jsonb NOT NULL,
-    targets jsonb NOT NULL,
-    result jsonb NOT NULL,
-    feasibility_status text NOT NULL CHECK (
-        feasibility_status IN (
-            'feasible', 'feasible_target_unmet', 'infeasible', 'generation_failed'
-        )
-    ),
-    created_at timestamptz NOT NULL DEFAULT now()
-);
+`uv run app migrate` verifies SHA-256 checksums and the installed history, then
+applies pending SQL and ledger entries atomically. A transaction advisory lock is
+acquired before ledger creation so concurrent first installations also serialize.
+Changed, missing, or reordered installed migrations are rejected; applied files must
+remain immutable. Docker startup runs the command before launching Uvicorn workers;
+migrations never execute in worker lifespan hooks. See the
+[database setup instructions](../backend/README.md#database-setup-and-migrations).
 
-CREATE INDEX options_parent_id_idx ON options(parent_id);
-CREATE INDEX options_created_at_idx ON options(created_at);
-```
-
-Numbered, checksummed SQL migrations run transactionally before option requests are
-served. Async psycopg uses parameters and explicit transactions. There is no option
-update API; future database permissions or an append-only trigger can reinforce
-immutability. Saved results and algorithm versions preserve historical interpretation
-without promising identical recomputation across changed geometry-engine versions.
+`app.persistence.options.OptionRepository` uses parameterized SQL,
+JSONB adapters, and explicit transactions for inserts, retrieval, and bounded summary
+listing. Inserts generate UUIDs and derive the indexed status from the result. An
+outer transaction retains commit ownership through nested savepoints. Reads return
+stored values without calling the geometry engine, and summaries select metadata
+and metrics without loading full geometry. Listing uses descending creation time
+and UUID, with limit/offset pagination. Future database permissions or an append-only
+trigger can reinforce immutability against direct SQL writes. Root saves set
+`schema_version=1` and record a massing-policy version plus the runtime Shapely and
+GEOS versions in `algorithm_version`. The policy version must change when algorithm
+behavior changes. Saved results preserve historical interpretation without promising
+identical recomputation across changed geometry-engine versions. Breaking snapshot
+schema changes will require compatible readers or explicit migration.
 
 ## API contract
 
 All routes use `/api/v1`; breaking changes require a new version, additive response
-fields remain compatible. `POST /api/v1/massing/preview` is implemented; the option
-and alternatives routes below remain planned. Preview requests require `site` and
+fields remain compatible. Preview, root save, option retrieval, and option listing
+are implemented. Branching, tree, comparison, and alternatives remain planned.
+Preview and root-save requests require `site` and
 `hard_constraints`. Omitted `preferences` and `targets` default to empty objects;
 explicit null objects are invalid. Optional scalar fields accept null. Unknown fields,
-including client-computed results, are rejected. Planned root saves also accept `name`.
+including client-computed results, are rejected. Root saves also accept an optional
+nullable `name`, trimmed and limited to 1–200 characters without NUL when supplied.
+A root request cannot supply a parent identifier.
 
 Computed preview example, also exercised through the OpenAPI example:
 
@@ -616,11 +615,22 @@ schemas and example; `/openapi.json` exposes the machine-readable schema.
 | `POST /massing/preview` | Complete configuration → domain result, HTTP `200`. |
 | `POST /options` | Recompute and save root → complete snapshot, `201`. |
 | `POST /options/{option_id}/branches` | Parent site plus complete new constraints/preferences/targets → child snapshot, `201`. |
-| `GET /options` | Summaries; optional parent/root filters. |
+| `GET /options` | Summary array; `limit` (default 50, maximum 200) and `offset` (default 0). |
 | `GET /options/{option_id}` | Complete immutable snapshot. |
 | `GET /options/tree?root_id=...` | Tree of option summaries. |
 | `POST /options/compare` | Selected options → snapshots and input/metric/diagnostic comparison. |
 | `POST /massing/alternatives` | Secondary bounded suggestions; no persistence. |
+
+`POST /options` uses the same configuration conversion, preview computation, and
+error translation as the preview endpoint, then inserts one snapshot transactionally.
+It returns `201` with a `Location` header and a complete snapshot containing `id`,
+null `parent_id`, name, schema/algorithm versions, timezone-aware `created_at`, configuration
+(`site_geometry`, `hard_constraints`, `preferences`, `targets`),
+`feasibility_status`, and the full preview under `result`. Repeated saves always
+create separate roots. Retrieval returns the stored snapshot without recomputation;
+listing returns metadata and metrics, newest first with UUID as a tie-breaker.
+Offset pagination is intended for this small prototype; concurrent inserts may shift
+page boundaries. Parent/root filters are deferred with the branching workflow.
 
 Results echo normalized configuration (including the canonical site) and return
 `site_geometry`, `buildable_geometry`,
@@ -639,7 +649,7 @@ signed difference, effective-target undershoot, status, and diagnostic codes.
 assessment (`requested_m2`, `actual_m2`, `shortfall_m2`, status, `diagnostic_code`),
 and diagnostics with code, severity, message, and optional path/details.
 
-All four domain statuses use preview `200`; future save APIs will support diagnostic
+All four domain statuses use preview `200` and root-save `201`, including diagnostic
 snapshots. For `infeasible`/`generation_failed`, actual footprint/floor-plate geometry,
 area, count, height, and GFA are null; retain available context/bounds. Empty buildable
 geometry is null; generated capacity is null if no default was constructed. Persisted
@@ -661,13 +671,16 @@ validation, then use the existing binary64 canonicalization without rounding.
 Floor-limit and GFA tolerances remain the domain policies above. A required derived
 metric outside finite binary64 range returns `422 NUMERICAL_RANGE_ERROR`, never
 infeasibility or non-finite JSON. Unexpected geometry failures remain server errors.
-The synchronous endpoint runs through FastAPI's worker thread pool and performs no
-database operation. The existing application lifespan still opens its configured
-database pool; the preview use case and API tests need no database connection.
+Preview computation runs through FastAPI's worker thread pool and performs no
+database operation. Root saves compute through the same function before repository
+insertion; database operations use the existing async pool. Pool shutdown runs even
+when application lifespan exits with an error. Preview tests need no database;
+option tests use isolated disposable PostgreSQL databases, also supplied in CI.
 
-Planned comparison validation uses `INVALID_COMPARISON`. Planned missing
-options/parents use `404 OPTION_NOT_FOUND` or `PARENT_OPTION_NOT_FOUND`; database
-failures remain server errors.
+Missing option UUIDs return `404 OPTION_NOT_FOUND` through the same error envelope;
+malformed UUIDs and invalid pagination use `422 INVALID_REQUEST`. Database failures
+remain server errors and failed inserts roll back. Planned comparison validation
+uses `INVALID_COMPARISON`, and planned missing parents use `PARENT_OPTION_NOT_FOUND`.
 
 The UI preserves requested drafts, shows floor errors inline and requested/effective/
 actual area differences. Failed construction clears stale building views; users can

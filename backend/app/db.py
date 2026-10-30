@@ -1,22 +1,4 @@
-"""Database plumbing — async psycopg with a connection pool.
-
-This wires up an async connection pool and a FastAPI dependency that hands you a
-connection. There is **no ORM and no schema** on purpose: define your own model
-types (plain dataclasses / pydantic) and write **pure SQL** with psycopg.
-
-Example usage in a route:
-
-    from psycopg import AsyncConnection
-    from psycopg.rows import dict_row
-
-    async def list_options(conn: AsyncConnection = Depends(get_connection)):
-        async with conn.cursor(row_factory=dict_row) as cur:
-            await cur.execute("SELECT id, parent_id, name FROM options")
-            return await cur.fetchall()
-
-Wire the dependency to the app's pool however you prefer (e.g. a small provider
-that reads `request.app.state.db_pool`).
-"""
+"""Async PostgreSQL pool and scoped connections for raw SQL repositories."""
 
 from collections.abc import AsyncGenerator
 

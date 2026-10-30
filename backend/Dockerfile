@@ -18,4 +18,4 @@ RUN uv sync --frozen --no-dev
 
 EXPOSE 8000
 
-CMD ["uv", "run", "--no-dev", "--no-sync", "uvicorn", "app.server:deploy_factory", "--factory", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+CMD ["sh", "-c", "uv run --no-dev --no-sync app migrate && exec uv run --no-dev --no-sync uvicorn app.server:deploy_factory --factory --host 0.0.0.0 --port 8000 --workers 2"]

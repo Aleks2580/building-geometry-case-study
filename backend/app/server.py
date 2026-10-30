@@ -13,11 +13,11 @@ from app.v1.router import router as v1_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    # startup
     await app.state.db_pool.open()
-    yield
-    # shutdown
-    await app.state.db_pool.close()
+    try:
+        yield
+    finally:
+        await app.state.db_pool.close()
 
 
 def create_app(config: Config) -> FastAPI:
