@@ -30,6 +30,17 @@ from app.massing.preferences import (
     PreferenceExceedsHardLimit,
     select_floor_count,
 )
+from app.massing.target_floors import select_floor_count_for_target
+from app.massing.targets import (
+    DesignTargets,
+    GfaTargetAssessment,
+    GfaTargetDiagnosticCode,
+    GfaTargetStatus,
+    InvalidDesignTargets,
+    assess_gfa_target,
+    gfa_tolerance_m2,
+    is_gfa_target_met,
+)
 
 __all__ = [
     "FootprintAreaPreferenceDiagnosticCode",
@@ -52,4 +63,13 @@ __all__ = [
     "generate_massing_with_preferences",
     "generate_preferred_footprint",
     "select_floor_count",
+    "DesignTargets",
+    "GfaTargetAssessment",
+    "GfaTargetDiagnosticCode",
+    "GfaTargetStatus",
+    "InvalidDesignTargets",
+    "assess_gfa_target",
+    "gfa_tolerance_m2",
+    "is_gfa_target_met",
+    "select_floor_count_for_target",
 ]
