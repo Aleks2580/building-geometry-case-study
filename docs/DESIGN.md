@@ -560,8 +560,15 @@ Changed, missing, or reordered installed migrations are rejected; applied files 
 remain immutable. Docker startup runs the command before launching Uvicorn workers;
 migrations never execute in worker lifespan hooks. See the
 [database setup instructions](../backend/README.md#database-setup-and-migrations). Async psycopg uses parameters and explicit transactions. There is no option
-update API; future database permissions or an append-only trigger can reinforce
-immutability. Saved results and algorithm versions preserve historical interpretation
+update API. `app.persistence.options.OptionRepository` uses parameterized SQL,
+JSONB adapters, and explicit transactions for inserts, retrieval, and bounded summary
+listing. Inserts generate UUIDs and derive the indexed status from the result. An
+outer transaction retains commit ownership through nested savepoints. Reads return
+stored values without calling the geometry engine, and summaries select metadata
+and metrics without loading full geometry. Listing uses descending creation time
+and UUID, with limit/offset pagination. Future database permissions or an append-only
+trigger can reinforce immutability against direct SQL writes. Saved results and
+algorithm versions preserve historical interpretation
 without promising identical recomputation across changed geometry-engine versions.
 
 ## API contract
