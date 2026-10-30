@@ -3,11 +3,17 @@ from pathlib import Path
 
 import pytest
 from shapely.errors import GEOSException
-from shapely.geometry import Polygon, box
+from shapely.geometry import Polygon, box, shape
 
 import app.geometry.footprints as footprints
 import app.massing.defaults as defaults
-from app.geometry import FootprintLimits, InvalidSetback, InvalidSiteGeometry, parse_site_geometry
+from app.geometry import (
+    FootprintLimits,
+    InvalidSetback,
+    InvalidSiteGeometry,
+    parse_site_geometry,
+    serialize_site_geometry,
+)
 from app.massing import FloorLimits, NumericalRangeError, generate_default_massing
 
 
@@ -100,11 +106,20 @@ def test_holed_site_keeps_holes_and_uses_hole_aware_coverage() -> None:
     )
 
     assert result.site_geometry.area == 384
-    assert result.footprint_geometry is not None
-    assert len(result.footprint_geometry.interiors) == 1
+    floor_plate = result.floor_plate_geometry
+    assert floor_plate is not None
+    assert len(floor_plate.interiors) == 1
     assert result.footprint_area_m2 == 192
     assert result.gfa_m2 == 384
     assert result.site_coverage_ratio == pytest.approx(0.5)
+
+    serialized = serialize_site_geometry(floor_plate)
+    restored = shape(json.loads(json.dumps(serialized, allow_nan=False)))
+
+    assert restored.is_valid
+    assert len(restored.interiors) == 1
+    assert serialize_site_geometry(restored) == serialized
+    assert restored.area == result.footprint_area_m2
 
 
 def test_heuristic_undershoot_remains_a_feasible_default() -> None:
@@ -124,7 +139,18 @@ def test_heuristic_undershoot_remains_a_feasible_default() -> None:
     assert result.footprint_result.secondary_discarded_area_m2 > 0
 
 
-def test_empty_buildable_region_skips_footprint_construction(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    ("floor_limits", "expected_floor_count"),
+    [
+        (FloorLimits(3.5, max_floors=6), 6),
+        (FloorLimits(3.5, max_height_m=3.49), 0),
+    ],
+)
+def test_empty_buildable_region_takes_precedence_over_zero_floors(
+    monkeypatch: pytest.MonkeyPatch,
+    floor_limits: FloorLimits,
+    expected_floor_count: int,
+) -> None:
     def fail_if_called(*args: object, **kwargs: object) -> object:
         raise AssertionError("footprint construction must be skipped")
 
@@ -133,12 +159,13 @@ def test_empty_buildable_region_skips_footprint_construction(monkeypatch: pytest
         box(0, 0, 10, 10),
         setback_m=5,
         footprint_limits=FootprintLimits(),
-        floor_limits=FloorLimits(3.5, max_floors=6),
+        floor_limits=floor_limits,
     )
 
     assert result.status == "infeasible"
     assert result.hard_constraints_satisfied is False
     assert result.reason == "EMPTY_BUILDABLE_REGION"
+    assert result.maximum_permitted_floor_count == expected_floor_count
     assert result.footprint_result is None
     assert result.footprint_area_upper_bound_m2 == result.gfa_upper_bound_m2 == 0
     assert result.generated_footprint_geometry is None
@@ -242,15 +269,61 @@ def test_stored_float_36_over_3_6_uses_nine_floors_everywhere() -> None:
 
     assert result.maximum_permitted_floor_count == 9
     assert result.floor_count == 9
-    assert result.height_m == pytest.approx(9 * 3.6)
+    assert result.height_m == 9 * result.floor_to_floor_m == 32.4
     assert result.height_m <= 36.0
     assert result.gfa_m2 == pytest.approx(result.footprint_area_m2 * 9)
 
 
-def test_metric_product_preserves_large_count_finite_product() -> None:
-    smallest_positive = 5e-324
+def test_very_large_floor_count_preserves_finite_height_and_gfa() -> None:
+    floor_count = 2**1074
+    # The measured subnormal area is 2024 units of the smallest positive binary64 float.
+    site = box(0, 0, 1e-160, 1e-160)
+    result = generate_default_massing(
+        site,
+        setback_m=0,
+        footprint_limits=FootprintLimits(),
+        floor_limits=FloorLimits(5e-324, max_floors=floor_count),
+    )
 
-    assert defaults._multiply_metric(smallest_positive, 2**1074, metric_name="test_metric") == 1.0
+    assert result.status == "feasible"
+    assert result.floor_count == floor_count
+    assert result.height_m == 1.0
+    assert result.gfa_m2 == 2024.0
+    assert result.height_m is not None and result.height_m < float("inf")
+    assert result.gfa_m2 is not None and result.gfa_m2 < float("inf")
+
+
+def test_default_massing_result_is_immutable() -> None:
+    result = generate_default_massing(
+        box(0, 0, 10, 10),
+        setback_m=0,
+        footprint_limits=FootprintLimits(),
+        floor_limits=FloorLimits(3.5, max_floors=2),
+    )
+
+    with pytest.raises(AttributeError):
+        result.status = "infeasible"  # type: ignore[misc]
+    for alias in (
+        "canonical_site",
+        "original_site_geometry",
+        "setback",
+        "outcome",
+        "total_height_m",
+        "actual_footprint_geometry",
+        "actual_footprint_area_m2",
+        "actual_site_coverage_ratio",
+    ):
+        assert not hasattr(result, alias)
+
+
+def test_height_overflow_is_independent_of_finite_gfa_metrics() -> None:
+    with pytest.raises(NumericalRangeError, match="height_m"):
+        generate_default_massing(
+            box(0, 0, 1e-160, 1e-160),
+            setback_m=0,
+            footprint_limits=FootprintLimits(),
+            floor_limits=FloorLimits(1.0, max_floors=2**1074),
+        )
 
 
 def test_unrepresentable_derived_metric_raises_explicit_error() -> None:

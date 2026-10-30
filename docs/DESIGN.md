@@ -1,10 +1,11 @@
 # Design note
 
 > The application currently provides the health endpoint, configuration, async
-> database-pool plumbing, sample sites, a tested TypeScript frontend scaffold, and
-> pure site geometry, setbacks, component selection, and deterministic default
-> footprint construction, plus a pure maximum-permitted-floor calculation. Actual
-> floor selection, floor plates, GFA, persistence, and visualization remain planned.
+> database-pool plumbing, sample sites, a tested TypeScript frontend scaffold, pure
+> site geometry, setbacks, component selection, deterministic default footprint
+> construction, maximum-permitted-floor calculation, and default massing metrics.
+> Preferences, GFA targets, persistence, HTTP transport, and visualization remain
+> planned.
 
 ## Problem interpretation
 
@@ -41,13 +42,18 @@ permissions, and background jobs are outside scope.
 - **FootprintResult:** the implemented default-construction result contains the hard
   upper bound, generated Polygon and measured area when present, an outcome, the
   returned construction's secondary component metadata, and area undershoot.
+- **DefaultMassingResult:** the implemented immutable result combines the canonical
+  site, complete setback context, optional attempted footprint result, hard bounds,
+  generated capacity, compact repeated-floor geometry, actual metrics, and a default
+  feasibility outcome. The complete configurable `MassingResult` remains planned.
 - **DesignPreferences:** optional positive integer `preferred_floor_count` and
   positive `preferred_footprint_area_m2`; explicit choices subordinate to hard limits.
 - **DesignTargets:** optional non-negative `gfa_target_m2`, a desired minimum, not a
   hard constraint or exact optimization objective.
-- **MassingResult:** input/context geometry, generated default and actual footprint,
-  repeated floor plate, metrics, preference outcomes, and feasibility. Hard upper
-  bounds, demonstrated construction capacity, and actual preferred results are distinct.
+- **MassingResult:** planned complete input/context geometry, generated default and
+  actual footprint, repeated floor plate, metrics, preference outcomes, and
+  feasibility. Hard upper bounds, demonstrated construction capacity, and actual
+  preferred results are distinct.
 - **Option:** immutable snapshot of inputs, result, schema/algorithm versions, and
   optional parent. A branch inherits the parent site, recomputes a complete new
   configuration, and inserts a child; it never updates its parent.
@@ -100,10 +106,12 @@ flowchart LR
 Transport owns Pydantic contracts, versioning, and error translation; no geometry or
 SQL. Application use cases coordinate preview, save, branch, tree, and comparison.
 Pure domain services separate polygon operations from massing rules: `app.geometry`
-owns polygons and `app.massing` owns floor-limit rules. Both depend on neither HTTP
-nor persistence. Repositories own parameterized SQL, transactions, and snapshot
-mapping; no ORM. The frontend owns drafts, interaction, and rendering; geometry,
-floor count, height, area, GFA, and feasibility remain server-authoritative.
+owns polygons, while `app.massing.floors` owns scalar floor-limit rules and
+`app.massing.defaults` orchestrates the current default result over those geometry
+operations. The domain remains independent of HTTP and persistence. Repositories own
+parameterized SQL, transactions, and snapshot mapping; no ORM. The frontend owns
+drafts, interaction, and rendering; geometry, floor count, height, area, GFA, and
+feasibility remain server-authoritative.
 
 ## Algorithm
 
@@ -285,9 +293,10 @@ The calculation uses `floor(max_height_m / floor_to_floor_m)` for a height-only 
 `max_floors` for a count-only limit, and the smaller value when both are supplied.
 It returns a non-negative integer hard upper bound. A valid positive height below one
 floor therefore returns zero; zero is a capacity result, not invalid input and not a
-claim that this module has assigned the application's full `infeasible` status. Actual
-floor selection, floor plates, height metrics, GFA, preferences, targets, and massing
-orchestration remain planned.
+claim that this scalar module has assigned the application's full `infeasible` status.
+The default massing orchestration uses this capacity as its actual floor count when a
+valid default building can be constructed; preference and target-driven floor
+selection remain planned.
 
 This is a pure massing rule and does not depend on Shapely, site geometry, HTTP,
 Pydantic, or persistence.
@@ -297,10 +306,10 @@ Pydantic, or persistence.
 `U = footprint_area_upper_bound_m2` is the minimum of the largest setback component's
 area, supplied `site_area_m2 * site_coverage_ratio`, and supplied
 `max_footprint_area_m2` in the current internal API. The planned HTTP contract calls
-the last field `max_footprint_m2`. `gfa_upper_bound_m2 = U * N` remains planned and
-is not calculated by the current footprint module. These are necessary hard upper
-bounds under the adopted single-building, setback, and repeated-plate conventions,
-not promises of attainable geometry.
+the last field `max_footprint_m2`. The footprint module does not calculate GFA, but
+default massing derives `gfa_upper_bound_m2 = U * N` from this bound and the floor
+capacity. These are necessary hard upper bounds under the adopted single-building,
+setback, and repeated-plate conventions, not promises of attainable geometry.
 
 The engine uses the selected component when its area fits `U`; otherwise it searches
 inward-buffer distances with the extent-derived bracket and fixed iteration budget
@@ -332,6 +341,45 @@ axis clipping adds an arbitrary direction and can split; inscribed rectangles
 restrict shapes; general optimization adds objectives and complexity. The MVP accepts
 and reports undershoot without adding an optimizer.
 
+#### Implemented default massing orchestration
+
+`app.massing` exposes `generate_default_massing(site, *, setback_m,
+footprint_limits, floor_limits)` and the immutable `DefaultMassingResult`. The
+orchestration first validates and canonicalizes the original Polygon, calculates the
+complete `SetbackResult`, derives `N` with
+`calculate_maximum_permitted_floor_count`, and calculates the hard footprint bound
+`U`. It preserves the complete buildable geometry, selected component, split
+diagnostics, and footprint construction metadata in the nested results.
+
+When the selected buildable region is empty, the result is `infeasible` with reason
+`EMPTY_BUILDABLE_REGION`. When `N` is zero, it is `infeasible` with reason
+`ZERO_PERMITTED_FLOORS`. An empty selected region takes precedence when both
+conditions apply. In both cases footprint construction is skipped and
+`footprint_result` is `None`. If a positive region and positive floor capacity are
+available, the existing deterministic generator is attempted. Its
+`generation_failed` outcome becomes `generation_failed` / `FOOTPRINT_NOT_GENERATED`
+with `hard_constraints_satisfied = null`; this is not a proof of mathematical
+infeasibility. A failed or skipped result has null generated capacity and null actual
+footprint, floor-plate geometry, area, floor count, height, GFA, and coverage.
+
+A successful default uses all `N` permitted floors and the generated footprint. The
+floor plate is represented compactly as one Polygon plus `floor_count` and
+`floor_to_floor_m`; no per-floor Polygon or 3D mesh is produced. The actual metrics
+are `height_m = floor_count * floor_to_floor_m`,
+`gfa_m2 = footprint_area_m2 * floor_count`, and
+`site_coverage_ratio = footprint_area_m2 / site_area_m2`. The hard
+`gfa_upper_bound_m2 = U * N` and generated `generated_gfa_capacity_m2` remain
+separate: the latter is evidence of one construction returned by the heuristic, not
+an optimality certificate. A valid default without preferences or a GFA target is
+`feasible`; this entry point does not evaluate a GFA target.
+
+The public `NumericalRangeError` is raised when a required height or area-times-count
+metric cannot be represented as a finite float. Metric multiplication keeps the
+arbitrary-precision integer floor count intact until the final conversion, including
+the case where a very large count multiplied by a small positive value remains
+finite. This error behavior is an implementation decision for the current domain
+slice, not an explicit employer requirement.
+
 ### Preferences and floor selection
 
 A floor preference is an exact discrete choice: exceeding `N` returns
@@ -359,12 +407,12 @@ unchanged even when the target is missed.
 
 ### Feasibility and targets
 
-These application-level statuses remain planned orchestration around the pure domain
-rules. `app.massing` currently returns only the permitted floor-count capacity; a zero
-capacity does not by itself produce one of these statuses.
-After basic input validation, future massing orchestration must classify zero
-permitted floors as `infeasible` before checking an otherwise valid positive floor
-preference against that zero capacity. Preference validation remains unimplemented.
+`generate_default_massing` now implements `feasible`, `infeasible`, and
+`generation_failed` around the pure geometry and floor-limit operations. The
+`feasible_target_unmet` status and target diagnostics remain planned for the complete
+configurable massing result. After basic input validation, the default orchestration
+classifies zero permitted floors as `infeasible` before any future preference checks;
+preference validation remains unimplemented.
 
 | Status | Meaning | `hard_constraints_satisfied` |
 |---|---|---|
@@ -408,6 +456,13 @@ ten. This is the current engineering choice, not an explicit employer requiremen
 If exact decimal or fixed-unit semantics are needed later, they require an explicit
 input contract before API integration. Rounded display values must not silently become
 the authority for accepting floor counts.
+
+Default massing preserves the arbitrary-precision integer count when deriving height,
+GFA capacity, GFA, and the hard GFA bound. Each required derived metric must remain a
+finite reportable float; otherwise `NumericalRangeError` is raised instead of
+returning infinity or NaN, clamping the count, or classifying the case as geometric
+infeasibility. This range-error behavior is an implementation decision for the
+current slice, not an explicit employer requirement.
 
 The same target predicate governs future floor selection and status; when a minimum
 count exceeds one, the preceding count must fail it. Tolerance cannot bridge material

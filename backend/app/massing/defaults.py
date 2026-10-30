@@ -54,46 +54,6 @@ class DefaultMassingResult:
     hard_constraints_satisfied: bool | None
     reason: DefaultMassingReason | None
 
-    @property
-    def canonical_site(self) -> Polygon:
-        """Return the canonical original site geometry."""
-        return self.site_geometry
-
-    @property
-    def original_site_geometry(self) -> Polygon:
-        """Return the canonical original site geometry."""
-        return self.site_geometry
-
-    @property
-    def setback(self) -> SetbackResult:
-        """Return the complete setback context."""
-        return self.setback_result
-
-    @property
-    def actual_footprint_geometry(self) -> Polygon | None:
-        """Return the generated geometry used for the actual building."""
-        return self.footprint_geometry
-
-    @property
-    def actual_footprint_area_m2(self) -> float | None:
-        """Return the measured area of the actual footprint."""
-        return self.footprint_area_m2
-
-    @property
-    def total_height_m(self) -> float | None:
-        """Return the actual building height."""
-        return self.height_m
-
-    @property
-    def actual_site_coverage_ratio(self) -> float | None:
-        """Return actual footprint area divided by original site area."""
-        return self.site_coverage_ratio
-
-    @property
-    def outcome(self) -> DefaultMassingStatus:
-        """Return the result status using the geometry module's terminology."""
-        return self.status
-
 
 def generate_default_massing(
     site: Polygon,
@@ -113,6 +73,7 @@ def generate_default_massing(
         metric_name="gfa_upper_bound_m2",
     )
 
+    # Report the missing selected region when both geometry and floor limits block construction.
     if setback_result.selected_buildable_geometry is None or setback_result.selected_buildable_geometry.is_empty:
         return _without_building(
             canonical_site,
@@ -173,7 +134,7 @@ def generate_default_massing(
     gfa = _multiply_metric(actual_area, maximum_floor_count, metric_name="gfa_m2")
     coverage = actual_area / setback_result.site_area_m2
     if not isfinite(coverage):
-        raise NumericalRangeError("actual_site_coverage_ratio must be representable as a finite float.")
+        raise NumericalRangeError("site_coverage_ratio must be representable as a finite float.")
 
     return DefaultMassingResult(
         site_geometry=canonical_site,
@@ -236,7 +197,7 @@ def _without_building(
 
 
 def _multiply_metric(value: float, count: int, *, metric_name: str) -> float:
-    """Multiply a finite float by an integer without converting the count first."""
+    """Multiply a finite stored float by an integer before the final float conversion."""
     if count == 0 or value == 0:
         return 0.0
     numerator, denominator = value.as_integer_ratio()
