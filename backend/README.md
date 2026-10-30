@@ -2,9 +2,9 @@
 
 FastAPI + uv + async psycopg. The backend exposes a health check, has database
 plumbing wired, and provides pure site geometry, setbacks, component selection,
-deterministic default footprint construction, and maximum-permitted-floor calculation.
-Actual floor selection, floor plates, GFA, and option persistence remain planned; see
-[the design note](../docs/DESIGN.md).
+deterministic default footprint construction, maximum-permitted-floor calculation,
+and default massing metrics. Preferences, GFA targets, HTTP transport, option
+persistence, and visualization remain planned; see [the design note](../docs/DESIGN.md).
 
 ## Stack
 
@@ -45,8 +45,15 @@ A Postgres is expected at `APP_DATABASE_URL`. The easiest way is the root
 - `app/massing/floors.py` — immutable `FloorLimits`, `InvalidFloorLimits`, and
   `calculate_maximum_permitted_floor_count`. It validates positive finite heights,
   positive integer floor counts, and the requirement for at least one height/count
-  limit. The result is a non-negative hard capacity bound; it does not select floors
-  or calculate building metrics.
+  limit. The result is a non-negative hard capacity bound.
+- `app/massing/defaults.py` — `generate_default_massing`, immutable
+  `DefaultMassingResult`, and `NumericalRangeError`. It combines the validated
+  geometry and floor operations into one default building with compact repeated-floor
+  metrics. Empty buildable regions and zero permitted floors are `infeasible`; a
+  failed positive-footprint construction is `generation_failed` and does not claim
+  mathematical infeasibility. Hard GFA bounds and generated capacity remain distinct.
+  Preferred constraints, GFA targets, transport models, persistence, and per-floor or
+  3D representations are excluded from this domain slice.
 - `app/geometry/tolerances.py` — scale-aware area comparison tolerance, without
   rounding geometry or filtering small positive components.
 
