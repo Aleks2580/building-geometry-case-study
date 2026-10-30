@@ -1,8 +1,9 @@
 # Backend — building geometry case study
 
 FastAPI + uv + async psycopg. The backend exposes a health check, has database
-plumbing wired, and provides pure site geometry, setbacks, and component selection.
-Massing and option persistence remain planned; see [the design note](../docs/DESIGN.md).
+plumbing wired, and provides pure site geometry, setbacks, component selection, and
+deterministic default footprint construction. Floors, GFA, and option persistence
+remain planned; see [the design note](../docs/DESIGN.md).
 
 ## Stack
 
@@ -35,6 +36,11 @@ A Postgres is expected at `APP_DATABASE_URL`. The easiest way is the root
 - `app/geometry/setbacks.py` — mitred inward setbacks, full buildable-region metrics,
   deterministic component selection, and empty/split diagnostics. Empty regions
   serialize as null; selected geometry remains separate from the complete region.
+- `app/geometry/footprints.py` — immutable `FootprintLimits`, hard-area upper-bound
+  calculation, and `generate_footprint` returning `FootprintResult`. The domain uses
+  `max_footprint_area_m2`; the planned HTTP contract uses `max_footprint_m2` and
+  transport mapping is not implemented yet. Construction reports success, empty
+  buildable regions, or generation failure without claiming full feasibility.
 - `app/geometry/tolerances.py` — scale-aware area comparison tolerance, without
   rounding geometry or filtering small positive components.
 

@@ -2,8 +2,8 @@
 
 > The application currently provides the health endpoint, configuration, async
 > database-pool plumbing, sample sites, a tested TypeScript frontend scaffold, and
-> pure site geometry, setbacks, and component selection. Massing, persistence, and
-> visualization functionality in this design remains planned.
+> pure site geometry, setbacks, component selection, and deterministic default
+> footprint construction. Floors, GFA, persistence, and visualization remain planned.
 
 ## Problem interpretation
 
@@ -31,6 +31,12 @@ permissions, and background jobs are outside scope.
   positive `max_height_m` and optional positive integer `max_floors`. Optional area
   limits are `site_coverage_ratio` in `(0, 1]` and positive `max_footprint_m2`.
   At least one height/floor limit is required.
+- **FootprintLimits:** the implemented immutable domain value object accepts optional
+  `site_coverage_ratio` and `max_footprint_area_m2` limits. The planned HTTP field is
+  named `max_footprint_m2`; transport mapping is not implemented yet.
+- **FootprintResult:** the implemented default-construction result contains the hard
+  upper bound, generated Polygon and measured area when present, an outcome, the
+  returned construction's secondary component metadata, and area undershoot.
 - **DesignPreferences:** optional positive integer `preferred_floor_count` and
   positive `preferred_footprint_area_m2`; explicit choices subordinate to hard limits.
 - **DesignTargets:** optional non-negative `gfa_target_m2`, a desired minimum, not a
@@ -227,6 +233,34 @@ positive output below the comparison tolerance and verify ordinary analytical in
 geometry. These near-collapse results are reported as produced by GEOS, without
 snapping, a custom repair, or a claim of exact mathematical erosion at every scale.
 
+#### Implemented default footprint construction
+
+`app/geometry/footprints.py` exposes `generate_footprint(setback, limits)` and the
+frozen `FootprintResult`. Its `footprint_area_upper_bound_m2` reuses the hard-area
+calculation: the minimum of selected buildable area, original site area multiplied
+by `site_coverage_ratio`, and `max_footprint_area_m2`. The internal field name is
+`max_footprint_area_m2`; the planned HTTP contract uses `max_footprint_m2` and will
+need an explicit mapping when transport is implemented.
+
+When the selected canonical Polygon already fits the bound, the result returns that
+canonical Polygon directly without `buffer(0)`, preserving holes and distinct
+collinear vertices. Otherwise, the generator applies mitred inward buffers to the
+original selected component. It derives a finite bracket from the component extent,
+expands it at most eight times until an empty result is verified, then evaluates a
+fixed 48-iteration binary search. Midpoint stagnation and non-finite arithmetic stop
+the search. Every candidate is canonicalized and validated, must remain covered by
+the original component, and is eligible only when its measured area is at or below
+the hard bound. The largest admissible candidate actually evaluated is returned.
+
+`FootprintResult.secondary_component_count` and
+`secondary_discarded_area_m2` describe the construction associated with the returned
+footprint; they are not cumulative search-iteration totals. A direct successful
+construction reports one component and zero discarded area. `undershoot_m2` is the
+hard-bound area minus the returned measured area. Outcomes are `success`,
+`empty_buildable_region`, and `generation_failed`; unsuccessful outcomes contain
+`None` geometry and area. Unexpected GEOS errors, invalid generated topology, and
+invariant violations propagate as errors rather than becoming ordinary failures.
+
 Let `N = maximum_permitted_floor_count`: use `floor(max_height_m / floor_to_floor_m)`
 for height alone, `max_floors` for count alone, or their minimum for both. Never round
 up past a height cap. Both limits absent is invalid input; a valid positive height
@@ -236,16 +270,19 @@ preference against zero capacity.
 ### Area bounds and deterministic construction
 
 `U = footprint_area_upper_bound_m2` is the minimum of the largest setback component's
-area, supplied `site_area_m2 * site_coverage_ratio`, and supplied `max_footprint_m2`.
-`gfa_upper_bound_m2 = U * N`. These are necessary hard upper bounds under the adopted
-single-building, setback, and repeated-plate conventions, not promises of attainable
-geometry.
+area, supplied `site_area_m2 * site_coverage_ratio`, and supplied
+`max_footprint_area_m2` in the current internal API. The planned HTTP contract calls
+the last field `max_footprint_m2`. `gfa_upper_bound_m2 = U * N` remains planned and
+is not calculated by the current footprint module. These are necessary hard upper
+bounds under the adopted single-building, setback, and repeated-plate conventions,
+not promises of attainable geometry.
 
 The engine uses the selected component when its area fits `U`; otherwise it searches
-inward-buffer distances with a fixed iteration budget. Each distance applies to the
-original selected component. After validation and largest-component selection using
-the same tie-break, the search retains the largest valid candidate actually generated
-at/below `U`, reporting secondary splits, discarded area, and undershoot.
+inward-buffer distances with the extent-derived bracket and fixed iteration budget
+described above. Each distance applies to the original selected component. After
+validation and largest-component selection using the same tie-break, the search
+retains the largest valid candidate actually generated at/below `U`, reporting
+secondary splits, discarded area, and undershoot.
 
 This default is `generated_footprint_geometry`, with `generated_footprint_area_m2` and
 `generated_gfa_capacity_m2 = generated_footprint_area_m2 * N`. Capacity demonstrates
@@ -254,10 +291,15 @@ If no positive valid default is generated despite positive buildable area and fl
 the result is `generation_failed` / `FOOTPRINT_NOT_GENERATED`; capacity is unknown
 (`null`), not zero.
 
-A dumbbell of two 20 × 20 m lobes joined by a 2 m corridor illustrates the limitation:
-a 350 m² cap may yield a split buffered component around 324 m² although a connected
-350 m² rectangle fits within one lobe. These dimensions are explanatory, not measured
-GEOS output. Failure of this heuristic does not prove geometric impossibility.
+A measured dumbbell fixture uses two 20 × 20 m lobes joined by a 2 m corridor, a zero
+setback, and a 350 m² cap. On Python 3.12.14 with Shapely 2.2.0 and GEOS 3.14.1,
+the implementation returns a valid contained Polygon of
+`323.9999999999905 m²`, with two construction components, equal discarded area, and
+`26.000000000009493 m²` undershoot. Independently, `box(0, 0, 20, 17.5)` is a valid
+connected 350 m² rectangle covered by the selected component. This demonstrates a
+larger admissible footprint than this inward-buffer heuristic constructs; it does not
+make the generated area a mathematical maximum. Failure of this heuristic does not
+prove geometric impossibility.
 
 Inward buffering reuses a mature operation, reduces search to one dimension, and
 supports direct containment checks. Centroid scaling can escape concave regions;

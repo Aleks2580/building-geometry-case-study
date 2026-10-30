@@ -1,6 +1,6 @@
 import json
 from dataclasses import replace
-from math import sqrt
+from math import nextafter, sqrt
 from pathlib import Path
 
 import pytest
@@ -267,6 +267,114 @@ def test_secondary_split_metadata_is_deterministic() -> None:
     assert serialize_site_geometry(first.generated_footprint_geometry) == serialize_site_geometry(
         second.generated_footprint_geometry
     )
+
+
+def test_dumbbell_heuristic_undershoot_has_an_independent_350_m2_witness() -> None:
+    setback = calculate_setback(_dumbbell_site(), 0)
+    limits = FootprintLimits(max_footprint_area_m2=350)
+    result = generate_footprint(setback, limits)
+    witness = box(0, 0, 20, 17.5)
+    tolerance = area_tolerance_m2(setback.site_area_m2)
+    geometry = result.generated_footprint_geometry
+
+    assert witness.area == 20 * 17.5 == 350
+    assert witness.is_valid and witness.geom_type == "Polygon"
+    assert setback.selected_buildable_geometry.covers(witness)
+    assert witness.area <= limits.max_footprint_area_m2
+
+    assert result.outcome == "success"
+    assert geometry is not None and geometry.is_valid and geometry.area > 0
+    assert setback.selected_buildable_geometry.covers(geometry)
+    assert result.generated_footprint_area_m2 == pytest.approx(geometry.area, rel=1e-12, abs=0)
+    assert result.generated_footprint_area_m2 <= 350
+    assert result.undershoot_m2 == pytest.approx(350 - geometry.area, rel=1e-12, abs=0)
+    assert result.undershoot_m2 > tolerance
+    assert result.secondary_component_count == 2
+    assert result.secondary_discarded_area_m2 > 0
+
+
+def test_positive_generated_footprint_can_be_below_area_tolerance() -> None:
+    setback = calculate_setback(box(0, 0, 1e-3, 1e-3), 0)
+    result = generate_footprint(setback, FootprintLimits(max_footprint_area_m2=1e-9))
+    geometry = result.generated_footprint_geometry
+    tolerance = area_tolerance_m2(setback.site_area_m2)
+
+    assert result.outcome == "success"
+    assert geometry is not None and geometry.is_valid and geometry.area > 0
+    assert 0 < result.generated_footprint_area_m2 < tolerance
+    assert result.generated_footprint_area_m2 <= 1e-9
+    assert setback.selected_buildable_geometry.covers(geometry)
+    assert result.generated_footprint_area_m2 == pytest.approx(geometry.area, rel=1e-12, abs=0)
+
+
+def test_cap_immediately_below_selected_area_is_never_exceeded() -> None:
+    setback = calculate_setback(box(0, 0, 10, 10), 0)
+    selected_area = setback.selected_buildable_area_m2
+    cap = nextafter(selected_area, 0.0)
+    result = generate_footprint(setback, FootprintLimits(max_footprint_area_m2=cap))
+    geometry = result.generated_footprint_geometry
+
+    assert 0 < selected_area - cap < area_tolerance_m2(setback.site_area_m2)
+    assert result.outcome == "success"
+    assert geometry is not None and geometry.area > 0
+    assert not geometry.equals(setback.selected_buildable_geometry)
+    assert result.generated_footprint_area_m2 <= cap
+    assert result.generated_footprint_area_m2 == pytest.approx(geometry.area, rel=1e-12, abs=0)
+
+
+def test_narrow_component_reduction_remains_valid_and_contained() -> None:
+    setback = calculate_setback(box(0, 0, 100, 0.01), 0)
+    result = generate_footprint(setback, FootprintLimits(max_footprint_area_m2=0.5))
+    geometry = result.generated_footprint_geometry
+
+    assert result.outcome == "success"
+    assert geometry is not None and geometry.is_valid and geometry.area > 0
+    assert setback.selected_buildable_geometry.covers(geometry)
+    assert result.generated_footprint_area_m2 <= 0.5
+    assert result.generated_footprint_area_m2 == pytest.approx(geometry.area, rel=1e-12, abs=0)
+    assert result.undershoot_m2 == pytest.approx(0.5 - geometry.area, rel=1e-12, abs=0)
+
+
+def test_equivalent_reduction_inputs_have_identical_canonical_results() -> None:
+    setback = calculate_setback(_sample_site("rectangle"), 1)
+    selected = setback.selected_buildable_geometry
+    exterior = list(selected.exterior.coords)[:-1]
+    rotated_reversed = list(reversed(exterior[1:] + exterior[:1]))
+    rotated_reversed.append(rotated_reversed[0])
+    equivalent = replace(setback, selected_buildable_geometry=Polygon(rotated_reversed))
+    limits = FootprintLimits(max_footprint_area_m2=500)
+
+    first = generate_footprint(setback, limits)
+    second = generate_footprint(equivalent, limits)
+
+    assert first.outcome == second.outcome == "success"
+    assert serialize_site_geometry(first.generated_footprint_geometry) == serialize_site_geometry(
+        second.generated_footprint_geometry
+    )
+    assert first.generated_footprint_area_m2 == second.generated_footprint_area_m2
+    assert first.secondary_component_count == second.secondary_component_count
+    assert first.secondary_discarded_area_m2 == second.secondary_discarded_area_m2
+    assert first.undershoot_m2 == second.undershoot_m2
+
+
+def test_retains_best_candidate_when_later_buffer_evaluations_are_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    setback = calculate_setback(box(0, 0, 10, 10), 0)
+    # Control the search sequence while exercising the real candidate validator.
+    candidates = iter([Polygon(), box(0, 0, 7, 7), box(0, 0, 6, 6)])
+
+    def controlled_buffer(*args: object, **kwargs: object) -> Polygon:
+        return next(candidates, Polygon())
+
+    monkeypatch.setattr(Polygon, "buffer", controlled_buffer)
+    result = generate_footprint(setback, FootprintLimits(max_footprint_area_m2=50))
+    geometry = result.generated_footprint_geometry
+
+    assert result.outcome == "success"
+    assert geometry is not None and geometry.equals(box(0, 0, 7, 7))
+    assert result.generated_footprint_area_m2 == 49
+    assert result.secondary_component_count == 1
+    assert result.secondary_discarded_area_m2 == 0
+    assert result.undershoot_m2 == 1
 
 
 def test_empty_buildable_region_has_no_constructed_geometry() -> None:
