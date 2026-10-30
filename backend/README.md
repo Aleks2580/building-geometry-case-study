@@ -3,8 +3,9 @@
 FastAPI + uv + async psycopg. The backend exposes a health check, has database
 plumbing wired, and provides pure site geometry, setbacks, component selection,
 deterministic default footprint construction, maximum-permitted-floor calculation,
-and default massing metrics. Preferences, GFA targets, HTTP transport, option
-persistence, and visualization remain planned; see [the design note](../docs/DESIGN.md).
+default massing metrics, and preference-aware massing integration. GFA targets, HTTP
+transport, option persistence, and visualization remain planned; see [the design
+note](../docs/DESIGN.md).
 
 ## Stack
 
@@ -52,8 +53,18 @@ A Postgres is expected at `APP_DATABASE_URL`. The easiest way is the root
   metrics. Empty buildable regions and zero permitted floors are `infeasible`; a
   failed positive-footprint construction is `generation_failed` and does not claim
   mathematical infeasibility. Hard GFA bounds and generated capacity remain distinct.
-  Preferred constraints, GFA targets, transport models, persistence, and per-floor or
-  3D representations are excluded from this domain slice.
+- `app/massing/metrics.py` — shared exact stored-float-by-integer metric multiplication
+  and `NumericalRangeError`, reused by default and preference-aware massing.
+- `app/massing/configurable.py` — `generate_massing_with_preferences` and immutable
+  `PreferenceMassingResult`. It composes default context with exact floor preferences
+  and measured preferred footprint geometry. Empty/zero-capacity precedence and
+  preferred generation failure remain explicit; clamped or approximated area choices
+  can still produce a feasible building.
+- `app/massing/preferences.py` and `app/massing/area_preferences.py` — validated
+  preference values, exact floor selection, deterministic preferred-area construction,
+  and its request/effective/actual diagnostics.
+  GFA targets, transport models, persistence, and per-floor or 3D representations
+  remain outside this domain slice.
 - `app/geometry/tolerances.py` — scale-aware area comparison tolerance, without
   rounding geometry or filtering small positive components.
 

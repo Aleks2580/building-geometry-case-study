@@ -15,11 +15,8 @@ from app.geometry.footprints import (
 from app.geometry.setbacks import SetbackResult, calculate_setback
 from app.geometry.site import normalize_polygon
 from app.massing.floors import FloorLimits, calculate_maximum_permitted_floor_count
-
-
-class NumericalRangeError(OverflowError):
-    """A required derived metric cannot be represented by a finite float."""
-
+from app.massing.metrics import NumericalRangeError
+from app.massing.metrics import multiply_metric as _multiply_metric
 
 type DefaultMassingStatus = Literal["feasible", "infeasible", "generation_failed"]
 type DefaultMassingReason = Literal[
@@ -194,17 +191,3 @@ def _without_building(
         hard_constraints_satisfied=False if status == "infeasible" else None,
         reason=reason,
     )
-
-
-def _multiply_metric(value: float, count: int, *, metric_name: str) -> float:
-    """Multiply a finite stored float by an integer before the final float conversion."""
-    if count == 0 or value == 0:
-        return 0.0
-    numerator, denominator = value.as_integer_ratio()
-    try:
-        product = (numerator * count) / denominator
-    except (OverflowError, ZeroDivisionError) as error:
-        raise NumericalRangeError(f"{metric_name} must be representable as a finite float.") from error
-    if not isfinite(product):
-        raise NumericalRangeError(f"{metric_name} must be representable as a finite float.")
-    return float(product)
