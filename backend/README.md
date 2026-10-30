@@ -4,8 +4,8 @@ FastAPI + uv + async psycopg. The backend exposes a health check, has database
 plumbing wired, and provides pure site geometry, setbacks, component selection,
 deterministic default footprint construction, maximum-permitted-floor calculation,
 default massing metrics, preference-aware massing integration, and target-driven GFA
-assessment through a typed preview API. Root options can be saved, retrieved, and
-listed as immutable PostgreSQL snapshots. Branching, comparison, alternatives, and
+assessment through a typed preview API. Options can be saved, branched, retrieved, and
+listed as immutable PostgreSQL snapshots. Tree retrieval, comparison, alternatives, and
 visualization remain planned; see
 [the design note](../docs/DESIGN.md).
 
@@ -62,8 +62,9 @@ these tests with the complete backend suite.
 - `app/db.py` — async psycopg pool and scoped connections, using raw SQL without an ORM.
 - `app/migrations.py` and `app/sql/migrations/` — explicit locked, checksummed migrations.
 - `app/persistence/options.py` — insert-only snapshots, ID lookup, and summary queries.
-- `app/application/options.py` and `app/v1/routes/options.py` — root saves and typed
-  save/retrieve/list endpoints with version metadata and structured not-found errors.
+- `app/application/options.py` and `app/v1/routes/options.py` — root saves, child
+  branching, and typed save/retrieve/list endpoints with version metadata and
+  structured not-found errors.
 - `app/v1/routes/health.py` — `GET /api/v1/health`.
 - `app/v1/schemas/massing.py` and `app/v1/routes/massing.py` — typed
   `POST /api/v1/massing/preview` contracts, OpenAPI example, and structured 422 errors.
@@ -129,7 +130,7 @@ for validation, feasibility, null geometry, preference, target, and precision se
 Previews are transient and never query or write the database. The existing server
 lifespan still opens its configured connection pool.
 
-## Root options
+## Saved options
 
 Send the same configuration to `POST /api/v1/options`, optionally adding `name`.
 The backend recomputes the result, inserts a new root snapshot, and returns `201`
@@ -149,11 +150,34 @@ curl -sS 'http://localhost:8000/api/v1/options?limit=50&offset=0'
 curl -sS http://localhost:8000/api/v1/options/OPTION_UUID
 ```
 
+To branch a saved option, send complete new constraints to
+`POST /api/v1/options/OPTION_UUID/branches`, optionally adding preferences, targets,
+and a child name:
+
+```bash
+curl -sS http://localhost:8000/api/v1/options/OPTION_UUID/branches \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "Lower building",
+    "hard_constraints": {"setback_m": 3, "floor_to_floor_m": 3.5, "max_floors": 3},
+    "targets": {"gfa_target_m2": 1500}
+  }'
+```
+
+The child inherits the saved site and recomputes the replacement configuration;
+omitted preferences and targets use empty defaults. The response is `201` with the
+complete child snapshot, its `parent_id`, and a `Location` header. Siblings and nested
+branches preserve existing snapshots. A missing parent returns
+`404 PARENT_OPTION_NOT_FOUND`. All four feasibility statuses and existing domain
+errors are preserved. Site geometry, parent identifiers, and computed results cannot
+be supplied in branch bodies.
+
 Retrieval returns the stored configuration/result and versions without recomputation.
 Listing returns metadata and metrics. An unknown UUID returns `404 OPTION_NOT_FOUND`.
 The [public API contract](../docs/DESIGN.md#api-contract) defines the complete snapshot,
-name validation, pagination, and numerical behavior. There are no update/delete,
-branching, tree, comparison, or automatic-alternative endpoints.
+request/name validation, pagination, and numerical behavior. Branching requires no new
+migration. There are no update/delete, tree, comparison, or automatic-alternative
+endpoints; frontend workflows remain planned.
 
 Compose retains snapshots in its `db-data` volume across `docker compose restart db backend`
 and `docker compose down` followed by `up`. `docker compose down -v` removes that

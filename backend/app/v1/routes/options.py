@@ -5,12 +5,13 @@ from fastapi import APIRouter, Depends, Query, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 
-from app.application.options import save_root_option
+from app.application.options import ParentOptionNotFound, branch_option, save_root_option
 from app.persistence.options import OptionRepository
 from app.v1.dependencies import get_option_repository
-from app.v1.massing import compute_preview
+from app.v1.errors import not_found_response
+from app.v1.massing import MASSING_VALIDATION_ERRORS, compute_preview, massing_error_response, preview_arguments
 from app.v1.schemas.massing import ErrorResponse
-from app.v1.schemas.options import OptionResponse, OptionSummaryResponse, RootOptionRequest
+from app.v1.schemas.options import BranchOptionRequest, OptionResponse, OptionSummaryResponse, RootOptionRequest
 
 router = APIRouter(prefix="/options", tags=["options"])
 type RepositoryDependency = Annotated[OptionRepository, Depends(get_option_repository)]
@@ -65,16 +66,43 @@ async def list_options(
 async def get_option(option_id: UUID, repository: RepositoryDependency) -> OptionResponse | JSONResponse:
     snapshot = await repository.get(option_id)
     if snapshot is None:
-        return JSONResponse(
-            status_code=404,
-            content=ErrorResponse.model_validate(
-                {
-                    "error": {
-                        "code": "OPTION_NOT_FOUND",
-                        "message": "Option not found.",
-                        "details": [{"path": "option_id", "message": "No saved option has this identifier."}],
-                    }
-                }
-            ).model_dump(mode="json"),
+        return not_found_response(
+            "OPTION_NOT_FOUND", "Option not found.", path="option_id", detail="No saved option has this identifier."
         )
+    return OptionResponse.model_validate(snapshot, from_attributes=True)
+
+
+@router.post(
+    "/{option_id}/branches",
+    status_code=201,
+    response_model=OptionResponse,
+    summary="Compute and save an immutable child option",
+    description=(
+        "Inherit the saved parent site and recompute a complete replacement configuration. "
+        "Omitted preferences and targets use empty defaults. All four feasibility statuses can be saved. "
+        "Site geometry, parent identifiers, and computed results cannot be supplied in the body."
+    ),
+    responses={
+        201: {
+            "headers": {"Location": {"description": "URL of the saved child snapshot.", "schema": {"type": "string"}}}
+        },
+        404: {"model": ErrorResponse, "description": "Parent option not found (PARENT_OPTION_NOT_FOUND)."},
+        422: {"model": ErrorResponse, "description": "Invalid configuration, name, or parent UUID."},
+    },
+)
+async def create_branch_option(
+    option_id: UUID, request: BranchOptionRequest, response: Response, repository: RepositoryDependency
+) -> OptionResponse | JSONResponse:
+    try:
+        snapshot = await branch_option(repository, option_id, **preview_arguments(request), name=request.name)
+    except ParentOptionNotFound:
+        return not_found_response(
+            "PARENT_OPTION_NOT_FOUND",
+            "Parent option not found.",
+            path="option_id",
+            detail="No saved parent option has this identifier.",
+        )
+    except MASSING_VALIDATION_ERRORS as error:
+        return massing_error_response(error)
+    response.headers["Location"] = f"/api/v1/options/{snapshot.id}"
     return OptionResponse.model_validate(snapshot, from_attributes=True)

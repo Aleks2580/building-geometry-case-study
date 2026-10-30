@@ -16,6 +16,15 @@ def validation_response(code: str, message: str, *, path: str) -> JSONResponse:
     )
 
 
+def not_found_response(code: str, message: str, *, path: str, detail: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=404,
+        content=ErrorResponse.model_validate(
+            {"error": {"code": code, "message": message, "details": [{"path": path, "message": detail}]}}
+        ).model_dump(mode="json"),
+    )
+
+
 async def request_validation_error_handler(request: Request, error: RequestValidationError) -> JSONResponse:
     errors = error.errors()
     section_codes = {
