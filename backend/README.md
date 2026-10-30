@@ -1,9 +1,10 @@
 # Backend — building geometry case study
 
 FastAPI + uv + async psycopg. The backend exposes a health check, has database
-plumbing wired, and provides pure site geometry, setbacks, component selection, and
-deterministic default footprint construction. Floors, GFA, and option persistence
-remain planned; see [the design note](../docs/DESIGN.md).
+plumbing wired, and provides pure site geometry, setbacks, component selection,
+deterministic default footprint construction, and maximum-permitted-floor calculation.
+Actual floor selection, floor plates, GFA, and option persistence remain planned; see
+[the design note](../docs/DESIGN.md).
 
 ## Stack
 
@@ -41,6 +42,11 @@ A Postgres is expected at `APP_DATABASE_URL`. The easiest way is the root
   `max_footprint_area_m2`; the planned HTTP contract uses `max_footprint_m2` and
   transport mapping is not implemented yet. Construction reports success, empty
   buildable regions, or generation failure without claiming full feasibility.
+- `app/massing/floors.py` — immutable `FloorLimits`, `InvalidFloorLimits`, and
+  `calculate_maximum_permitted_floor_count`. It validates positive finite heights,
+  positive integer floor counts, and the requirement for at least one height/count
+  limit. The result is a non-negative hard capacity bound; it does not select floors
+  or calculate building metrics.
 - `app/geometry/tolerances.py` — scale-aware area comparison tolerance, without
   rounding geometry or filtering small positive components.
 

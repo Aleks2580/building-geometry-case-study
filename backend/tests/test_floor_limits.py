@@ -24,6 +24,27 @@ def test_positive_height_below_one_floor_permits_zero() -> None:
     assert calculate_maximum_permitted_floor_count(FloorLimits(3.5, max_height_m=3.49, max_floors=4)) == 0
 
 
+@pytest.mark.parametrize("floor_to_floor_m", [3.5, 3.6])
+def test_one_floor_capacity_boundary(floor_to_floor_m: float) -> None:
+    assert calculate_maximum_permitted_floor_count(FloorLimits(floor_to_floor_m, max_height_m=floor_to_floor_m)) == 1
+    assert (
+        calculate_maximum_permitted_floor_count(
+            FloorLimits(
+                floor_to_floor_m,
+                max_height_m=math.nextafter(floor_to_floor_m, 0.0),
+                max_floors=7,
+            )
+        )
+        == 0
+    )
+    assert (
+        calculate_maximum_permitted_floor_count(
+            FloorLimits(floor_to_floor_m, max_height_m=math.nextafter(floor_to_floor_m, math.inf))
+        )
+        == 1
+    )
+
+
 @pytest.mark.parametrize(
     ("height", "expected"),
     [
@@ -53,6 +74,52 @@ def test_decimal_looking_inputs_use_their_binary64_values() -> None:
     assert calculate_maximum_permitted_floor_count(FloorLimits(0.1, max_height_m=0.3)) == 2
 
 
+def _exact_height_fits(floor_count: int, floor_to_floor_m: float, max_height_m: float) -> bool:
+    floor_numerator, floor_denominator = floor_to_floor_m.as_integer_ratio()
+    height_numerator, height_denominator = max_height_m.as_integer_ratio()
+    return floor_count * floor_numerator * height_denominator <= height_numerator * floor_denominator
+
+
+def test_stored_float_boundary_36_m_over_3_6_m_returns_nine() -> None:
+    limits = FloorLimits(floor_to_floor_m=3.6, max_height_m=36.0)
+
+    assert 10 * 3.6 == 36.0
+    assert not _exact_height_fits(10, 3.6, 36.0)
+    assert _exact_height_fits(9, 3.6, 36.0)
+    assert calculate_maximum_permitted_floor_count(limits) == 9
+    assert calculate_maximum_permitted_floor_count(FloorLimits(3.6, max_height_m=36.0, max_floors=10)) == 9
+    assert calculate_maximum_permitted_floor_count(FloorLimits(3.6, max_height_m=36.0, max_floors=8)) == 8
+    assert calculate_maximum_permitted_floor_count(FloorLimits(3.6, max_height_m=math.nextafter(36.0, math.inf))) == 10
+
+
+@pytest.mark.parametrize(
+    ("limits", "expected"),
+    [
+        (FloorLimits(3.5, max_height_m=24), 6),
+        (FloorLimits(3.5, max_floors=6), 6),
+        (FloorLimits(3.5, max_height_m=24, max_floors=4), 4),
+        (FloorLimits(3.5, max_height_m=3.49, max_floors=7), 0),
+        (FloorLimits(3.6, max_height_m=36.0, max_floors=10), 9),
+    ],
+)
+def test_returned_capacity_is_admissible_and_maximal(limits: FloorLimits, expected: int) -> None:
+    floor_count = calculate_maximum_permitted_floor_count(limits)
+
+    assert floor_count == expected
+    assert isinstance(floor_count, int)
+    assert floor_count >= 0
+    if limits.max_floors is not None:
+        assert floor_count <= limits.max_floors
+    if limits.max_height_m is not None:
+        assert _exact_height_fits(floor_count, limits.floor_to_floor_m, limits.max_height_m)
+
+    next_floor_violates_height = limits.max_height_m is not None and not _exact_height_fits(
+        floor_count + 1, limits.floor_to_floor_m, limits.max_height_m
+    )
+    next_floor_violates_count = limits.max_floors is not None and floor_count + 1 > limits.max_floors
+    assert next_floor_violates_height or next_floor_violates_count
+
+
 def test_large_floor_count_is_kept_as_an_integer() -> None:
     maximum = 10**400
     limits = FloorLimits(floor_to_floor_m=3.5, max_floors=maximum)
@@ -62,11 +129,12 @@ def test_large_floor_count_is_kept_as_an_integer() -> None:
     assert calculate_maximum_permitted_floor_count(limits) == maximum
 
 
-def test_large_finite_height_ratio_does_not_overflow_to_an_invented_cap() -> None:
-    result = calculate_maximum_permitted_floor_count(FloorLimits(5e-324, max_height_m=1.0))
+def test_smallest_positive_float_ratio_is_exact_and_count_bound_still_applies() -> None:
+    smallest_positive = math.nextafter(0.0, 1.0)
+    result = calculate_maximum_permitted_floor_count(FloorLimits(smallest_positive, max_height_m=1.0))
 
-    assert result > 10**323
-    assert result.bit_length() > 1000
+    assert result == 2**1074
+    assert calculate_maximum_permitted_floor_count(FloorLimits(smallest_positive, max_height_m=1.0, max_floors=7)) == 7
 
 
 @pytest.mark.parametrize(
@@ -90,10 +158,10 @@ def test_invalid_supplied_heights_are_rejected_even_with_floor_count(value: obje
 @pytest.mark.parametrize("value", [True, False, 6.0, 6.5, "6", 0, -1])
 def test_invalid_floor_counts_are_rejected(value: object) -> None:
     with pytest.raises(InvalidFloorLimits):
-        FloorLimits(3.5, max_floors=value)  # type: ignore[arg-type]
+        FloorLimits(3.5, max_height_m=24, max_floors=value)  # type: ignore[arg-type]
 
 
-def test_both_optional_limits_are_required() -> None:
+def test_at_least_one_height_or_floor_limit_is_required() -> None:
     with pytest.raises(InvalidFloorLimits):
         FloorLimits(3.5)
 
