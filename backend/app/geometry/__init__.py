@@ -1,9 +1,12 @@
 """Pure planar geometry operations, independent of HTTP and persistence."""
 
 from app.geometry.footprints import (
+    FootprintConstructionOutcome,
     FootprintLimits,
+    FootprintResult,
     InvalidFootprintLimits,
     calculate_footprint_area_upper_bound,
+    generate_footprint,
 )
 from app.geometry.setbacks import (
     Diagnostic,
@@ -25,7 +28,9 @@ from app.geometry.site import (
 
 __all__ = [
     "Diagnostic",
+    "FootprintConstructionOutcome",
     "FootprintLimits",
+    "FootprintResult",
     "InvalidFootprintLimits",
     "InvalidSetback",
     "InvalidSiteGeometry",
@@ -34,6 +39,7 @@ __all__ = [
     "SetbackResult",
     "calculate_setback",
     "calculate_footprint_area_upper_bound",
+    "generate_footprint",
     "normalize_polygon",
     "parse_site_geometry",
     "select_largest_component",
