@@ -6,7 +6,9 @@
 > construction, maximum-permitted-floor calculation, default massing metrics,
 > validated design preferences, preferred footprint construction, preference-aware
 > massing metrics, validated GFA targets, target-driven floor selection, and target
-> assessment. Persistence, HTTP transport, and visualization remain planned.
+> assessment. A typed massing preview API now exposes the domain result through
+> explicit application mapping. Persistence, option APIs, alternatives, and
+> visualization remain planned.
 
 ## Problem interpretation
 
@@ -38,8 +40,8 @@ permissions, and background jobs are outside scope.
   `floor_to_floor_m`, optional `max_height_m`, and optional `max_floors`. Its pure
   calculation returns the maximum permitted floor count without selecting a building.
 - **FootprintLimits:** the implemented immutable domain value object accepts optional
-  `site_coverage_ratio` and `max_footprint_area_m2` limits. The planned HTTP field is
-  named `max_footprint_m2`; transport mapping is not implemented yet.
+  `site_coverage_ratio` and `max_footprint_area_m2` limits. HTTP uses
+  `max_footprint_m2`, explicitly mapped to the existing domain field.
 - **FootprintResult:** the implemented default-construction result contains the hard
   upper bound, generated Polygon and measured area when present, an outcome, the
   returned construction's secondary component metadata, and area undershoot.
@@ -56,10 +58,10 @@ permissions, and background jobs are outside scope.
   positive `preferred_footprint_area_m2`; explicit choices subordinate to hard limits.
 - **DesignTargets:** implemented immutable optional non-negative `gfa_target_m2`, a
   desired minimum, not a hard constraint or exact optimization objective.
-- **MassingResult:** planned complete input/context geometry, generated default and
-  actual footprint, repeated floor plate, metrics, preference outcomes, and
-  feasibility. Hard upper bounds, demonstrated construction capacity, and actual
-  preferred results are distinct.
+- **MassingPreviewResponse:** typed HTTP configuration, context geometry, generated
+  default and actual footprint, repeated floor plate, metrics, preference outcomes,
+  and feasibility. Hard upper bounds, demonstrated construction capacity, and actual
+  preferred results remain distinct.
 - **Option:** immutable snapshot of inputs, result, schema/algorithm versions, and
   optional parent. A branch inherits the parent site, recomputes a complete new
   configuration, and inserts a child; it never updates its parent.
@@ -110,7 +112,10 @@ flowchart LR
 ```
 
 Transport owns Pydantic contracts, versioning, and error translation; no geometry or
-SQL. Application use cases coordinate preview, save, branch, tree, and comparison.
+SQL. `app.application.massing.preview_massing` parses site input, calls the existing
+preference-aware domain service, and explicitly maps the result to JSON-compatible
+values without importing Pydantic or FastAPI. Save, branch, tree, and comparison
+use cases remain planned.
 Pure domain services separate polygon operations from massing rules: `app.geometry`
 owns polygons, while `app.massing.floors` owns scalar floor-limit rules and
 `app.massing.defaults` orchestrates the current default result over those geometry
@@ -151,7 +156,7 @@ construction is a domain outcome.
 and applies the same canonicalization to directly supplied polygons, including
 generated setback components. A Shapely polygon is the domain
 value; no separate geometry wrapper, HTTP model, or database dependency is needed.
-`InvalidSiteGeometry` carries a message and input path for later transport translation.
+`InvalidSiteGeometry` carries a message and input path for transport translation.
 
 The parser accepts a Polygon mapping with list/tuple coordinate arrays. Positions
 must contain exactly two finite numeric ordinates; booleans and numeric strings
@@ -261,8 +266,7 @@ snapping, a custom repair, or a claim of exact mathematical erosion at every sca
 frozen `FootprintResult`. Its `footprint_area_upper_bound_m2` reuses the hard-area
 calculation: the minimum of selected buildable area, original site area multiplied
 by `site_coverage_ratio`, and `max_footprint_area_m2`. The internal field name is
-`max_footprint_area_m2`; the planned HTTP contract uses `max_footprint_m2` and will
-need an explicit mapping when transport is implemented.
+`max_footprint_area_m2`; the HTTP route explicitly maps `max_footprint_m2` to it.
 
 When the selected canonical Polygon already fits the bound, the result returns that
 canonical Polygon directly without `buffer(0)`, preserving holes and distinct
@@ -315,7 +319,7 @@ Pydantic, or persistence.
 
 `U = footprint_area_upper_bound_m2` is the minimum of the largest setback component's
 area, supplied `site_area_m2 * site_coverage_ratio`, and supplied
-`max_footprint_area_m2` in the current internal API. The planned HTTP contract calls
+`max_footprint_area_m2` in the current internal API. The HTTP contract calls
 the last field `max_footprint_m2`. The footprint module does not calculate GFA, but
 default massing derives `gfa_upper_bound_m2 = U * N` from this bound and the floor
 capacity. These are necessary hard upper bounds under the adopted single-building,
@@ -579,10 +583,13 @@ without promising identical recomputation across changed geometry-engine version
 ## API contract
 
 All routes use `/api/v1`; breaking changes require a new version, additive response
-fields remain compatible. Preview and root-save requests contain `site`,
-`hard_constraints`, `preferences`, and `targets`; save also accepts `name`.
+fields remain compatible. `POST /api/v1/massing/preview` is implemented; the option
+and alternatives routes below remain planned. Preview requests require `site` and
+`hard_constraints`. Omitted `preferences` and `targets` default to empty objects;
+explicit null objects are invalid. Optional scalar fields accept null. Unknown fields,
+including client-computed results, are rejected. Planned root saves also accept `name`.
 
-Illustrative preview request (not a computed fixture):
+Computed preview example, also exercised through the OpenAPI example:
 
 ```json
 {
@@ -592,13 +599,17 @@ Illustrative preview request (not a computed fixture):
   },
   "hard_constraints": {
     "setback_m": 3, "floor_to_floor_m": 3.5,
-    "max_height_m": 24, "max_floors": 6,
-    "site_coverage_ratio": 0.6, "max_footprint_m2": null
+    "max_height_m": 24, "max_floors": 6
   },
-  "preferences": {"preferred_floor_count": 4, "preferred_footprint_area_m2": 225},
-  "targets": {"gfa_target_m2": 900}
+  "preferences": {},
+  "targets": {"gfa_target_m2": 2000}
 }
 ```
+
+This produces a 646 m² footprint, four floors, 14 m height, and 2584 m² GFA,
+with status `feasible` and target status `met`. The hard and generated GFA capacity
+are both 3876 m² at six permitted floors. `/docs` exposes the request/response
+schemas and example; `/openapi.json` exposes the machine-readable schema.
 
 | Method and path | Contract |
 |---|---|
@@ -611,30 +622,52 @@ Illustrative preview request (not a computed fixture):
 | `POST /options/compare` | Selected options → snapshots and input/metric/diagnostic comparison. |
 | `POST /massing/alternatives` | Secondary bounded suggestions; no persistence. |
 
-Results echo configuration and return `site_geometry`, `buildable_geometry`,
+Results echo normalized configuration (including the canonical site) and return
+`site_geometry`, `buildable_geometry`,
 `selected_buildable_geometry`, `generated_footprint_geometry`, `footprint_geometry`,
 and `floor_plate_geometry` using closed-ring GeoJSON-style geometry. `metrics` contains
 site/buildable/selected areas (`site_area_m2`, `buildable_area_m2`,
 `selected_buildable_area_m2`), `footprint_area_upper_bound_m2`, `gfa_upper_bound_m2`,
 `generated_footprint_area_m2`, `generated_gfa_capacity_m2`,
 `maximum_permitted_floor_count`, and actual `footprint_area_m2`, `floor_count`,
-`height_m`, and `gfa_m2`. `preference_results` follows the preference contract;
-`feasibility` contains status, hard-constraint satisfaction, target assessment
-(`requested_m2`, `actual_m2`, `shortfall_m2`, status), and diagnostics.
+`height_m`, `gfa_m2`, `site_coverage_ratio`, and `floor_to_floor_m`. `setback`
+contains `component_count`, `retained_area_m2`, and `discarded_area_m2`.
+`preference_results` contains the requested `preferred_floor_count` and a nullable
+`footprint_area` assessment with the domain's requested/effective/actual areas,
+signed difference, effective-target undershoot, status, and diagnostic codes.
+`feasibility` contains status, nullable reason, hard-constraint satisfaction, target
+assessment (`requested_m2`, `actual_m2`, `shortfall_m2`, status, `diagnostic_code`),
+and diagnostics with code, severity, message, and optional path/details.
 
-All four domain statuses use preview `200` and can be explicitly saved as diagnostic
+All four domain statuses use preview `200`; future save APIs will support diagnostic
 snapshots. For `infeasible`/`generation_failed`, actual footprint/floor-plate geometry,
 area, count, height, and GFA are null; retain available context/bounds. Empty buildable
 geometry is null; generated capacity is null if no default was constructed. Persisted
 status must agree with result. Clients cannot submit authoritative computed results.
 
-Errors use `{error: {code, message, details: [{path, ...}]}}`. Validation is `422`:
+Errors use `{error: {code, message, details: [{path, message}]}}`. Validation is `422`:
 `INVALID_SITE_GEOMETRY`, `INVALID_CONSTRAINTS`, `INVALID_PREFERENCE`,
-`PREFERENCE_EXCEEDS_HARD_LIMIT`, or `INVALID_COMPARISON`. Malformed/non-positive
+`INVALID_TARGET`, or `PREFERENCE_EXCEEDS_HARD_LIMIT`. Malformed/non-positive
 preferences use `INVALID_PREFERENCE`; absent height and floor limits use
-`INVALID_CONSTRAINTS`. Missing options/parents use `404 OPTION_NOT_FOUND` or
-`PARENT_OPTION_NOT_FOUND`. Unexpected geometry/database failures are server errors,
-never feasibility diagnoses.
+`INVALID_CONSTRAINTS`. Invalid GFA targets use `INVALID_TARGET`. Malformed JSON,
+invalid root bodies, and unknown root fields use `INVALID_REQUEST`. For multiple
+invalid sections, the code identifies the first validation error in schema order;
+details retain all field paths and messages, without input values or exception
+contexts. Paths use dotted fields and bracketed array indexes.
+
+Numbers must be finite JSON numeric values, excluding booleans and strings. Floor
+counts require integers; coordinates preserve original integers until domain ring
+validation, then use the existing binary64 canonicalization without rounding.
+Floor-limit and GFA tolerances remain the domain policies above. A required derived
+metric outside finite binary64 range returns `422 NUMERICAL_RANGE_ERROR`, never
+infeasibility or non-finite JSON. Unexpected geometry failures remain server errors.
+The synchronous endpoint runs through FastAPI's worker thread pool and performs no
+database operation. The existing application lifespan still opens its configured
+database pool; the preview use case and API tests need no database connection.
+
+Planned comparison validation uses `INVALID_COMPARISON`. Planned missing
+options/parents use `404 OPTION_NOT_FOUND` or `PARENT_OPTION_NOT_FOUND`; database
+failures remain server errors.
 
 The UI preserves requested drafts, shows floor errors inline and requested/effective/
 actual area differences. Failed construction clears stale building views; users can
