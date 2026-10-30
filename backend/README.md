@@ -4,7 +4,8 @@ FastAPI + uv + async psycopg. The backend exposes a health check, has database
 plumbing wired, and provides pure site geometry, setbacks, component selection,
 deterministic default footprint construction, maximum-permitted-floor calculation,
 default massing metrics, preference-aware massing integration, and target-driven GFA
-assessment through a typed preview API. Option persistence, alternatives, and
+assessment through a typed preview API. Root options can be saved, retrieved, and
+listed as immutable PostgreSQL snapshots. Branching, comparison, alternatives, and
 visualization remain planned; see
 [the design note](../docs/DESIGN.md).
 
@@ -13,8 +14,8 @@ visualization remain planned; see
 - **[uv](https://docs.astral.sh/uv/)** — package manager
 - **FastAPI** — HTTP API under `/api/v1/`
 - **pydantic-settings** — config from env vars (`APP_` prefix)
-- **psycopg (async) + connection pool** — DB access (pool wired, no schema; you write raw SQL)
-- **Typer** — CLI (`serve`, `generate-openapi`)
+- **psycopg (async) + connection pool** — parameterized raw SQL and JSONB snapshots
+- **Typer** — CLI (`migrate`, `serve`, `generate-openapi`)
 - **Ruff** + **Pyright** — lint/format + type check
 
 ## Getting started
@@ -55,11 +56,14 @@ the URL. Integration tests skip when `TEST_DATABASE_URL` is absent and fail when
 configured server cannot be reached. CI supplies a PostgreSQL 16 service and runs
 these tests with the complete backend suite.
 
-## What's here / what's yours
+## Implementation
 
 - `app/server.py` — FastAPI app, CORS, lifespan; creates + opens the DB connection pool.
-- `app/db.py` — async psycopg pool + `get_connection` dependency. **No ORM, no schema** — define
-  your own model types and write pure SQL.
+- `app/db.py` — async psycopg pool and scoped connections, using raw SQL without an ORM.
+- `app/migrations.py` and `app/sql/migrations/` — explicit locked, checksummed migrations.
+- `app/persistence/options.py` — insert-only snapshots, ID lookup, and summary queries.
+- `app/application/options.py` and `app/v1/routes/options.py` — root saves and typed
+  save/retrieve/list endpoints with version metadata and structured not-found errors.
 - `app/v1/routes/health.py` — `GET /api/v1/health`.
 - `app/v1/schemas/massing.py` and `app/v1/routes/massing.py` — typed
   `POST /api/v1/massing/preview` contracts, OpenAPI example, and structured 422 errors.
@@ -99,8 +103,8 @@ these tests with the complete backend suite.
   conservative tolerance, and upper-bound/generated-capacity diagnostics.
 - `app/massing/preferences.py` and `app/massing/area_preferences.py` — validated
   preference values, exact floor selection, deterministic preferred-area construction,
-  and its request/effective/actual diagnostics. Persistence and per-floor or 3D
-  representations remain planned.
+  and its request/effective/actual diagnostics. Per-floor or 3D representations
+  remain planned.
 - `app/geometry/tolerances.py` — scale-aware area comparison tolerance, without
   rounding geometry or filtering small positive components.
 
@@ -123,8 +127,37 @@ Open [interactive API documentation](http://localhost:8000/docs) for the typed
 contracts and a runnable example. See [the API contract](../docs/DESIGN.md#api-contract)
 for validation, feasibility, null geometry, preference, target, and precision semantics.
 Previews are transient and never query or write the database. The existing server
-lifespan still opens its configured connection pool. Option routes, persistence,
-branching, comparisons, and automatic alternatives are not implemented.
+lifespan still opens its configured connection pool.
+
+## Root options
+
+Send the same configuration to `POST /api/v1/options`, optionally adding `name`.
+The backend recomputes the result, inserts a new root snapshot, and returns `201`
+with its UUID and a `Location` header. All feasibility statuses can be saved.
+Client-submitted results, metrics, and parent identifiers are rejected.
+
+```bash
+curl -sS http://localhost:8000/api/v1/options \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "Rectangle study",
+    "site": {"type": "Polygon", "coordinates": [[[0,0],[40,0],[40,25],[0,25],[0,0]]]},
+    "hard_constraints": {"setback_m": 3, "floor_to_floor_m": 3.5, "max_floors": 6},
+    "targets": {"gfa_target_m2": 2000}
+  }'
+curl -sS 'http://localhost:8000/api/v1/options?limit=50&offset=0'
+curl -sS http://localhost:8000/api/v1/options/OPTION_UUID
+```
+
+Retrieval returns the stored configuration/result and versions without recomputation.
+Listing returns metadata and metrics. An unknown UUID returns `404 OPTION_NOT_FOUND`.
+The [public API contract](../docs/DESIGN.md#api-contract) defines the complete snapshot,
+name validation, pagination, and numerical behavior. There are no update/delete,
+branching, tree, comparison, or automatic-alternative endpoints.
+
+Compose retains snapshots in its `db-data` volume across `docker compose restart db backend`
+and `docker compose down` followed by `up`. `docker compose down -v` removes that
+project's stored data. Back up persistent data before any deliberate volume removal.
 
 ## Commands
 
