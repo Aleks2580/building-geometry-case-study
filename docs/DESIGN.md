@@ -3,7 +3,8 @@
 > The application currently provides the health endpoint, configuration, async
 > database-pool plumbing, sample sites, a tested TypeScript frontend scaffold, and
 > pure site geometry, setbacks, component selection, and deterministic default
-> footprint construction. Floors, GFA, persistence, and visualization remain planned.
+> footprint construction, plus a pure maximum-permitted-floor calculation. Actual
+> floor selection, floor plates, GFA, persistence, and visualization remain planned.
 
 ## Problem interpretation
 
@@ -31,6 +32,9 @@ permissions, and background jobs are outside scope.
   positive `max_height_m` and optional positive integer `max_floors`. Optional area
   limits are `site_coverage_ratio` in `(0, 1]` and positive `max_footprint_m2`.
   At least one height/floor limit is required.
+- **FloorLimits:** the implemented immutable `app.massing` value object validates
+  `floor_to_floor_m`, optional `max_height_m`, and optional `max_floors`. Its pure
+  calculation returns the maximum permitted floor count without selecting a building.
 - **FootprintLimits:** the implemented immutable domain value object accepts optional
   `site_coverage_ratio` and `max_footprint_area_m2` limits. The planned HTTP field is
   named `max_footprint_m2`; transport mapping is not implemented yet.
@@ -95,10 +99,11 @@ flowchart LR
 
 Transport owns Pydantic contracts, versioning, and error translation; no geometry or
 SQL. Application use cases coordinate preview, save, branch, tree, and comparison.
-Pure domain services separate polygon operations from massing rules and depend on
-neither HTTP nor persistence. Repositories own parameterized SQL, transactions, and
-snapshot mapping; no ORM. The frontend owns drafts, interaction, and rendering;
-geometry, floor count, height, area, GFA, and feasibility remain server-authoritative.
+Pure domain services separate polygon operations from massing rules: `app.geometry`
+owns polygons and `app.massing` owns floor-limit rules. Both depend on neither HTTP
+nor persistence. Repositories own parameterized SQL, transactions, and snapshot
+mapping; no ORM. The frontend owns drafts, interaction, and rendering; geometry,
+floor count, height, area, GFA, and feasibility remain server-authoritative.
 
 ## Algorithm
 
@@ -261,11 +266,31 @@ hard-bound area minus the returned measured area. Outcomes are `success`,
 `None` geometry and area. Unexpected GEOS errors, invalid generated topology, and
 invariant violations propagate as errors rather than becoming ordinary failures.
 
-Let `N = maximum_permitted_floor_count`: use `floor(max_height_m / floor_to_floor_m)`
-for height alone, `max_floors` for count alone, or their minimum for both. Never round
-up past a height cap. Both limits absent is invalid input; a valid positive height
-allowing zero floors is `infeasible`, checked before rejecting a positive floor
-preference against zero capacity.
+#### Implemented floor-limit calculation
+
+Let `N = maximum_permitted_floor_count` denote the hard upper bound returned by
+`calculate_maximum_permitted_floor_count(limits)`.
+
+`app.massing` exposes the immutable `FloorLimits` value object, the
+`InvalidFloorLimits` domain exception, and
+`calculate_maximum_permitted_floor_count(limits)`. `floor_to_floor_m` is required
+and must be a finite positive number. `max_height_m` is optional and, when supplied,
+must use the same validation. `max_floors` is optional and must be a strictly
+positive Python integer; booleans, floats, strings, zero, and negative values are
+rejected. Every supplied field is validated, and at least one of the two optional
+limits must be present. Integer length inputs are normalized to Python `float`;
+`max_floors` retains integer semantics.
+
+The calculation uses `floor(max_height_m / floor_to_floor_m)` for a height-only limit,
+`max_floors` for a count-only limit, and the smaller value when both are supplied.
+It returns a non-negative integer hard upper bound. A valid positive height below one
+floor therefore returns zero; zero is a capacity result, not invalid input and not a
+claim that this module has assigned the application's full `infeasible` status. Actual
+floor selection, floor plates, height metrics, GFA, preferences, targets, and massing
+orchestration remain planned.
+
+This is a pure massing rule and does not depend on Shapely, site geometry, HTTP,
+Pydantic, or persistence.
 
 ### Area bounds and deterministic construction
 
@@ -334,6 +359,13 @@ unchanged even when the target is missed.
 
 ### Feasibility and targets
 
+These application-level statuses remain planned orchestration around the pure domain
+rules. `app.massing` currently returns only the permitted floor-count capacity; a zero
+capacity does not by itself produce one of these statuses.
+After basic input validation, future massing orchestration must classify zero
+permitted floors as `infeasible` before checking an otherwise valid positive floor
+preference against that zero capacity. Preference validation remains unimplemented.
+
 | Status | Meaning | `hard_constraints_satisfied` |
 |---|---|---|
 | `feasible` | Positive valid building; target met or absent. | `true` |
@@ -358,12 +390,28 @@ positive building.
 
 ### Numerical policy and alternatives
 
-Comparisons use centralized scale-aware tolerances: initially area tolerance
-`max(1e-8, 1e-9 * max(site_area_m2, 1))`, length tolerance derived from extent, and GFA
-tolerance propagated through `N`. The same target predicate governs floor selection
-and status; when a minimum count exceeds one, the preceding count must fail it.
-Tolerance cannot bridge material capacity gaps or certify ungenerated geometry;
-adjustments require fixture evidence.
+Geometry and area comparisons use centralized scale-aware tolerances: initially area
+tolerance `max(1e-8, 1e-9 * max(site_area_m2, 1))`, length tolerance derived from
+extent, and GFA tolerance propagated through `N`. Floor-limit arithmetic uses a
+separate exact policy. Length inputs are first normalized to Python floats, then
+`Fraction.from_float` represents those stored binary64 values exactly; it does not
+recover the original decimal text. This avoids intermediate float quotient overflow
+and prevents rounding from admitting an over-height floor. No epsilon, `isclose`, or
+area tolerance authorizes an extra floor, and `max_floors` is never converted through
+float.
+
+For example, `10.0 / 2.5` permits four floors. With stored values
+`max_height_m=36.0` and `floor_to_floor_m=3.6`, the result is nine: ten exact copies
+of the stored `3.6` exceed the stored height even though ordinary rounded float
+multiplication displays `10 * 3.6 == 36.0`. A height of `nextafter(36.0, inf)` permits
+ten. This is the current engineering choice, not an explicit employer requirement.
+If exact decimal or fixed-unit semantics are needed later, they require an explicit
+input contract before API integration. Rounded display values must not silently become
+the authority for accepting floor counts.
+
+The same target predicate governs future floor selection and status; when a minimum
+count exceeds one, the preceding count must fail it. Tolerance cannot bridge material
+capacity gaps or certify ungenerated geometry; adjustments require fixture evidence.
 
 After the manual save/branch workflow works, optional bounded suggestions enumerate
 counts `1..N`, request `target / count` area for positive targets, otherwise use the
