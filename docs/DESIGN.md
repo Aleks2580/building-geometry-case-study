@@ -4,9 +4,9 @@
 > database-pool plumbing, sample sites, a tested TypeScript frontend scaffold, pure
 > site geometry, setbacks, component selection, deterministic default footprint
 > construction, maximum-permitted-floor calculation, default massing metrics,
-> validated design preferences, preferred footprint construction, and
-> preference-aware massing metrics. GFA targets, persistence, HTTP transport, and
-> visualization remain planned.
+> validated design preferences, preferred footprint construction, preference-aware
+> massing metrics, validated GFA targets, target-driven floor selection, and target
+> assessment. Persistence, HTTP transport, and visualization remain planned.
 
 ## Problem interpretation
 
@@ -48,13 +48,14 @@ permissions, and background jobs are outside scope.
   generated capacity, compact repeated-floor geometry, actual metrics, and a default
   feasibility outcome.
 - **PreferenceMassingResult:** the implemented immutable result composes a
-  `DefaultMassingResult`, validated `DesignPreferences`, and an optional
-  `FootprintAreaPreferenceResult`. It exposes the selected actual footprint, compact
-  floor-plate metrics, and preference-aware status without adding GFA targets.
+  `DefaultMassingResult`, validated `DesignPreferences`, validated `DesignTargets`,
+  and an optional `FootprintAreaPreferenceResult`. It exposes the selected actual
+  footprint, compact floor-plate metrics, target assessment, and preference-aware
+  status.
 - **DesignPreferences:** optional positive integer `preferred_floor_count` and
   positive `preferred_footprint_area_m2`; explicit choices subordinate to hard limits.
-- **DesignTargets:** optional non-negative `gfa_target_m2`, a desired minimum, not a
-  hard constraint or exact optimization objective.
+- **DesignTargets:** implemented immutable optional non-negative `gfa_target_m2`, a
+  desired minimum, not a hard constraint or exact optimization objective.
 - **MassingResult:** planned complete input/context geometry, generated default and
   actual footprint, repeated floor plate, metrics, preference outcomes, and
   feasibility. Hard upper bounds, demonstrated construction capacity, and actual
@@ -303,8 +304,9 @@ It returns a non-negative integer hard upper bound. A valid positive height belo
 floor therefore returns zero; zero is a capacity result, not invalid input and not a
 claim that this scalar module has assigned the application's full `infeasible` status.
 The default massing orchestration uses this capacity as its actual floor count when a
-valid default building can be constructed; preference and target-driven floor
-selection remain planned.
+valid default building can be constructed. Preference-aware orchestration can retain
+that count, honor an explicit floor preference, or select the minimum count that
+fulfills a positive GFA target.
 
 This is a pure massing rule and does not depend on Shapely, site geometry, HTTP,
 Pydantic, or persistence.
@@ -378,8 +380,8 @@ are `height_m = floor_count * floor_to_floor_m`,
 `site_coverage_ratio = footprint_area_m2 / site_area_m2`. The hard
 `gfa_upper_bound_m2 = U * N` and generated `generated_gfa_capacity_m2` remain
 separate: the latter is evidence of one construction returned by the heuristic, not
-an optimality certificate. A valid default without preferences or a GFA target is
-`feasible`; this entry point does not evaluate a GFA target.
+an optimality certificate. A valid default is `feasible`; target assessment is part of
+the preference-aware entry point described below.
 
 The public `NumericalRangeError` is raised when a required height or area-times-count
 metric cannot be represented as a finite float. Metric multiplication keeps the
@@ -391,12 +393,11 @@ slice, not an explicit employer requirement.
 #### Implemented preference-aware massing orchestration
 
 `app.massing` exposes `generate_massing_with_preferences(site, *, setback_m,
-footprint_limits, floor_limits, preferences)` and the immutable
+footprint_limits, floor_limits, preferences, targets=None)` and the immutable
 `PreferenceMassingResult`. The result composes the complete `default_result` context
-with the validated preferences, optional `area_preference_result`, and the selected
-actual footprint, compact floor plate, floor count, height, GFA, coverage, status,
-reason, and hard-constraint outcome. It does not include GFA targets or target-driven
-floor selection.
+with validated preferences and targets, optional `area_preference_result`, and the
+selected actual footprint, compact floor plate, floor count, height, GFA, coverage,
+status, reason, hard-constraint outcome, and `target_assessment`.
 
 The default result establishes outcome precedence. An empty selected buildable region
 is `infeasible` with `EMPTY_BUILDABLE_REGION`, including when floor capacity is also
@@ -408,9 +409,11 @@ validated against `N` before preferred-area construction; exceeding `N` raises
 
 When no area preference is supplied, the generated default footprint is used. A
 preferred area uses the existing deterministic inward-buffer construction and its
-measured Polygon. `met`, `clamped`, and `approximated` area outcomes remain a valid
-`feasible` building, while the nested preference result preserves the request,
-effective target, measured area, signed difference, and diagnostic codes. A failed
+measured Polygon. Successful `met`, `clamped`, and `approximated` area outcomes
+satisfy hard constraints; overall massing status is `feasible` or
+`feasible_target_unmet` according to the GFA target assessment. The nested preference
+result preserves the request, effective target, measured area, signed difference, and
+diagnostic codes. A failed
 preferred construction produces `generation_failed` with
 `PREFERRED_FOOTPRINT_NOT_GENERATED`, null selected metrics, and no fallback to the
 default footprint. A failed default construction can still yield a feasible preferred
@@ -441,20 +444,22 @@ discrepancies. If preferred construction produces no positive polygon, the resul
 `unmet` and actual area null. Context, bounds, and known default capacity remain
 available; the default never silently replaces the request.
 
-Without a floor preference, the preference-aware entry point uses `N`; without an area
-preference, it uses the generated default footprint. Explicit valid preferences remain
-unchanged when area construction approximates or clamps the requested area. GFA target
-evaluation, target-driven floor selection, and target-shortfall diagnostics remain
-planned for the complete configurable workflow.
+Without a floor preference, the preference-aware entry point uses `N` when the target is
+absent or zero, and otherwise selects the minimum permitted count whose measured GFA
+fulfills the target. A preferred footprint is constructed first, so target selection
+uses its measured area. Explicit floor preferences remain unchanged even when a target
+is unmet; an unmet target is reported as `feasible_target_unmet` while hard constraints
+remain satisfied.
 
 ### Feasibility and targets
 
 `generate_default_massing` and `generate_massing_with_preferences` implement
 `feasible`, `infeasible`, and `generation_failed` around the pure geometry and
-floor-limit operations. The `feasible_target_unmet` status and target diagnostics
-remain planned. Preference-aware orchestration validates preference types and floor
-capacity after empty-region/zero-floor precedence, then applies the selected area and
-floor choices without changing hard bounds or generated default capacity.
+floor-limit operations. The preference-aware entry point additionally returns
+`feasible_target_unmet` when a valid building misses a supplied target. It validates
+preference types and floor capacity after empty-region/zero-floor precedence, then
+applies the selected area and floor choices without changing hard bounds or generated
+default capacity.
 
 | Status | Meaning | `hard_constraints_satisfied` |
 |---|---|---|
@@ -476,14 +481,17 @@ For a valid building with an unmet target, classify in order using tolerance:
 
 Target status is `not_requested` when absent, `met`/`unmet` for positive buildings,
 and `not_evaluated` for supplied targets without a building. Zero is met only with a
-positive building.
+positive building. When the default footprint generator has no measured capacity but a
+preferred footprint succeeds, an unmet target keeps its assessment without inventing a
+generated-capacity diagnostic.
 
 ### Numerical policy and alternatives
 
 Geometry and area comparisons use centralized scale-aware tolerances: initially area
 tolerance `max(1e-8, 1e-9 * max(site_area_m2, 1))`, length tolerance derived from
-extent, and GFA tolerance propagated through `N`. Floor-limit arithmetic uses a
-separate exact policy. Length inputs are first normalized to Python floats, then
+extent, and GFA tolerance propagated through `N` and conservatively capped at
+`1e-9 * comparison_scale_m2`. Floor-limit arithmetic uses a separate exact policy.
+Length inputs are first normalized to Python floats, then
 `Fraction.from_float` represents those stored binary64 values exactly; it does not
 recover the original decimal text. This avoids intermediate float quotient overflow
 and prevents rounding from admitting an over-height floor. No epsilon, `isclose`, or
@@ -506,9 +514,9 @@ returning infinity or NaN, clamping the count, or classifying the case as geomet
 infeasibility. This range-error behavior is an implementation decision for the
 current slice, not an explicit employer requirement.
 
-The same target predicate governs future floor selection and status; when a minimum
-count exceeds one, the preceding count must fail it. Tolerance cannot bridge material
-capacity gaps or certify ungenerated geometry; adjustments require fixture evidence.
+The same target predicate governs floor selection and final status; when a minimum count
+exceeds one, the preceding count must fail it. Tolerance cannot bridge material capacity
+gaps or certify ungenerated geometry; adjustments require fixture evidence.
 
 After the manual save/branch workflow works, optional bounded suggestions enumerate
 counts `1..N`, request `target / count` area for positive targets, otherwise use the

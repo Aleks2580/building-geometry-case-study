@@ -3,9 +3,9 @@
 FastAPI + uv + async psycopg. The backend exposes a health check, has database
 plumbing wired, and provides pure site geometry, setbacks, component selection,
 deterministic default footprint construction, maximum-permitted-floor calculation,
-default massing metrics, and preference-aware massing integration. GFA targets, HTTP
-transport, option persistence, and visualization remain planned; see [the design
-note](../docs/DESIGN.md).
+default massing metrics, preference-aware massing integration, and target-driven GFA
+assessment. HTTP transport, option persistence, and visualization remain planned; see
+[the design note](../docs/DESIGN.md).
 
 ## Stack
 
@@ -56,15 +56,18 @@ A Postgres is expected at `APP_DATABASE_URL`. The easiest way is the root
 - `app/massing/metrics.py` — shared exact stored-float-by-integer metric multiplication
   and `NumericalRangeError`, reused by default and preference-aware massing.
 - `app/massing/configurable.py` — `generate_massing_with_preferences` and immutable
-  `PreferenceMassingResult`. It composes default context with exact floor preferences
-  and measured preferred footprint geometry. Empty/zero-capacity precedence and
-  preferred generation failure remain explicit; clamped or approximated area choices
-  can still produce a feasible building.
+  `PreferenceMassingResult`. It composes default context with exact floor preferences,
+  optional validated GFA targets, measured preferred footprint geometry, target-driven
+  floor selection, and target assessment. Empty/zero-capacity precedence and preferred
+  generation failure remain explicit; clamped or approximated area choices can still
+  produce a feasible building.
+- `app/massing/target_floors.py` and `app/massing/targets.py` — minimum sufficient
+  floor-count selection, shared target-fulfillment predicate, validated GFA targets,
+  conservative tolerance, and upper-bound/generated-capacity diagnostics.
 - `app/massing/preferences.py` and `app/massing/area_preferences.py` — validated
   preference values, exact floor selection, deterministic preferred-area construction,
-  and its request/effective/actual diagnostics.
-  GFA targets, transport models, persistence, and per-floor or 3D representations
-  remain outside this domain slice.
+  and its request/effective/actual diagnostics. Transport models, persistence, and
+  per-floor or 3D representations remain outside this domain slice.
 - `app/geometry/tolerances.py` — scale-aware area comparison tolerance, without
   rounding geometry or filtering small positive components.
 

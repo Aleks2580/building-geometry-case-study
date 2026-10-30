@@ -17,8 +17,15 @@ from app.massing.preferences import (
     InvalidDesignPreferences,
     select_floor_count,
 )
+from app.massing.target_floors import select_floor_count_for_target
+from app.massing.targets import DesignTargets, GfaTargetAssessment, assess_gfa_target
 
-type PreferenceMassingStatus = Literal["feasible", "infeasible", "generation_failed"]
+type PreferenceMassingStatus = Literal[
+    "feasible",
+    "feasible_target_unmet",
+    "infeasible",
+    "generation_failed",
+]
 type PreferenceMassingReason = Literal[
     "EMPTY_BUILDABLE_REGION",
     "ZERO_PERMITTED_FLOORS",
@@ -44,6 +51,8 @@ class PreferenceMassingResult:
     status: PreferenceMassingStatus
     reason: PreferenceMassingReason | None
     hard_constraints_satisfied: bool | None
+    targets: DesignTargets
+    target_assessment: GfaTargetAssessment
 
 
 def generate_massing_with_preferences(
@@ -53,10 +62,17 @@ def generate_massing_with_preferences(
     footprint_limits: FootprintLimits,
     floor_limits: FloorLimits,
     preferences: DesignPreferences,
+    targets: DesignTargets | None = None,
 ) -> PreferenceMassingResult:
-    """Generate one building using validated floor and footprint preferences."""
+    """Generate one building using preferences and an optional GFA target."""
     if not isinstance(preferences, DesignPreferences):
         raise InvalidDesignPreferences("preferences must be a DesignPreferences instance.")
+    if targets is None:
+        validated_targets = DesignTargets()
+    elif not isinstance(targets, DesignTargets):
+        raise TypeError("targets must be a DesignTargets instance.")
+    else:
+        validated_targets = targets
 
     default_result = generate_default_massing(
         site,
@@ -70,6 +86,7 @@ def generate_massing_with_preferences(
         return _without_building(
             default_result,
             preferences,
+            targets=validated_targets,
             status=default_result.status,
             reason=default_result.reason,
         )
@@ -82,6 +99,7 @@ def generate_massing_with_preferences(
         return _without_building(
             default_result,
             preferences,
+            targets=validated_targets,
             status=default_result.status,
             reason=default_result.reason,
         )
@@ -99,12 +117,22 @@ def generate_massing_with_preferences(
             return _without_building(
                 default_result,
                 preferences,
+                targets=validated_targets,
                 area_preference_result=area_preference_result,
                 status="generation_failed",
                 reason="PREFERRED_FOOTPRINT_NOT_GENERATED",
             )
 
     geometry, actual_area = _selected_footprint(default_result, area_preference_result)
+    selected_floor_count = select_floor_count_for_target(
+        default_result.maximum_permitted_floor_count,
+        preferences,
+        validated_targets,
+        footprint_area_m2=actual_area,
+        site_area_m2=default_result.setback_result.site_area_m2,
+    )
+    if selected_floor_count is None:
+        raise RuntimeError("Positive massing capacity must select a positive floor count.")
     height = multiply_metric(
         default_result.floor_to_floor_m,
         selected_floor_count,
@@ -114,6 +142,15 @@ def generate_massing_with_preferences(
     coverage = actual_area / default_result.setback_result.site_area_m2
     if not isfinite(coverage):
         raise NumericalRangeError("site_coverage_ratio must be representable as a finite float.")
+    target_assessment = assess_gfa_target(
+        validated_targets,
+        actual_gfa_m2=gfa,
+        gfa_upper_bound_m2=default_result.gfa_upper_bound_m2,
+        generated_gfa_capacity_m2=default_result.generated_gfa_capacity_m2,
+        site_area_m2=default_result.setback_result.site_area_m2,
+        maximum_permitted_floor_count=default_result.maximum_permitted_floor_count,
+    )
+    status: PreferenceMassingStatus = "feasible_target_unmet" if target_assessment.status == "unmet" else "feasible"
 
     return PreferenceMassingResult(
         default_result=default_result,
@@ -126,9 +163,11 @@ def generate_massing_with_preferences(
         height_m=height,
         gfa_m2=gfa,
         site_coverage_ratio=coverage,
-        status="feasible",
+        status=status,
         reason=None,
         hard_constraints_satisfied=True,
+        targets=validated_targets,
+        target_assessment=target_assessment,
     )
 
 
@@ -161,6 +200,7 @@ def _without_building(
     default_result: DefaultMassingResult,
     preferences: DesignPreferences,
     *,
+    targets: DesignTargets,
     status: PreferenceMassingStatus,
     reason: PreferenceMassingReason | None,
     area_preference_result: FootprintAreaPreferenceResult | None = None,
@@ -179,4 +219,6 @@ def _without_building(
         status=status,
         reason=reason,
         hard_constraints_satisfied=False if status == "infeasible" else None,
+        targets=targets,
+        target_assessment=assess_gfa_target(targets, actual_gfa_m2=None),
     )
