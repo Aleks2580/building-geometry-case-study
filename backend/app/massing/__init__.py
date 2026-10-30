@@ -30,6 +30,7 @@ from app.massing.preferences import (
     PreferenceExceedsHardLimit,
     select_floor_count,
 )
+from app.massing.target_floors import select_floor_count_for_target
 from app.massing.targets import (
     DesignTargets,
     GfaTargetAssessment,
@@ -38,6 +39,7 @@ from app.massing.targets import (
     InvalidDesignTargets,
     assess_gfa_target,
     gfa_tolerance_m2,
+    is_gfa_target_met,
 )
 
 __all__ = [
@@ -68,4 +70,6 @@ __all__ = [
     "InvalidDesignTargets",
     "assess_gfa_target",
     "gfa_tolerance_m2",
+    "is_gfa_target_met",
+    "select_floor_count_for_target",
 ]

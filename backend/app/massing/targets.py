@@ -133,7 +133,12 @@ def assess_gfa_target(
         comparison_scale_m2=comparison_scale,
     )
     shortfall = target - actual
-    if shortfall <= tolerance:
+    if is_gfa_target_met(
+        targets,
+        actual_gfa_m2=actual,
+        site_area_m2=site_area,
+        maximum_permitted_floor_count=floor_count,
+    ):
         return GfaTargetAssessment(target, "met", None, None)
 
     if target - upper_bound > tolerance:
@@ -146,6 +151,36 @@ def assess_gfa_target(
     if not isfinite(shortfall) or shortfall <= 0:
         raise RuntimeError("Unmet GFA target must have a finite positive shortfall.")
     return GfaTargetAssessment(target, "unmet", shortfall, diagnostic_code)
+
+
+def is_gfa_target_met(
+    targets: DesignTargets,
+    *,
+    actual_gfa_m2: float,
+    site_area_m2: float,
+    maximum_permitted_floor_count: int,
+) -> bool:
+    """Return whether measured GFA fulfills the validated target predicate."""
+
+    if not isinstance(targets, DesignTargets):
+        raise TypeError("targets must be a DesignTargets instance.")
+    if targets.gfa_target_m2 is None:
+        return True
+
+    actual = _finite_positive_float(actual_gfa_m2, "actual_gfa_m2")
+    site_area = _finite_positive_float(site_area_m2, "site_area_m2")
+    floor_count = _positive_integer(maximum_permitted_floor_count, "maximum_permitted_floor_count")
+    if floor_count is None:
+        raise ValueError("maximum_permitted_floor_count must be a strictly positive integer.")
+
+    target = targets.gfa_target_m2
+    assert target is not None
+    tolerance = gfa_tolerance_m2(
+        site_area,
+        floor_count,
+        comparison_scale_m2=max(target, actual),
+    )
+    return target - actual <= tolerance
 
 
 def _finite_non_negative_float(
