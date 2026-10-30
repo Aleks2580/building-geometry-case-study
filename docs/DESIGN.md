@@ -544,38 +544,22 @@ configuration rows. More normalization reduces duplication and improves analytic
 but adds joins and version coordination. Small immutable snapshots favor self-contained
 reads, with application validation and schema versions for nested invariants.
 
-```sql
-CREATE TABLE schema_migrations (
-    version text PRIMARY KEY,
-    checksum text NOT NULL,
-    applied_at timestamptz NOT NULL DEFAULT now()
-);
+The implemented schema is defined by the numbered SQL migration
+[`001_create_options.sql`](../backend/app/sql/migrations/001_create_options.sql).
+`options` stores UUID identity and optional parent foreign key, name, positive schema
+version, algorithm version, JSONB configuration/result snapshots, feasibility status,
+and a timezone-aware creation timestamp. The parent foreign key restricts deletion;
+indexes cover parent lookup and deterministic creation-time/UUID listing. A database
+check requires the indexed status to agree with the result's feasibility status.
 
-CREATE TABLE options (
-    id uuid PRIMARY KEY,
-    parent_id uuid REFERENCES options(id) ON DELETE RESTRICT,
-    name text,
-    schema_version integer NOT NULL,
-    algorithm_version text NOT NULL,
-    site_geometry jsonb NOT NULL,
-    hard_constraints jsonb NOT NULL,
-    preferences jsonb NOT NULL,
-    targets jsonb NOT NULL,
-    result jsonb NOT NULL,
-    feasibility_status text NOT NULL CHECK (
-        feasibility_status IN (
-            'feasible', 'feasible_target_unmet', 'infeasible', 'generation_failed'
-        )
-    ),
-    created_at timestamptz NOT NULL DEFAULT now()
-);
 
-CREATE INDEX options_parent_id_idx ON options(parent_id);
-CREATE INDEX options_created_at_idx ON options(created_at);
-```
-
-Numbered, checksummed SQL migrations run transactionally before option requests are
-served. Async psycopg uses parameters and explicit transactions. There is no option
+`uv run app migrate` verifies SHA-256 checksums and the installed history, then
+applies pending SQL and ledger entries atomically. A transaction advisory lock is
+acquired before ledger creation so concurrent first installations also serialize.
+Changed, missing, or reordered installed migrations are rejected; applied files must
+remain immutable. Docker startup runs the command before launching Uvicorn workers;
+migrations never execute in worker lifespan hooks. See the
+[database setup instructions](../backend/README.md#database-setup-and-migrations). Async psycopg uses parameters and explicit transactions. There is no option
 update API; future database permissions or an append-only trigger can reinforce
 immutability. Saved results and algorithm versions preserve historical interpretation
 without promising identical recomputation across changed geometry-engine versions.

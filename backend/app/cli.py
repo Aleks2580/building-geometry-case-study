@@ -10,6 +10,25 @@ def _load_env() -> None:
 
 
 @cli.command()
+def migrate() -> None:
+    """Apply pending SQL migrations before starting application workers."""
+    import asyncio
+
+    from psycopg import Error
+
+    from app.config import Config
+    from app.migrations import MigrationError, run_migrations
+
+    _load_env()
+    try:
+        versions = asyncio.run(run_migrations(Config().database_url))
+    except (MigrationError, Error) as error:
+        typer.echo(f"Migrations failed: {error}", err=True)
+        raise typer.Exit(code=1) from error
+    typer.echo(f"Applied migrations: {', '.join(versions)}" if versions else "Database migrations are up to date.")
+
+
+@cli.command()
 def serve(
     host: str = typer.Option("0.0.0.0", help="Bind host"),
     port: int = typer.Option(8000, help="Bind port"),

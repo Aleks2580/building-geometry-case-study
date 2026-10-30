@@ -22,11 +22,38 @@ visualization remain planned; see
 ```bash
 cp .env.example .env
 uv sync --group dev
+uv run app migrate               # apply schema before serving option requests
 uv run app serve --reload        # http://localhost:8000  (docs at /docs)
 ```
 
 A Postgres is expected at `APP_DATABASE_URL`. The easiest way is the root
 `docker compose up` (brings up db + backend + frontend together).
+
+## Database setup and migrations
+
+The database must already exist at `APP_DATABASE_URL`. Run `uv run app migrate`
+before starting the backend directly. Docker Compose uses the backend image's
+startup command, which applies migrations once before launching the two Uvicorn
+workers. Workers do not run migrations. A failed migration prevents server startup.
+
+Numbered SQL files live in `app/sql/migrations/`. The runner records each file's
+SHA-256 checksum in `schema_migrations`, verifies installed history, and applies all
+pending files in one transaction under a PostgreSQL advisory lock. Repeated runs
+are safe; changed or missing installed files cause failure. Add a new migration
+instead of editing an applied file. The initial schema is defined in
+[`001_create_options.sql`](app/sql/migrations/001_create_options.sql).
+
+For PostgreSQL integration tests:
+
+```bash
+TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres uv run pytest -m integration
+```
+
+The test account needs permission to create databases. Each test creates and drops
+its own uniquely named database; it does not migrate or clear the database named in
+the URL. Integration tests skip when `TEST_DATABASE_URL` is absent and fail when a
+configured server cannot be reached. CI supplies a PostgreSQL 16 service and runs
+these tests with the complete backend suite.
 
 ## What's here / what's yours
 
