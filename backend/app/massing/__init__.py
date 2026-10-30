@@ -12,6 +12,12 @@ from app.massing.floors import (
     InvalidFloorLimits,
     calculate_maximum_permitted_floor_count,
 )
+from app.massing.preferences import (
+    DesignPreferences,
+    InvalidDesignPreferences,
+    PreferenceExceedsHardLimit,
+    select_floor_count,
+)
 
 __all__ = [
     "FloorLimits",
@@ -21,5 +27,9 @@ __all__ = [
     "DefaultMassingStatus",
     "NumericalRangeError",
     "calculate_maximum_permitted_floor_count",
+    "DesignPreferences",
+    "InvalidDesignPreferences",
+    "PreferenceExceedsHardLimit",
     "generate_default_massing",
+    "select_floor_count",
 ]
