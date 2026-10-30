@@ -1,5 +1,17 @@
-"""Pure massing rules and default orchestration independent of transport and persistence."""
+"""Pure massing rules and orchestration independent of transport and persistence."""
 
+from app.massing.area_preferences import (
+    FootprintAreaPreferenceDiagnosticCode,
+    FootprintAreaPreferenceResult,
+    FootprintAreaPreferenceStatus,
+    generate_preferred_footprint,
+)
+from app.massing.configurable import (
+    PreferenceMassingReason,
+    PreferenceMassingResult,
+    PreferenceMassingStatus,
+    generate_massing_with_preferences,
+)
 from app.massing.defaults import (
     DefaultMassingReason,
     DefaultMassingResult,
@@ -12,8 +24,20 @@ from app.massing.floors import (
     InvalidFloorLimits,
     calculate_maximum_permitted_floor_count,
 )
+from app.massing.preferences import (
+    DesignPreferences,
+    InvalidDesignPreferences,
+    PreferenceExceedsHardLimit,
+    select_floor_count,
+)
 
 __all__ = [
+    "FootprintAreaPreferenceDiagnosticCode",
+    "FootprintAreaPreferenceResult",
+    "FootprintAreaPreferenceStatus",
+    "PreferenceMassingReason",
+    "PreferenceMassingResult",
+    "PreferenceMassingStatus",
     "FloorLimits",
     "InvalidFloorLimits",
     "DefaultMassingReason",
@@ -21,5 +45,11 @@ __all__ = [
     "DefaultMassingStatus",
     "NumericalRangeError",
     "calculate_maximum_permitted_floor_count",
+    "DesignPreferences",
+    "InvalidDesignPreferences",
+    "PreferenceExceedsHardLimit",
     "generate_default_massing",
+    "generate_massing_with_preferences",
+    "generate_preferred_footprint",
+    "select_floor_count",
 ]

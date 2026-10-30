@@ -3,9 +3,10 @@
 > The application currently provides the health endpoint, configuration, async
 > database-pool plumbing, sample sites, a tested TypeScript frontend scaffold, pure
 > site geometry, setbacks, component selection, deterministic default footprint
-> construction, maximum-permitted-floor calculation, and default massing metrics.
-> Preferences, GFA targets, persistence, HTTP transport, and visualization remain
-> planned.
+> construction, maximum-permitted-floor calculation, default massing metrics,
+> validated design preferences, preferred footprint construction, and
+> preference-aware massing metrics. GFA targets, persistence, HTTP transport, and
+> visualization remain planned.
 
 ## Problem interpretation
 
@@ -45,7 +46,11 @@ permissions, and background jobs are outside scope.
 - **DefaultMassingResult:** the implemented immutable result combines the canonical
   site, complete setback context, optional attempted footprint result, hard bounds,
   generated capacity, compact repeated-floor geometry, actual metrics, and a default
-  feasibility outcome. The complete configurable `MassingResult` remains planned.
+  feasibility outcome.
+- **PreferenceMassingResult:** the implemented immutable result composes a
+  `DefaultMassingResult`, validated `DesignPreferences`, and an optional
+  `FootprintAreaPreferenceResult`. It exposes the selected actual footprint, compact
+  floor-plate metrics, and preference-aware status without adding GFA targets.
 - **DesignPreferences:** optional positive integer `preferred_floor_count` and
   positive `preferred_footprint_area_m2`; explicit choices subordinate to hard limits.
 - **DesignTargets:** optional non-negative `gfa_target_m2`, a desired minimum, not a
@@ -108,10 +113,13 @@ SQL. Application use cases coordinate preview, save, branch, tree, and compariso
 Pure domain services separate polygon operations from massing rules: `app.geometry`
 owns polygons, while `app.massing.floors` owns scalar floor-limit rules and
 `app.massing.defaults` orchestrates the current default result over those geometry
-operations. The domain remains independent of HTTP and persistence. Repositories own
-parameterized SQL, transactions, and snapshot mapping; no ORM. The frontend owns
-drafts, interaction, and rendering; geometry, floor count, height, area, GFA, and
-feasibility remain server-authoritative.
+operations. `app.massing.configurable` composes the default result with exact floor
+selection and preferred-area construction; `app.massing.metrics` centralizes the
+arbitrary-precision metric multiplication used by both massing entry points. The
+domain remains independent of HTTP and persistence. Repositories own parameterized
+SQL, transactions, and snapshot mapping; no ORM. The frontend owns drafts,
+interaction, and rendering; geometry, floor count, height, area, GFA, and feasibility
+remain server-authoritative.
 
 ## Algorithm
 
@@ -380,6 +388,40 @@ the case where a very large count multiplied by a small positive value remains
 finite. This error behavior is an implementation decision for the current domain
 slice, not an explicit employer requirement.
 
+#### Implemented preference-aware massing orchestration
+
+`app.massing` exposes `generate_massing_with_preferences(site, *, setback_m,
+footprint_limits, floor_limits, preferences)` and the immutable
+`PreferenceMassingResult`. The result composes the complete `default_result` context
+with the validated preferences, optional `area_preference_result`, and the selected
+actual footprint, compact floor plate, floor count, height, GFA, coverage, status,
+reason, and hard-constraint outcome. It does not include GFA targets or target-driven
+floor selection.
+
+The default result establishes outcome precedence. An empty selected buildable region
+is `infeasible` with `EMPTY_BUILDABLE_REGION`, including when floor capacity is also
+zero. A positive region with zero permitted floors is `infeasible` with
+`ZERO_PERMITTED_FLOORS`; both cases skip preference construction and return null
+actual building metrics. With positive capacity, an explicit floor preference is
+validated against `N` before preferred-area construction; exceeding `N` raises
+`PreferenceExceedsHardLimit` rather than clamping.
+
+When no area preference is supplied, the generated default footprint is used. A
+preferred area uses the existing deterministic inward-buffer construction and its
+measured Polygon. `met`, `clamped`, and `approximated` area outcomes remain a valid
+`feasible` building, while the nested preference result preserves the request,
+effective target, measured area, signed difference, and diagnostic codes. A failed
+preferred construction produces `generation_failed` with
+`PREFERRED_FOOTPRINT_NOT_GENERATED`, null selected metrics, and no fallback to the
+default footprint. A failed default construction can still yield a feasible preferred
+building when the separate preferred construction succeeds; without an area
+preference, the default failure is preserved.
+
+Actual height and GFA use the selected floor count and measured footprint area. The
+hard GFA bound and generated default capacity remain unchanged in `default_result`.
+Both entry points reuse the same exact stored-float-by-integer metric helper, so large
+integer floor counts and `NumericalRangeError` behavior remain consistent.
+
 ### Preferences and floor selection
 
 A floor preference is an exact discrete choice: exceeding `N` returns
@@ -399,20 +441,20 @@ discrepancies. If preferred construction produces no positive polygon, the resul
 `unmet` and actual area null. Context, bounds, and known default capacity remain
 available; the default never silently replaces the request.
 
-Without a floor preference, the engine uses `N` when the target is absent or zero.
-For a positive target, it chooses the smallest positive count at/below `N` meeting it
-with the actual plate; otherwise it uses `N` and reports shortfall. Without an area
+Without a floor preference, the preference-aware entry point uses `N`; without an area
 preference, it uses the generated default footprint. Explicit valid preferences remain
-unchanged even when the target is missed.
+unchanged when area construction approximates or clamps the requested area. GFA target
+evaluation, target-driven floor selection, and target-shortfall diagnostics remain
+planned for the complete configurable workflow.
 
 ### Feasibility and targets
 
-`generate_default_massing` now implements `feasible`, `infeasible`, and
-`generation_failed` around the pure geometry and floor-limit operations. The
-`feasible_target_unmet` status and target diagnostics remain planned for the complete
-configurable massing result. After basic input validation, the default orchestration
-classifies zero permitted floors as `infeasible` before any future preference checks;
-preference validation remains unimplemented.
+`generate_default_massing` and `generate_massing_with_preferences` implement
+`feasible`, `infeasible`, and `generation_failed` around the pure geometry and
+floor-limit operations. The `feasible_target_unmet` status and target diagnostics
+remain planned. Preference-aware orchestration validates preference types and floor
+capacity after empty-region/zero-floor precedence, then applies the selected area and
+floor choices without changing hard bounds or generated default capacity.
 
 | Status | Meaning | `hard_constraints_satisfied` |
 |---|---|---|
