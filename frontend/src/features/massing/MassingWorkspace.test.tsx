@@ -2,9 +2,11 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import MassingWorkspace from "./MassingWorkspace";
-import type { FeasibilityStatus } from "../../api/contracts";
+import type { FeasibilityStatus, MassingPreviewResponse } from "../../api/contracts";
 import { createQueryClient } from "../../queryClient";
+import { backendPreviewResponse } from "../../test/backendPreviewFixtures";
 import { previewResponse } from "../../test/massingFixtures";
+import { createViewportTransform, geometryBounds, geometryPath } from "../visualization/svgGeometry";
 
 const fetchMock = vi.fn<typeof fetch>();
 let client = createQueryClient();
@@ -34,6 +36,27 @@ function metric(label: string) {
   return term.parentElement?.querySelector("dd");
 }
 
+function planPaths() {
+  return [...screen.getByRole("img", { name: "Site plan" }).querySelectorAll("path")]
+    .map((path) => [path.getAttribute("data-layer"), path.getAttribute("d")]);
+}
+
+function expectPlanGeometry(result: MassingPreviewResponse) {
+  const bounds = geometryBounds(result.site_geometry);
+  if (bounds === null) throw new Error("Expected a displayable site fixture.");
+  const transform = createViewportTransform(bounds, { width: 640, height: 400, padding: 24 });
+  if (transform === null) throw new Error("Expected a valid display frame.");
+  const layers: [string, MassingPreviewResponse["buildable_geometry"]][] = [
+    ["site", result.site_geometry],
+    ["buildable", result.buildable_geometry],
+    ["selected-buildable", result.selected_buildable_geometry],
+    ["footprint", result.footprint_geometry],
+  ];
+  expect(planPaths()).toEqual(layers.flatMap(([key, geometry]) => (
+    geometry === null ? [] : [[key, geometryPath(geometry, transform)]]
+  )));
+}
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason: unknown) => void;
@@ -51,9 +74,13 @@ describe("MassingWorkspace", () => {
     renderWorkspace();
 
     expect(screen.getByText(/No preview yet/)).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "Site plan" })).not.toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
     submit();
     expect(await screen.findByText("Generating preview…")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Massing preview" })).toHaveAttribute("aria-busy", "true");
+    expect(screen.queryByRole("img", { name: "Site plan" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Footprint area", { selector: "dt" })).not.toBeInTheDocument();
     const [url, options] = fetchMock.mock.calls[0];
     expect(url).toBe("http://localhost:8000/api/v1/massing/preview");
     expect(options?.method).toBe("POST");
@@ -70,6 +97,16 @@ describe("MassingWorkspace", () => {
     expect(metric("Height")).toHaveTextContent("21 m");
     expect(metric("GFA")).toHaveTextContent("3,876 m²");
     expect(screen.queryByText("Generating preview…")).not.toBeInTheDocument();
+    expectPlanGeometry(previewResponse());
+    const plan = screen.getByRole("img", { name: "Site plan" });
+    expect(plan).toHaveAccessibleDescription(/Plan view of backend geometry in metres/);
+    expect(plan).toHaveAttribute("viewBox", "0 0 640 400");
+    expect(plan).toHaveAttribute("preserveAspectRatio", "xMidYMid meet");
+    expect(plan.compareDocumentPosition(screen.getByText("Footprint area", { selector: "dt" })))
+      .toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(screen.getByRole("region", { name: "Massing preview" })).toHaveAttribute("aria-busy", "false");
+    expect(within(screen.getByRole("list", { name: "Site plan layers" })).getAllByRole("listitem"))
+      .toHaveLength(4);
   });
 
   it.each([
@@ -113,11 +150,17 @@ describe("MassingWorkspace", () => {
       submit();
 
       expect(await screen.findByRole("heading", { name: title })).toBeInTheDocument();
+      expectPlanGeometry(result);
+      expect(screen.getByRole("img", { name: "Site plan" }).querySelectorAll("path"))
+        .toHaveLength(emptyMetrics ? 3 : 4);
       expect(screen.queryByRole("alert")).not.toBeInTheDocument();
       expect(metric("Hard constraints satisfied")).toHaveTextContent(
         status === "generation_failed" ? "Unknown" : status === "infeasible" ? "False" : "True",
       );
       if (emptyMetrics) {
+        expect(screen.getByText("No building footprint is available.", { selector: "p" })).toBeInTheDocument();
+        expect(screen.getByRole("img", { name: "Site plan" }))
+          .toHaveAccessibleDescription(/No building footprint is available/);
         for (const label of ["Footprint area", "Floor count", "Height", "GFA", "Site coverage ratio"]) {
           expect(metric(label)).toHaveTextContent("Not available");
         }
@@ -142,6 +185,7 @@ describe("MassingWorkspace", () => {
     expect(error).toHaveTextContent("site.coordinates[0]: Ring self-intersection.");
     expect(error).toHaveTextContent("preferences: Preference exceeds permitted floor count.");
     expect(screen.queryByText("Not available")).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "Site plan" })).not.toBeInTheDocument();
   });
 
   it("does not display small positive backend metrics as zero", async () => {
@@ -164,9 +208,11 @@ describe("MassingWorkspace", () => {
     submit();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Unable to reach the massing API.");
+    expect(screen.queryByRole("img", { name: "Site plan" })).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     submit();
     expect(await screen.findByRole("heading", { name: "Feasible" })).toBeInTheDocument();
+    expectPlanGeometry(previewResponse());
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -176,6 +222,7 @@ describe("MassingWorkspace", () => {
     submit();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Invalid massing preview response.");
+    expect(screen.queryByRole("img", { name: "Site plan" })).not.toBeInTheDocument();
   });
 
   it("keeps edits separate from the displayed result, including invalid drafts and restoring submitted values", async () => {
@@ -183,19 +230,24 @@ describe("MassingWorkspace", () => {
     renderWorkspace();
     submit();
     await screen.findByRole("heading", { name: "Feasible" });
+    const submittedPaths = planPaths();
     change(/Maximum floor count/, "2");
+    change(/Site Polygon JSON/, JSON.stringify(backendPreviewResponse("notched").site));
 
     expect(screen.getByText(/Draft inputs have changed/)).toBeInTheDocument();
     expect(metric("Floor count")).toHaveTextContent("6");
+    expect(planPaths()).toEqual(submittedPaths);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     change(/Site Polygon JSON/, "{");
     submit();
     expect(await screen.findByText("Enter valid Polygon JSON.")).toBeInTheDocument();
     expect(metric("Floor count")).toHaveTextContent("6");
+    expect(planPaths()).toEqual(submittedPaths);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     change(/Site Polygon JSON/, JSON.stringify(previewResponse().site, null, 2));
     change(/Maximum floor count/, "6");
     expect(screen.queryByText(/Draft inputs have changed/)).not.toBeInTheDocument();
+    expect(planPaths()).toEqual(submittedPaths);
   });
 
   it("does not let edits during a request mutate its submitted inputs or its response", async () => {
@@ -208,6 +260,7 @@ describe("MassingWorkspace", () => {
     await act(async () => pending.resolve(Response.json(previewResponse())));
 
     await screen.findByRole("heading", { name: "Feasible" });
+    expectPlanGeometry(previewResponse());
     expect(metric("Floor count")).toHaveTextContent("6");
     expect(screen.getByLabelText(/Maximum floor count/)).toHaveValue("2");
     expect(screen.getByText(/Draft inputs have changed/)).toBeInTheDocument();
@@ -216,7 +269,7 @@ describe("MassingWorkspace", () => {
 
   it("cancels superseded requests and ignores late responses even when fetch ignores the signal", async () => {
     const first = deferred<Response>();
-    const oldResult = previewResponse();
+    const oldResult = backendPreviewResponse("notched");
     oldResult.feasibility.diagnostics = [{
       code: "BUILDABLE_REGION_SPLIT", severity: "warning", message: "Old split-region warning.",
     }];
@@ -226,18 +279,24 @@ describe("MassingWorkspace", () => {
     second.metrics.gfa_m2 = 1292;
     fetchMock.mockReturnValueOnce(first.promise).mockResolvedValueOnce(Response.json(second));
     renderWorkspace();
+    change(/Site Polygon JSON/, JSON.stringify(oldResult.site));
     submit();
     await screen.findByText("Generating preview…");
     const firstSignal = fetchMock.mock.calls[0][1]?.signal;
+    change(/Site Polygon JSON/, JSON.stringify(second.site));
     change(/Maximum floor count/, "2");
     submit();
 
     await screen.findByRole("heading", { name: "Feasible" });
     expect(firstSignal?.aborted).toBe(true);
     expect(metric("Floor count")).toHaveTextContent("2");
+    expectPlanGeometry(second);
+    const currentPaths = planPaths();
     await act(async () => first.resolve(Response.json(oldResult)));
     expect(metric("Floor count")).toHaveTextContent("2");
     expect(metric("GFA")).toHaveTextContent("1,292 m²");
+    expectPlanGeometry(second);
+    expect(planPaths()).toEqual(currentPaths);
     expect(screen.queryByText(/Draft inputs have changed/)).not.toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.queryByText("Old split-region warning.")).not.toBeInTheDocument();
@@ -256,6 +315,38 @@ describe("MassingWorkspace", () => {
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(metric("Floor count")).toHaveTextContent("6");
+    expectPlanGeometry(previewResponse());
+  });
+
+  it("keeps the active request error when a superseded request later returns successful geometry", async () => {
+    const first = deferred<Response>();
+    const oldResult = backendPreviewResponse("notched");
+    fetchMock.mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce(new Response("Unavailable", { status: 503 }));
+    renderWorkspace();
+    change(/Site Polygon JSON/, JSON.stringify(oldResult.site));
+    submit();
+    await screen.findByText("Generating preview…");
+    const firstSignal = fetchMock.mock.calls[0][1]?.signal;
+    change(/Site Polygon JSON/, JSON.stringify(previewResponse().site));
+    submit();
+
+    const error = await screen.findByRole("alert");
+    expect(error).toHaveTextContent("HTTP 503");
+    expect(firstSignal?.aborted).toBe(true);
+    expect(screen.queryByRole("img", { name: "Site plan" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Footprint area", { selector: "dt" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Diagnostics" })).not.toBeInTheDocument();
+    await act(async () => first.resolve(Response.json(oldResult)));
+
+    expect(screen.getByRole("alert")).toBe(error);
+    expect(error).toHaveTextContent("HTTP 503");
+    expect(screen.queryByRole("heading", { name: "Feasible" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "Site plan" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Footprint area", { selector: "dt" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Diagnostics" })).not.toBeInTheDocument();
+    expect(screen.queryByText(oldResult.feasibility.diagnostics[0].message)).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("cancels the pending request when the workspace unmounts", async () => {
@@ -282,7 +373,7 @@ describe("MassingWorkspace", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("clears previous metrics for a new submission and does not show them after its error", async () => {
+  it.each(["http", "network"])("clears previous plan, metrics, and diagnostics during a new request and after its %s error", async (failure) => {
     const pending = deferred<Response>();
     const previous = previewResponse();
     previous.targets.gfa_target_m2 = 4000;
@@ -299,18 +390,26 @@ describe("MassingWorkspace", () => {
     submit();
     await screen.findByRole("heading", { name: "Feasible — GFA target unmet" });
     expect(screen.getByText("Previous target exceeds the hard GFA bound.")).toBeInTheDocument();
+    expectPlanGeometry(previous);
     change(/Maximum floor count/, "2");
     submit();
     await screen.findByText("Generating preview…");
 
+    expect(screen.queryByRole("img", { name: "Site plan" })).not.toBeInTheDocument();
     expect(screen.queryByText("Footprint area", { selector: "dt" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Site and setback" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Generated default capacity" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Preferences and target" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Diagnostics" })).not.toBeInTheDocument();
     expect(screen.queryByText("Previous target exceeds the hard GFA bound.")).not.toBeInTheDocument();
-    await act(async () => pending.resolve(new Response("Unavailable", { status: 503 })));
-    expect(await screen.findByRole("alert")).toHaveTextContent("HTTP 503");
+    await act(async () => {
+      if (failure === "http") pending.resolve(new Response("Unavailable", { status: 503 }));
+      else pending.reject(new TypeError("Failed to fetch"));
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      failure === "http" ? "HTTP 503" : "Unable to reach the massing API.",
+    );
+    expect(screen.queryByRole("img", { name: "Site plan" })).not.toBeInTheDocument();
     expect(screen.queryByText("Footprint area", { selector: "dt" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Hard constraints and capacity" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Preferences and target" })).not.toBeInTheDocument();
@@ -335,5 +434,67 @@ describe("MassingWorkspace", () => {
     await screen.findByRole("heading", { name: "Feasible" });
     expect(within(screen.getByRole("form", { name: "Massing configuration" })).queryByRole("alert"))
       .not.toBeInTheDocument();
+  });
+
+  it("renders the actual preferred footprint separately from generated default capacity", async () => {
+    const result = backendPreviewResponse("preferred");
+    fetchMock.mockResolvedValue(Response.json(result));
+    renderWorkspace();
+    change(/Maximum footprint \(m²\)/, String(result.hard_constraints.max_footprint_m2));
+    change(/Preferred footprint \(m²\)/, String(result.preferences.preferred_footprint_area_m2));
+    submit();
+
+    await screen.findByRole("heading", { name: "Feasible" });
+    expectPlanGeometry(result);
+    expect(metric("Footprint area")).toHaveTextContent("300 m²");
+    expect(result.footprint_geometry).not.toEqual(result.generated_footprint_geometry);
+    const paths = planPaths();
+    expect(new Set(paths.map(([, path]) => path)).size).toBe(3);
+    expect(screen.getByRole("region", { name: "Generated default capacity" })).toHaveTextContent("500 m²");
+  });
+
+  it("retains site and setback context without substituting generated geometry for a missing actual footprint", async () => {
+    const result = backendPreviewResponse("preferred_failed");
+    expect(result.generated_footprint_geometry).not.toBeNull();
+    expect(result.footprint_geometry).toBeNull();
+    fetchMock.mockResolvedValue(Response.json(result));
+    renderWorkspace();
+    change(/Preferred footprint \(m²\)/, String(result.preferences.preferred_footprint_area_m2));
+    submit();
+
+    await screen.findByRole("heading", { name: "Generation failed" });
+    expectPlanGeometry(result);
+    expect(planPaths().map(([key]) => key)).toEqual(["site", "buildable", "selected-buildable"]);
+    expect(screen.getByText("No building footprint is available.", { selector: "p" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Site plan" }))
+      .toHaveAccessibleDescription(/No building footprint is available/);
+    expect(screen.queryByText("Actual building footprint", { selector: "li" })).not.toBeInTheDocument();
+    expect(metric("Footprint area")).toHaveTextContent("Not available");
+    expect(screen.getByRole("region", { name: "Generated default capacity" })).toHaveTextContent("646 m²");
+  });
+
+  it.each([
+    ["holed", [2, 2, 2, 2]],
+    ["notched", [1, 2, 1, 1]],
+  ] as const)("renders every ring and component from the backend %s response", async (name, subpathCounts) => {
+    const result = backendPreviewResponse(name);
+    fetchMock.mockResolvedValue(Response.json(result));
+    renderWorkspace();
+    change(/Site Polygon JSON/, JSON.stringify(result.site));
+    change(/Setback \(m\)/, String(result.hard_constraints.setback_m));
+    submit();
+
+    await screen.findByRole("heading", { name: "Feasible" });
+    expectPlanGeometry(result);
+    const paths = screen.getByRole("img", { name: "Site plan" }).querySelectorAll("path");
+    expect([...paths].map((path) => path.getAttribute("d")?.match(/M/g)?.length)).toEqual(subpathCounts);
+    for (const path of paths) {
+      expect(path).toHaveAttribute("fill-rule", "evenodd");
+      expect(path).toHaveAttribute("vector-effect", "non-scaling-stroke");
+    }
+    expect(within(screen.getByRole("list", { name: "Site plan layers" })).getAllByRole("listitem")
+      .map((item) => item.textContent)).toEqual([
+      "Original site boundary", "Complete buildable region", "Selected buildable component", "Actual building footprint",
+    ]);
   });
 });

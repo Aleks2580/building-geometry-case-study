@@ -39,8 +39,8 @@ transport tests live beside the client in `src/api/`. Shared fixtures and test s
 stay in `src/test/`. Application entry points, global styles, and QueryClient setup remain
 at the root. Imports use direct relative paths.
 
-SVG workspace integration, 3D views, saving, branching, tree navigation,
-and comparison are planned separately; see [the design note](../docs/DESIGN.md).
+3D views, saving, branching, tree navigation, and comparison are planned separately;
+see [the design note](../docs/DESIGN.md).
 
 ## Styling
 
@@ -55,6 +55,7 @@ within the feature rather than duplicating them or adding global component selec
 Global CSS remains limited to document defaults, typography, shared custom properties,
 and accessibility defaults. No additional styling dependency is required.
 
+The desktop workspace gives the results column more space for the plan.
 Responsive rules stay with their owners: the header and workspace stack at 900 px;
 page/panel padding and the form field grid adjust at 520 px. Status and validation
 styles retain their existing data and accessibility attributes.
@@ -74,10 +75,15 @@ ESLint uses a flat configuration with TypeScript, React Hooks, and React Refresh
 rules. Generated files and dependencies are excluded.
 
 Vitest and React Testing Library cover draft parsing, accessible form validation,
-preview transport, all feasibility states, request failures, draft/result separation,
-out-of-order responses, cancellation, cache remounts, and existing health behavior.
+preview transport, integrated SVG layers, all feasibility states, request failures,
+draft/result separation, out-of-order responses, cancellation, cache remounts, and
+existing health behavior.
 Tests use jsdom and stub the fetch boundary; no running backend is required.
 Test sources are type checked.
+
+Workspace geometry fixtures in `src/test/backendPreviewFixtures.json` capture real
+backend responses, retaining configuration, geometry, and metrics together. The
+tests check scalable SVG markup; actual layout and overflow need browser verification.
 
 Focused SVG utility and component tests cover the supplied rectangle, L-shaped, and
 notched sites, holes, split setback regions, missing layers, orientation, fitting,
@@ -103,19 +109,21 @@ associated with their labeled inputs, and invalid submission focuses the first e
 ## Preview workflow
 
 Choose **Generate Preview** to submit the validated draft. Editing does not send
-requests or change the displayed metrics. A notice beside the result identifies
+requests or change the displayed plan or metrics. A notice beside the result identifies
 changes since the last submission, including invalid drafts. Returning to exactly
 the submitted text clears the notice; formatting-only edits also count as changes.
 
 Each submission starts a new request, including retries with unchanged inputs.
 Pending requests are cancelled when superseded or unmounted, and their results
-cannot replace the active request. A new submission clears previous metrics while
-loading. Failed requests show a summary and backend field paths/messages when
-available; correcting the inputs and submitting again retries explicitly.
+cannot replace the active request. A new submission clears the previous plan,
+metrics, and diagnostics while loading. Failed requests show a summary and backend
+field paths/messages when available; correcting the inputs and submitting again
+retries explicitly.
 
-Successful responses show feasibility and grouped site/setback, capacity, actual
-massing, preference, and target measurements. The prominent footprint area, floor
-count, height, and GFA summarize the selected building. Theoretical hard upper
+Successful responses show feasibility, an SVG site plan above the detailed metrics,
+and grouped site/setback, capacity, actual massing, preference, and target measurements.
+The prominent footprint area, floor count, height, and GFA summarize the selected
+building. Theoretical hard upper
 bounds do not guarantee a constructible footprint; generated default capacity
 describes demonstrated construction before preferences and target-driven floor
 selection. All values come directly from the response.
@@ -141,8 +149,14 @@ Superseding requests and request failures remove all previous result sections.
 
 ## SVG plan renderer
 
-`SitePlan` is available independently of `MassingWorkspace`; the current application
-does not mount it yet. It needs no Query provider, API request, or application state:
+`MassingWorkspace` mounts `SitePlan` directly from the successful TanStack Query
+response, alongside that response's metrics and diagnostics. All four geometry
+fields pass through unchanged. Empty, pending, and request-error states mount no
+viewer; infeasible and generation-failed results show available site/setback context
+with an explicit missing-footprint message. Draft edits retain the submitted plan.
+
+`SitePlan` also works independently. It needs no Query provider, API request, or
+application state:
 
 ```tsx
 <SitePlan
@@ -179,8 +193,19 @@ Omitted, null, or empty optional layers draw no paths. Available site/setback co
 remains visible when the footprint is missing, with an explicit unavailable message.
 An empty or unprojectable site frame displays an unavailable message and no paths;
 it never fits an optional layer instead. These display guards do not validate
-topology or determine feasibility. Pan/zoom, editing, 3D, and workspace integration
+topology or determine feasibility. Pan/zoom, editing, and 3D
 remain outside this component.
+
+For browser smoke checks, run the app with its backend and submit the supplied
+`data/sites/` examples through the JSON field, wrapping their vertices in a Polygon
+ring and closing it. The default rectangle and L-shaped site use a 3 m setback;
+the notched site at 3 m shows two setback components. The holed-site case in
+`backend/tests/test_massing_preview_api.py` uses a zero setback. Check the legend,
+hole openings, and selected component at desktop, tablet, 390 px, and 320 px widths.
+Use a maximum height of 3 m with the floor cap blank to check infeasible context,
+or a preferred footprint of `1e-30` to check generation failure with available
+default capacity. A backend validation failure must remove the previous plan and
+diagnostics; an unsubmitted edit must retain them with the changed-draft notice.
 
 ## Massing preview API
 
