@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, previewMassing } from "./api";
-import type { MassingPreviewResponse } from "./api/contracts";
-import { previewRequest, previewResponse } from "./test/massingFixtures";
+import type { MassingPreviewResponse } from "./contracts";
+import { previewRequest, previewResponse } from "../test/massingFixtures";
 
 const fetchMock = vi.fn<typeof fetch>();
 

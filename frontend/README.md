@@ -1,7 +1,7 @@
 # Frontend — building geometry case study
 
-Vite + React with strict TypeScript, a typed preview API client, and TanStack Query
-for server state. The app displays backend health and a placeholder for visualization.
+Vite + React with strict TypeScript, a typed configuration form, and a backend massing
+preview workspace. TanStack Query owns server results; React Hook Form owns drafts.
 
 ## Getting started
 
@@ -15,18 +15,25 @@ npm run dev        # http://localhost:5173
 The backend base URL defaults to `http://localhost:8000`; override with
 `VITE_API_BASE` (see `.env.example`). With the root `docker compose up`, both run together.
 
-## What's here / what's yours
+## Frontend structure
 
-- `src/api.ts` — health check and cancellable `previewMassing(request, signal?)`.
+- `src/api/api.ts` — health check and cancellable `previewMassing(request, signal?)`.
 - `src/api/contracts.ts` — Zod contracts inferred as strict TypeScript types.
 - `src/queryClient.ts` — reusable QueryClient factory and application instance.
-- `src/App.tsx` — shows backend health + a placeholder canvas marked `TODO`.
+- `src/App.tsx` — backend health and the responsive configuration workspace.
+- `src/features/massing/configuration.ts` — typed draft parsing using existing Zod API contracts.
+- `src/features/massing/ConfigurationForm.tsx` — accessible site, constraint, preference, and target inputs.
+- `src/features/massing/MassingWorkspace.tsx` — explicit preview submission, request states, and result summary.
+- `src/styles.css` — workspace layout and basic responsive styling.
 - `src/vite-env.d.ts` — types the optional `VITE_API_BASE` environment variable.
 
-You own the visualization: render the site, buildable footprint, massing, and
-metrics, and let the user create / branch / navigate saved options (the decision
-tree). Rendering approach is your call (2D SVG/canvas, 3D, …) — justify it in
-`docs/DESIGN.md`. Add whatever libraries you need.
+Feature modules and their tests live together under `src/features/massing/`; API
+transport tests live beside the client in `src/api/`. Shared fixtures and test setup
+stay in `src/test/`. Application entry points, styles, and QueryClient setup remain
+at the root. Imports use direct relative paths.
+
+Detailed metrics/diagnostics, SVG and 3D views, saving, branching, tree navigation,
+and comparison are planned separately; see [the design note](../docs/DESIGN.md).
 
 ## Commands
 
@@ -42,12 +49,48 @@ npm run preview    # preview the build
 ESLint uses a flat configuration with TypeScript, React Hooks, and React Refresh
 rules. Generated files and dependencies are excluded.
 
-Vitest and React Testing Library cover preview transport, the QueryClient setup,
-and health loading, success, and error UI states. Tests use jsdom and stub the fetch
-boundary; no running backend is required. Test sources are type checked.
+Vitest and React Testing Library cover draft parsing, accessible form validation,
+preview transport, all feasibility states, request failures, draft/result separation,
+out-of-order responses, cancellation, cache remounts, and existing health behavior.
+Tests use jsdom and stub the fetch boundary; no running backend is required.
+Test sources are type checked.
 
 Vite 6 and Vitest 4 share `vite.config.js`. Their minimum versions include
 development-tooling security fixes. Jest DOM stays on 6.9 to retain Node 20 support.
+
+## Configuration inputs
+
+`ConfigurationForm` uses React Hook Form with the Zod resolver. Its typed string
+draft is parsed by `src/features/massing/configuration.ts`, reusing the API contracts
+for numeric bounds. The initial example is a 40 × 25 m rectangle, a 3 m setback, 3.5 m
+floor-to-floor height, and a six-floor cap. All other inputs start blank.
+
+The JSON editor accepts a Polygon object with closed two-dimensional coordinate
+rings, including holes. Client checks cover JSON/coordinate structure, numeric
+inputs, and the required height-or-floor cap. Topology, capacity, preference
+compatibility, and feasibility remain backend decisions. Blank optional numbers
+become `null`; zero setbacks and zero GFA targets are preserved. Inline errors are
+associated with their labeled inputs, and invalid submission focuses the first error.
+
+## Preview workflow
+
+Choose **Generate Preview** to submit the validated draft. Editing does not send
+requests or change the displayed metrics. A notice beside the result identifies
+changes since the last submission, including invalid drafts. Returning to exactly
+the submitted text clears the notice; formatting-only edits also count as changes.
+
+Each submission starts a new request, including retries with unchanged inputs.
+Pending requests are cancelled when superseded or unmounted, and their results
+cannot replace the active request. A new submission clears previous metrics while
+loading. Failed requests show a summary and backend field paths/messages when
+available; correcting the inputs and submitting again retries explicitly.
+
+Successful responses show feasibility, footprint area, floor count, height, and GFA.
+`feasible_target_unmet`, `infeasible`, and `generation_failed` are domain results;
+they do not become HTTP errors. Null metrics display **Not available**. Numeric
+display uses at most two decimal places, with positive values below 0.01 shown as
+**<0.01**, without changing stored response values. No frontend geometry or capacity
+calculations are performed, and previews are not saved.
 
 ## Massing preview API
 
@@ -71,8 +114,8 @@ The existing `getHealth()` behavior and errors remain unchanged.
 Geometry validity and massing rules remain server-authoritative; response validation
 checks transport shapes and numeric bounds, without recalculating domain results.
 JavaScript numbers use binary64 precision; integer counts outside the safe integer
-range are rejected rather than silently rounded. Option API methods and preview UI
-integration will be added with their consuming features.
+range are rejected rather than silently rounded. Option API methods will be added
+with their consuming features.
 
 ## Server state
 
@@ -84,9 +127,29 @@ disable retries because a repeated save would create another immutable snapshot.
 
 The health display reads Query state directly, without copying it into local state.
 Its reconnect refetch is disabled to preserve the existing check-on-mount behavior.
-Future forms and selection state stay local; remote preview and option results belong
-in Query. Preview keys and hooks will be added with the configuration workflow so
-their identity includes the actual submitted configuration.
+The preview key contains the parsed submitted configuration and a unique submission
+ID, preventing cache reuse across explicit attempts or remounts. Query consumes the
+API client's AbortSignal; results remain in Query without a local copy. Preview
+queries are infinitely fresh for that attempt, with mount/reconnect refetch disabled
+and network mode `always` so offline attempts surface an error. Unobserved results
+use the library's five-minute retention. Submission snapshots and the draft-change
+indicator are local interaction state; future option results also belong in Query.
+
+## Browser smoke test
+
+With the frontend and backend running:
+
+1. Check backend health, submit the example, and expect 646 m² footprint, six floors,
+   21 m height, and 3,876 m² GFA.
+2. Edit a constraint without submitting: metrics stay unchanged and the draft notice
+   appears beside the result. Submit to apply the change.
+3. Try a GFA target of 1,000,000 (target unmet), a setback of 100 (infeasible), and a
+   preferred floor count above the cap (backend validation error).
+4. Enter malformed JSON and remove both height/floor caps to check inline errors.
+   Try zero setback/target and a valid Polygon with a hole.
+5. Check the layout and submission on a narrow viewport. Request races, cancellation,
+   network/malformed-response failures, and generation-failure rendering have focused
+   automated coverage.
 
 ## Docker development
 
