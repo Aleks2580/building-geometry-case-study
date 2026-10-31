@@ -31,6 +31,10 @@ function change(label: RegExp, value: string) {
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
 }
 
+function selectShape(kind: "rectangle" | "l-shaped" | "notched" | "custom") {
+  fireEvent.change(screen.getByRole("combobox", { name: "Site shape" }), { target: { value: kind } });
+}
+
 function metric(label: string) {
   const term = screen.getByText(label, { selector: "dt" });
   return term.parentElement?.querySelector("dd");
@@ -39,6 +43,10 @@ function metric(label: string) {
 function planPaths() {
   return [...screen.getByRole("img", { name: "Site plan" }).querySelectorAll("path")]
     .map((path) => [path.getAttribute("data-layer"), path.getAttribute("d")]);
+}
+
+function draftOutline() {
+  return screen.getByRole("img", { name: "Draft site preview" }).querySelector("path")?.getAttribute("d") ?? "";
 }
 
 function expectPlanGeometry(result: MassingPreviewResponse) {
@@ -74,6 +82,7 @@ describe("MassingWorkspace", () => {
     renderWorkspace();
 
     expect(screen.getByText(/No preview yet/)).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Draft site preview" })).toBeInTheDocument();
     expect(screen.queryByRole("img", { name: "Site plan" })).not.toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
     submit();
@@ -85,6 +94,10 @@ describe("MassingWorkspace", () => {
     expect(url).toBe("http://localhost:8000/api/v1/massing/preview");
     expect(options?.method).toBe("POST");
     expect(JSON.parse(String(options?.body))).toMatchObject({
+      site: {
+        type: "Polygon",
+        coordinates: [[[0, 0], [40, 0], [40, 25], [0, 25], [0, 0]]],
+      },
       hard_constraints: { setback_m: 3, floor_to_floor_m: 3.5, max_floors: 6, max_height_m: null },
       preferences: { preferred_floor_count: null, preferred_footprint_area_m2: null },
       targets: { gfa_target_m2: null },
@@ -232,6 +245,7 @@ describe("MassingWorkspace", () => {
     await screen.findByRole("heading", { name: "Feasible" });
     const submittedPaths = planPaths();
     change(/Maximum floor count/, "2");
+    selectShape("custom");
     change(/Site Polygon JSON/, JSON.stringify(backendPreviewResponse("notched").site));
 
     expect(screen.getByText(/Draft inputs have changed/)).toBeInTheDocument();
@@ -244,10 +258,112 @@ describe("MassingWorkspace", () => {
     expect(metric("Floor count")).toHaveTextContent("6");
     expect(planPaths()).toEqual(submittedPaths);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    change(/Site Polygon JSON/, JSON.stringify(previewResponse().site, null, 2));
+    selectShape("rectangle");
     change(/Maximum floor count/, "6");
     expect(screen.queryByText(/Draft inputs have changed/)).not.toBeInTheDocument();
     expect(planPaths()).toEqual(submittedPaths);
+  });
+
+  it("keeps displayed geometry and metrics while editing dimensions and switching site types without requests", async () => {
+    const rectangle = previewResponse();
+    const notched = backendPreviewResponse("notched");
+    fetchMock.mockResolvedValueOnce(Response.json(rectangle))
+      .mockResolvedValueOnce(Response.json(notched))
+      .mockResolvedValueOnce(Response.json(rectangle));
+    renderWorkspace();
+    submit();
+    await screen.findByRole("heading", { name: "Feasible" });
+    const rectanglePaths = planPaths();
+    const rectangleDraftPath = draftOutline();
+
+    change(/Width \(m\)/, "45.25");
+    expect(draftOutline()).not.toBe(rectangleDraftPath);
+    expect(planPaths()).toEqual(rectanglePaths);
+    change(/Length \(m\)/, "");
+    expect(screen.queryByRole("img", { name: "Draft site preview" })).not.toBeInTheDocument();
+    submit();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Enter a number.");
+    expect(screen.getByText(/Draft inputs have changed/)).toBeInTheDocument();
+    expect(planPaths()).toEqual(rectanglePaths);
+    expect(metric("Footprint area")).toHaveTextContent("646 m²");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const exampleDraftPaths: string[] = [];
+    for (const kind of ["l-shaped", "notched", "custom"] as const) {
+      selectShape(kind);
+      exampleDraftPaths.push(draftOutline());
+      expect(planPaths()).toEqual(rectanglePaths);
+      expect(metric("GFA")).toHaveTextContent("3,876 m²");
+      expect(screen.getByText(/Draft inputs have changed/)).toBeInTheDocument();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    }
+    expect(exampleDraftPaths[0]).not.toBe(rectangleDraftPath);
+    expect(exampleDraftPaths[1]).not.toBe(exampleDraftPaths[0]);
+    expect(exampleDraftPaths[2]).toBe(exampleDraftPaths[1]);
+    submit();
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const request = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
+    expect(request.site).toEqual(notched.site);
+    expect(Object.keys(request)).toEqual(["site", "hard_constraints", "preferences", "targets"]);
+    expect(Object.keys(request.site)).toEqual(["type", "coordinates"]);
+    await waitFor(() => expectPlanGeometry(notched));
+    expect(screen.queryByText(/Draft inputs have changed/)).not.toBeInTheDocument();
+    const notchedPaths = planPaths();
+
+    selectShape("rectangle");
+
+    expect(draftOutline()).toBe(rectangleDraftPath);
+    expect(planPaths()).toEqual(notchedPaths);
+    expect(screen.getByText(/Draft inputs have changed/)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    submit();
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(JSON.parse(String(fetchMock.mock.calls[2][1]?.body)).site).toEqual(rectangle.site);
+    await waitFor(() => expectPlanGeometry(rectangle));
+    expect(screen.queryByText(/Draft inputs have changed/)).not.toBeInTheDocument();
+  });
+
+  it("tracks raw rectangle dimensions and selection when restoring the submitted draft", async () => {
+    fetchMock.mockResolvedValue(Response.json(previewResponse()));
+    renderWorkspace();
+    submit();
+    await screen.findByRole("heading", { name: "Feasible" });
+
+    change(/Width \(m\)/, "40.0");
+    expect(screen.getByText(/Draft inputs have changed/)).toBeInTheDocument();
+    change(/Width \(m\)/, "40");
+    expect(screen.queryByText(/Draft inputs have changed/)).not.toBeInTheDocument();
+    selectShape("custom");
+    expect(screen.getByText(/Draft inputs have changed/)).toBeInTheDocument();
+    selectShape("rectangle");
+    expect(screen.queryByText(/Draft inputs have changed/)).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expectPlanGeometry(previewResponse());
+  });
+
+  it("keeps a pending rectangle request active when an invalid dimension blocks a replacement", async () => {
+    const pending = deferred<Response>();
+    fetchMock.mockReturnValue(pending.promise);
+    renderWorkspace();
+    submit();
+    await screen.findByText("Generating preview…");
+    const signal = fetchMock.mock.calls[0][1]?.signal;
+    change(/Width \(m\)/, "invalid");
+    expect(screen.queryByRole("img", { name: "Draft site preview" })).not.toBeInTheDocument();
+
+    submit();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Enter a finite decimal number.");
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(signal?.aborted).toBe(false);
+    await act(async () => pending.resolve(Response.json(previewResponse())));
+    await screen.findByRole("heading", { name: "Feasible" });
+    expectPlanGeometry(previewResponse());
+    expect(screen.queryByRole("img", { name: "Draft site preview" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Draft inputs have changed/)).toBeInTheDocument();
   });
 
   it("does not let edits during a request mutate its submitted inputs or its response", async () => {
@@ -257,12 +373,17 @@ describe("MassingWorkspace", () => {
     submit();
     await screen.findByText("Generating preview…");
     change(/Maximum floor count/, "2");
+    selectShape("l-shaped");
+    const lShapedDraftPath = draftOutline();
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).site).toEqual(previewResponse().site);
     await act(async () => pending.resolve(Response.json(previewResponse())));
 
     await screen.findByRole("heading", { name: "Feasible" });
     expectPlanGeometry(previewResponse());
+    expect(draftOutline()).toBe(lShapedDraftPath);
     expect(metric("Floor count")).toHaveTextContent("6");
     expect(screen.getByLabelText(/Maximum floor count/)).toHaveValue("2");
+    expect(screen.getByRole("combobox", { name: "Site shape" })).toHaveValue("l-shaped");
     expect(screen.getByText(/Draft inputs have changed/)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -279,12 +400,14 @@ describe("MassingWorkspace", () => {
     second.metrics.gfa_m2 = 1292;
     fetchMock.mockReturnValueOnce(first.promise).mockResolvedValueOnce(Response.json(second));
     renderWorkspace();
-    change(/Site Polygon JSON/, JSON.stringify(oldResult.site));
+    selectShape("notched");
     submit();
     await screen.findByText("Generating preview…");
     const firstSignal = fetchMock.mock.calls[0][1]?.signal;
-    change(/Site Polygon JSON/, JSON.stringify(second.site));
+    selectShape("rectangle");
     change(/Maximum floor count/, "2");
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(firstSignal?.aborted).toBe(false);
     submit();
 
     await screen.findByRole("heading", { name: "Feasible" });
@@ -324,11 +447,11 @@ describe("MassingWorkspace", () => {
     fetchMock.mockReturnValueOnce(first.promise)
       .mockResolvedValueOnce(new Response("Unavailable", { status: 503 }));
     renderWorkspace();
-    change(/Site Polygon JSON/, JSON.stringify(oldResult.site));
+    selectShape("notched");
     submit();
     await screen.findByText("Generating preview…");
     const firstSignal = fetchMock.mock.calls[0][1]?.signal;
-    change(/Site Polygon JSON/, JSON.stringify(previewResponse().site));
+    selectShape("rectangle");
     submit();
 
     const error = await screen.findByRole("alert");
@@ -420,6 +543,7 @@ describe("MassingWorkspace", () => {
   it("submits zero targets and Polygon holes through the real API client", async () => {
     fetchMock.mockResolvedValue(Response.json(previewResponse()));
     renderWorkspace();
+    selectShape("custom");
     const site = previewResponse().site;
     site.coordinates.push([[10, 10], [15, 10], [15, 15], [10, 15], [10, 10]]);
     change(/Site Polygon JSON/, JSON.stringify(site));
@@ -480,6 +604,7 @@ describe("MassingWorkspace", () => {
     const result = backendPreviewResponse(name);
     fetchMock.mockResolvedValue(Response.json(result));
     renderWorkspace();
+    selectShape("custom");
     change(/Site Polygon JSON/, JSON.stringify(result.site));
     change(/Setback \(m\)/, String(result.hard_constraints.setback_m));
     submit();
