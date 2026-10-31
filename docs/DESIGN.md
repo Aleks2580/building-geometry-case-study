@@ -8,8 +8,8 @@
 > massing metrics, validated GFA targets, target-driven floor selection, and target
 > assessment. A typed massing preview API now exposes the domain result through
 > explicit application mapping. PostgreSQL migrations, immutable root saves and
-> child branches, retrieval, and summary listing are implemented. Tree traversal,
-> comparison, alternatives, and visualization remain planned.
+> child branches, retrieval, summary listing, and decision-tree retrieval are
+> implemented. Comparison, alternatives, and visualization remain planned.
 
 ## Problem interpretation
 
@@ -117,8 +117,8 @@ SQL. `app.application.massing.preview_massing` parses site input, calls the exis
 preference-aware domain service, and explicitly maps the result to JSON-compatible
 values without importing Pydantic or FastAPI. The branching application use case
 loads the parent site and calls this same preview function through `asyncio.to_thread`.
-Root saves and branches share snapshot insertion and version metadata. Tree and
-comparison use cases remain planned.
+Root saves and branches share snapshot insertion and version metadata. Tree retrieval
+assembles saved summaries without invoking the domain; comparison remains planned.
 Pure domain services separate polygon operations from massing rules: `app.geometry`
 owns polygons, while `app.massing.floors` owns scalar floor-limit rules and
 `app.massing.defaults` orchestrates the current default result over those geometry
@@ -602,8 +602,8 @@ remain deferred.
 ## API contract
 
 All routes use `/api/v1`; breaking changes require a new version, additive response
-fields remain compatible. Preview, root save, branching, option retrieval, and option
-listing are implemented. Tree, comparison, and alternatives remain planned.
+fields remain compatible. Preview, root save, branching, option retrieval, summary
+listing, and tree retrieval are implemented. Comparison and alternatives remain planned.
 Preview and root-save requests require `site` and `hard_constraints`. Branch requests
 require `hard_constraints` and inherit the site from the parent identified in the URL.
 Omitted `preferences` and `targets` default to empty objects in all three requests;
@@ -642,7 +642,7 @@ schemas and example; `/openapi.json` exposes the machine-readable schema.
 | `POST /options/{option_id}/branches` | Parent site plus complete new constraints/preferences/targets → child snapshot, `201`. |
 | `GET /options` | Summary array; `limit` (default 50, maximum 200) and `offset` (default 0). |
 | `GET /options/{option_id}` | Complete immutable snapshot. |
-| `GET /options/tree?root_id=...` | Planned: tree of option summaries. |
+| `GET /options/tree?root_id={uuid}` | Selected option and all descendants as nested summaries, `200`; `root_id` required. |
 | `POST /options/compare` | Planned: selected options → snapshots and input/metric/diagnostic comparison. |
 | `POST /massing/alternatives` | Planned: secondary bounded suggestions; no persistence. |
 
@@ -655,7 +655,19 @@ null `parent_id`, name, schema/algorithm versions, timezone-aware `created_at`, 
 create separate roots. Retrieval returns the stored snapshot without recomputation;
 listing returns metadata and metrics, newest first with UUID as a tie-breaker.
 Offset pagination is intended for this small prototype; concurrent inserts may shift
-page boundaries. Parent/root filters remain deferred with tree retrieval.
+page boundaries. List filtering by parent/root remains deferred; use tree retrieval
+for a selected decision history.
+
+`GET /options/tree` requires a UUID `root_id` query parameter and returns one
+`OptionTreeResponse` object: the existing summary fields (`id`, `parent_id`, `name`,
+`schema_version`, `algorithm_version`, `created_at`, `feasibility_status`, and typed
+`metrics`) plus a required `children` array of the same type. Leaves return
+`children: []`; a root-only history still returns an object. The subtree and ordering
+rules are defined in the persistence section above. No configuration, geometry, or
+complete result is returned. All four saved feasibility statuses and nullable metrics
+are preserved. An unknown UUID returns `404 OPTION_NOT_FOUND` with detail path
+`root_id`; absent or malformed values return `422 INVALID_REQUEST` with detail path
+`query.root_id`. The static `/tree` route is registered before `/{option_id}`.
 
 `POST /options/{option_id}/branches` replaces the complete hard constraints,
 preferences, and targets; it never merges configuration with the parent. The child
@@ -665,8 +677,9 @@ then inserts a snapshot with `parent_id` equal to the URL identifier. The respon
 uses the complete snapshot contract above with status `201` and
 `Location: /api/v1/options/{child_id}`. Repeated requests create distinct siblings;
 any saved child can itself be branched. Parent results remain unchanged, including
-when a diagnostic parent produces a feasible child. Tree retrieval, navigation,
-comparison, frontend workflows, and automatic alternatives remain outside this endpoint.
+when a diagnostic parent produces a feasible child. Tree retrieval is a separate
+read-only endpoint; navigation, comparison, frontend workflows, and automatic
+alternatives remain outside this endpoint.
 
 Results echo normalized configuration (including the canonical site) and return
 `site_geometry`, `buildable_geometry`,
@@ -852,8 +865,11 @@ with null fields. Verify all status/diagnostic branches and preference preservat
 
 API/database tests cover validation, all snapshot statuses, transactional save/branch,
 unchanged parents, sibling and nested branches, configuration replacement, and reload
-using disposable PostgreSQL. Tree/comparison tests remain planned. Frontend checks
-cover strict types and lint/build; planned interaction tests cover forms, stale responses,
+using disposable PostgreSQL. Tree tests cover isolated roots/subtrees, stable sibling
+ordering including timestamp ties, lightweight status/metrics, read-only retrieval,
+structured errors, and reload without changing snapshots. Comparison tests remain
+planned. Frontend checks cover strict types and lint/build; planned interaction tests
+cover forms, stale responses,
 keyboard tree navigation, node selection/comparison, null-state rendering, and matching
 SVG/3D geometry, floors, holes, and resource lifecycle.
 

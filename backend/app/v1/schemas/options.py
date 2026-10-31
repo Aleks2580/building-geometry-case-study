@@ -52,3 +52,7 @@ class OptionResponse(OptionMetadata):
 
 class OptionSummaryResponse(OptionMetadata):
     metrics: MassingMetrics
+
+
+class OptionTreeResponse(OptionSummaryResponse):
+    children: list["OptionTreeResponse"]
