@@ -586,6 +586,19 @@ parents. Caller-owned transactions still control commit or rollback through the
 repository's savepoints. Each child is a new snapshot; siblings and nested branches
 never modify their ancestors.
 
+Decision-tree retrieval uses one recursive PostgreSQL query anchored at a selected
+option ID. It follows `parent_id` through all descendants and selects the existing
+summary metadata, saved feasibility status, and `result.metrics`, without loading
+snapshot geometry or recomputing results. The application assembles nodes by ID and
+orders siblings by ascending `(created_at, id)`, including a UUID tie-breaker for
+shared transaction timestamps. Any saved child can be the selected root; its stored
+`parent_id` is retained, while ancestors, siblings, and unrelated roots are excluded.
+Leaves have an empty children list, and unknown IDs have no tree. The existing
+parent index is sufficient; no migration is needed. Supported writes only insert
+children of existing options, so parent links cannot form cycles. Complete subtrees
+are intended for small decision histories; pagination and large/deep-tree handling
+remain deferred.
+
 ## API contract
 
 All routes use `/api/v1`; breaking changes require a new version, additive response

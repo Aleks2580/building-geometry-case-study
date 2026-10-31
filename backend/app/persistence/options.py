@@ -125,3 +125,25 @@ class OptionRepository:
                 )
                 rows = await cursor.fetchall()
         return rows
+
+    async def get_descendant_summaries(self, root_id: UUID) -> list[OptionSummary]:
+        async with self._connection.transaction():
+            async with self._connection.cursor(row_factory=class_row(OptionSummary)) as cursor:
+                await cursor.execute(
+                    """
+                    WITH RECURSIVE descendants AS (
+                        SELECT id FROM options WHERE id = %s
+                        UNION ALL
+                        SELECT child.id FROM options AS child
+                        JOIN descendants ON child.parent_id = descendants.id
+                    )
+                    SELECT option.id, option.parent_id, option.name, option.schema_version,
+                        option.algorithm_version, option.feasibility_status, option.created_at,
+                        option.result -> 'metrics' AS metrics
+                    FROM options AS option JOIN descendants ON option.id = descendants.id
+                    ORDER BY option.created_at ASC, option.id ASC
+                    """,
+                    (root_id,),
+                )
+                rows = await cursor.fetchall()
+        return rows
