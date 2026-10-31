@@ -17,7 +17,8 @@ The backend base URL defaults to `http://localhost:8000`; override with
 
 ## What's here / what's yours
 
-- `src/api.ts` — tiny fetch client with runtime validation of the health response.
+- `src/api.ts` — health check and cancellable `previewMassing(request, signal?)`.
+- `src/api/contracts.ts` — Zod contracts inferred as strict TypeScript types.
 - `src/App.tsx` — shows backend health + a placeholder canvas marked `TODO`.
 - `src/vite-env.d.ts` — types the optional `VITE_API_BASE` environment variable.
 
@@ -43,6 +44,31 @@ rules. Generated files and dependencies are excluded.
 Vitest and React Testing Library cover the health API and its loading, success,
 and error UI states. Tests use jsdom and stub only the fetch boundary; no running
 backend is required. Test files and setup are included in TypeScript checks.
+
+## Massing preview API
+
+`previewMassing` posts a `MassingPreviewRequest` to `/api/v1/massing/preview`
+using `VITE_API_BASE`. Omitted optional inputs stay omitted; explicit nulls and a
+zero GFA target are preserved. Pass an `AbortSignal` to cancel superseded work.
+
+The contracts mirror `backend/app/v1/schemas/massing.py` and validate responses at
+runtime. Types are inferred from these schemas rather than maintained separately.
+Parsing applies the backend's optional configuration defaults and accepts additive
+response fields. Polygon holes, MultiPolygon setbacks, nullable metrics, preference
+results, target assessments, and all four feasibility statuses are preserved.
+An `infeasible` or `generation_failed` preview is a successful domain result.
+
+Preview failures throw `ApiError`: `kind` distinguishes `http`, `network`, and
+`malformed_response`; `status` retains the HTTP status when available, and `error`
+contains a validated server error code, message, and field details when supplied.
+Network failures retain their `cause`. Cancellation propagates its original reason.
+The existing `getHealth()` behavior and errors remain unchanged.
+
+Geometry validity and massing rules remain server-authoritative; response validation
+checks transport shapes and numeric bounds, without recalculating domain results.
+JavaScript numbers use binary64 precision; integer counts outside the safe integer
+range are rejected rather than silently rounded. Option API methods and preview UI
+integration will be added with their consuming features.
 
 Vite 6 and Vitest 4 share `vite.config.js`. Their minimum versions include
 development-tooling security fixes. Jest DOM stays on 6.9 to retain Node 20 support.

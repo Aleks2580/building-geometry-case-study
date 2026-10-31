@@ -1,4 +1,6 @@
-// Minimal API client. Point at the backend; override with VITE_API_BASE if needed.
+import { errorResponseSchema, massingPreviewResponseSchema } from "./api/contracts";
+import type { ErrorBody, MassingPreviewRequest, MassingPreviewResponse } from "./api/contracts";
+
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 
 export interface HealthResponse {
@@ -20,7 +22,79 @@ export async function getHealth(): Promise<HealthResponse> {
   return { status: data.status };
 }
 
-// TODO(candidate): add the calls for your massing / options API here, e.g.
-//   export async function createMassing(payload) { ... }
-//   export async function branchOption(id, payload) { ... }
-//   export async function listOptions() { ... }
+export class ApiError extends Error {
+  readonly status: number | null;
+  readonly error: ErrorBody | null;
+  readonly cause: unknown;
+
+  constructor(
+    readonly kind: "http" | "network" | "malformed_response",
+    message: string,
+    options: { status?: number; error?: ErrorBody; cause?: unknown } = {},
+  ) {
+    super(message);
+    this.name = "ApiError";
+    this.status = options.status ?? null;
+    this.error = options.error ?? null;
+    this.cause = options.cause;
+  }
+}
+
+function rethrowCancellation(cause: unknown, signal?: AbortSignal): void {
+  signal?.throwIfAborted();
+  if ((cause instanceof Error || cause instanceof DOMException) && cause.name === "AbortError") {
+    throw cause;
+  }
+}
+
+export async function previewMassing(
+  request: MassingPreviewRequest,
+  signal?: AbortSignal,
+): Promise<MassingPreviewResponse> {
+  signal?.throwIfAborted();
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/api/v1/massing/preview`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+      signal,
+    });
+  } catch (cause) {
+    rethrowCancellation(cause, signal);
+    throw new ApiError("network", "Unable to reach the massing API.", { cause });
+  }
+
+  let data: unknown;
+  try {
+    data = await response.json();
+  } catch (cause) {
+    rethrowCancellation(cause, signal);
+    if (response.ok) {
+      throw new ApiError("malformed_response", "Invalid massing preview response.", {
+        status: response.status, cause,
+      });
+    }
+    throw new ApiError("http", `Massing preview failed: HTTP ${response.status}`, {
+      status: response.status, cause,
+    });
+  }
+  signal?.throwIfAborted();
+
+  if (!response.ok) {
+    const parsed = errorResponseSchema.safeParse(data);
+    throw new ApiError(
+      "http",
+      parsed.success ? parsed.data.error.message : `Massing preview failed: HTTP ${response.status}`,
+      { status: response.status, error: parsed.success ? parsed.data.error : undefined },
+    );
+  }
+
+  const parsed = massingPreviewResponseSchema.safeParse(data);
+  if (!parsed.success) {
+    throw new ApiError("malformed_response", "Invalid massing preview response.", {
+      status: response.status,
+    });
+  }
+  return parsed.data;
+}

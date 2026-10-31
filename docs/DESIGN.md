@@ -800,6 +800,19 @@ checks and adding typed API/environment boundaries, typecheck, lint, tests, and 
 geometry and inconsistent statuses across forms/renderers more reliably than
 JavaScript/JSDoc, but does not replace runtime or geometric validation.
 
+The preview client in `frontend/src/api.ts` uses the existing `VITE_API_BASE` and
+accepts an `AbortSignal`. Zod schemas in `frontend/src/api/contracts.ts` mirror the
+backend preview contract and infer TypeScript types from one frontend definition.
+Response parsing retains nullable results and all four feasibility statuses,
+applies optional configuration defaults, and tolerates additive response fields.
+Geometry validity and massing calculations remain on the backend. JavaScript's
+binary64 numbers cannot preserve arbitrary Python integer counts; counts outside
+the safe integer range are rejected as malformed responses. Preview HTTP, network,
+and malformed-response failures use `ApiError`, retaining structured server error
+details when available. Cancellation preserves its original reason; the existing
+health client keeps its established behavior. Option client methods are deferred
+until their consuming workflows.
+
 [TanStack Query](https://tanstack.com/query/latest/docs/framework/react/overview)
 owns remote previews/options and cache lifecycle. Fetch/effects would repeat that
 logic across consumers. Configuration keys must prevent stale responses replacing
