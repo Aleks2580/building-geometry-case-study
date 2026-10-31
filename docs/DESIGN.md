@@ -11,8 +11,9 @@
 > child branches, retrieval, summary listing, and decision-tree retrieval are
 > implemented, together with read-only saved-option comparison. The frontend provides
 > a typed editable configuration workspace and explicit backend preview with detailed
-> metrics, preference/target assessments, feasibility, and diagnostics. Saved-option
-> workflows, alternatives, and visualization remain planned in the frontend.
+> metrics, preference/target assessments, feasibility, and diagnostics. An independent
+> SVG geometry renderer is available; workspace integration, saved-option workflows,
+> alternatives, and 3D visualization remain planned in the frontend.
 
 ## Problem interpretation
 
@@ -811,8 +812,8 @@ turning target shortfalls into hard violations or construction failure into a pr
 of infeasibility. Diagnostics retain backend severity, code, message, and optional
 path/details, with an explicit empty state. Native disclosures keep detail fields
 keyboard accessible. These presentational components read the current Query response;
-new pending or failed attempts display no previous metrics or diagnostics. SVG/3D
-views remain subsequent slices.
+new pending or failed attempts display no previous metrics or diagnostics. Integration
+of the independent SVG renderer and the 3D view remain subsequent slices.
 
 ### Types and state
 
@@ -870,6 +871,18 @@ shared, aspect-preserving transform with screen y-axis inversion. DOM events sup
 interaction without custom hit-testing. Canvas becomes attractive for large geometry
 sets but needs explicit redraw, hit-testing, and accessibility. SVG still requires
 bounded vertex complexity and accessible metric/diagnostic text alongside the plan.
+
+The independent `SitePlan` component and pure display utilities live under
+`frontend/src/features/visualization/`. Explicit geometry props reuse the API types
+without requiring a result object, requests, a provider, or workspace state. Every
+layer uses the original site's bounds; a smaller or absent footprint cannot change
+the common frame. Complete setbacks retain all MultiPolygon components, with separate
+styles for the backend-selected component and actual footprint. No component is
+selected or constructed in the renderer, and default-generation geometry never
+substitutes for an absent actual footprint. Holes use even-odd fills regardless of
+ring winding. A visible legend and SVG title/description identify available context.
+The [renderer usage contract](../frontend/README.md#svg-plan-renderer) documents fitting,
+empty layers, and the display-only boundary. Workspace integration is deferred.
 
 The 3D view helps architects read volume, floor count, and height that overlap in a
 plan, making footprint/height trade-offs easier to judge. It complements precise plan

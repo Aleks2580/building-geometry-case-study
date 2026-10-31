@@ -1,0 +1,77 @@
+.plan {
+  margin: 0;
+  min-width: 0;
+}
+
+.viewport {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+}
+
+.layer {
+  fill: var(--layer-fill);
+  stroke: var(--layer-stroke);
+  stroke-width: 2;
+  stroke-dasharray: var(--layer-dash, none);
+  stroke-linejoin: round;
+}
+
+.site {
+  --layer-fill: #f8faf9;
+  --layer-stroke: #50636a;
+}
+
+.buildable {
+  --layer-fill: rgb(113 99 157 / 18%);
+  --layer-stroke: #71639d;
+  --layer-dash: 7 4;
+}
+
+.selectedBuildable {
+  --layer-fill: rgb(41 125 145 / 15%);
+  --layer-stroke: #297d91;
+  --layer-dash: 3 3;
+}
+
+.footprint {
+  --layer-fill: rgb(50 99 89 / 65%);
+  --layer-stroke: #204e44;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  padding: 0;
+  margin: 0.75rem 0 0;
+  list-style: none;
+  font-size: 0.85rem;
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.swatch {
+  flex: 0 0 1.2rem;
+  height: 0.85rem;
+  background: var(--layer-fill);
+  border: 2px solid var(--layer-stroke);
+}
+
+.swatch.buildable,
+.swatch.selectedBuildable {
+  border-style: dashed;
+}
+
+.notice {
+  margin: 0.75rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
