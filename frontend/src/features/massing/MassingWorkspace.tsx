@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ApiError, previewMassing } from "../../api/api";
 import type { MassingPreviewResponse } from "../../api/contracts";
+import SitePlan from "../visualization/SitePlan";
 import ConfigurationForm from "./ConfigurationForm";
 import DetailedMetrics from "./DetailedMetrics";
 import Diagnostics from "./Diagnostics";
@@ -21,6 +22,12 @@ function PreviewSummary({ result }: { result: MassingPreviewResponse }) {
   return (
     <>
       <FeasibilitySummary feasibility={result.feasibility} />
+      <SitePlan
+        siteGeometry={result.site_geometry}
+        buildableGeometry={result.buildable_geometry}
+        selectedBuildableGeometry={result.selected_buildable_geometry}
+        footprintGeometry={result.footprint_geometry}
+      />
       <DetailedMetrics result={result} />
       <PreferenceAssessments result={result} />
       <Diagnostics diagnostics={result.feasibility.diagnostics} />

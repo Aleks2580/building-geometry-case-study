@@ -1,0 +1,437 @@
+{
+  "notched": {
+    "site": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [0.0, 0.0],
+          [50.0, 0.0],
+          [50.0, 20.0],
+          [30.0, 20.0],
+          [30.0, 6.0],
+          [20.0, 6.0],
+          [20.0, 20.0],
+          [0.0, 20.0],
+          [0.0, 0.0]
+        ]
+      ]
+    },
+    "hard_constraints": {
+      "setback_m": 3,
+      "floor_to_floor_m": 3.5,
+      "max_height_m": null,
+      "max_floors": 6,
+      "site_coverage_ratio": null,
+      "max_footprint_m2": null
+    },
+    "preferences": {
+      "preferred_floor_count": null,
+      "preferred_footprint_area_m2": null
+    },
+    "targets": {
+      "gfa_target_m2": null
+    },
+    "site_geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [0.0, 0.0],
+          [50.0, 0.0],
+          [50.0, 20.0],
+          [30.0, 20.0],
+          [30.0, 6.0],
+          [20.0, 6.0],
+          [20.0, 20.0],
+          [0.0, 20.0],
+          [0.0, 0.0]
+        ]
+      ]
+    },
+    "buildable_geometry": {
+      "type": "MultiPolygon",
+      "coordinates": [
+        [[[3.0, 3.0], [17.0, 3.0], [17.0, 17.0], [3.0, 17.0], [3.0, 3.0]]],
+        [[[33.0, 3.0], [47.0, 3.0], [47.0, 17.0], [33.0, 17.0], [33.0, 3.0]]]
+      ]
+    },
+    "selected_buildable_geometry": {
+      "type": "Polygon",
+      "coordinates": [[[3.0, 3.0], [17.0, 3.0], [17.0, 17.0], [3.0, 17.0], [3.0, 3.0]]]
+    },
+    "generated_footprint_geometry": {
+      "type": "Polygon",
+      "coordinates": [[[3.0, 3.0], [17.0, 3.0], [17.0, 17.0], [3.0, 17.0], [3.0, 3.0]]]
+    },
+    "footprint_geometry": {
+      "type": "Polygon",
+      "coordinates": [[[3.0, 3.0], [17.0, 3.0], [17.0, 17.0], [3.0, 17.0], [3.0, 3.0]]]
+    },
+    "floor_plate_geometry": {
+      "type": "Polygon",
+      "coordinates": [[[3.0, 3.0], [17.0, 3.0], [17.0, 17.0], [3.0, 17.0], [3.0, 3.0]]]
+    },
+    "metrics": {
+      "site_area_m2": 860.0,
+      "buildable_area_m2": 392.0,
+      "selected_buildable_area_m2": 196.0,
+      "footprint_area_upper_bound_m2": 196.0,
+      "gfa_upper_bound_m2": 1176.0,
+      "generated_footprint_area_m2": 196.0,
+      "generated_gfa_capacity_m2": 1176.0,
+      "maximum_permitted_floor_count": 6,
+      "footprint_area_m2": 196.0,
+      "floor_count": 6,
+      "floor_to_floor_m": 3.5,
+      "height_m": 21.0,
+      "gfa_m2": 1176.0,
+      "site_coverage_ratio": 0.22790697674418606
+    },
+    "setback": {
+      "component_count": 2,
+      "retained_area_m2": 196.0,
+      "discarded_area_m2": 196.0
+    },
+    "preference_results": {
+      "preferred_floor_count": null,
+      "footprint_area": null
+    },
+    "feasibility": {
+      "status": "feasible",
+      "reason": null,
+      "hard_constraints_satisfied": true,
+      "target_assessment": {
+        "requested_m2": null,
+        "actual_m2": 1176.0,
+        "shortfall_m2": null,
+        "status": "not_requested",
+        "diagnostic_code": null
+      },
+      "diagnostics": [
+        {
+          "code": "BUILDABLE_REGION_SPLIT",
+          "severity": "warning",
+          "message": "Setback produced multiple buildable components; one largest component was selected."
+        }
+      ]
+    }
+  },
+  "holed": {
+    "site": {
+      "type": "Polygon",
+      "coordinates": [
+        [[0.0, 0.0], [20.0, 0.0], [20.0, 20.0], [0.0, 20.0], [0.0, 0.0]],
+        [[5.0, 5.0], [5.0, 10.0], [10.0, 10.0], [10.0, 5.0], [5.0, 5.0]]
+      ]
+    },
+    "hard_constraints": {
+      "setback_m": 0,
+      "floor_to_floor_m": 3.5,
+      "max_height_m": null,
+      "max_floors": 6,
+      "site_coverage_ratio": null,
+      "max_footprint_m2": null
+    },
+    "preferences": {
+      "preferred_floor_count": null,
+      "preferred_footprint_area_m2": null
+    },
+    "targets": {
+      "gfa_target_m2": null
+    },
+    "site_geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [[0.0, 0.0], [20.0, 0.0], [20.0, 20.0], [0.0, 20.0], [0.0, 0.0]],
+        [[5.0, 5.0], [5.0, 10.0], [10.0, 10.0], [10.0, 5.0], [5.0, 5.0]]
+      ]
+    },
+    "buildable_geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [[0.0, 0.0], [20.0, 0.0], [20.0, 20.0], [0.0, 20.0], [0.0, 0.0]],
+        [[5.0, 5.0], [5.0, 10.0], [10.0, 10.0], [10.0, 5.0], [5.0, 5.0]]
+      ]
+    },
+    "selected_buildable_geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [[0.0, 0.0], [20.0, 0.0], [20.0, 20.0], [0.0, 20.0], [0.0, 0.0]],
+        [[5.0, 5.0], [5.0, 10.0], [10.0, 10.0], [10.0, 5.0], [5.0, 5.0]]
+      ]
+    },
+    "generated_footprint_geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [[0.0, 0.0], [20.0, 0.0], [20.0, 20.0], [0.0, 20.0], [0.0, 0.0]],
+        [[5.0, 5.0], [5.0, 10.0], [10.0, 10.0], [10.0, 5.0], [5.0, 5.0]]
+      ]
+    },
+    "footprint_geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [[0.0, 0.0], [20.0, 0.0], [20.0, 20.0], [0.0, 20.0], [0.0, 0.0]],
+        [[5.0, 5.0], [5.0, 10.0], [10.0, 10.0], [10.0, 5.0], [5.0, 5.0]]
+      ]
+    },
+    "floor_plate_geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [[0.0, 0.0], [20.0, 0.0], [20.0, 20.0], [0.0, 20.0], [0.0, 0.0]],
+        [[5.0, 5.0], [5.0, 10.0], [10.0, 10.0], [10.0, 5.0], [5.0, 5.0]]
+      ]
+    },
+    "metrics": {
+      "site_area_m2": 375.0,
+      "buildable_area_m2": 375.0,
+      "selected_buildable_area_m2": 375.0,
+      "footprint_area_upper_bound_m2": 375.0,
+      "gfa_upper_bound_m2": 2250.0,
+      "generated_footprint_area_m2": 375.0,
+      "generated_gfa_capacity_m2": 2250.0,
+      "maximum_permitted_floor_count": 6,
+      "footprint_area_m2": 375.0,
+      "floor_count": 6,
+      "floor_to_floor_m": 3.5,
+      "height_m": 21.0,
+      "gfa_m2": 2250.0,
+      "site_coverage_ratio": 1.0
+    },
+    "setback": {
+      "component_count": 1,
+      "retained_area_m2": 375.0,
+      "discarded_area_m2": 0.0
+    },
+    "preference_results": {
+      "preferred_floor_count": null,
+      "footprint_area": null
+    },
+    "feasibility": {
+      "status": "feasible",
+      "reason": null,
+      "hard_constraints_satisfied": true,
+      "target_assessment": {
+        "requested_m2": null,
+        "actual_m2": 2250.0,
+        "shortfall_m2": null,
+        "status": "not_requested",
+        "diagnostic_code": null
+      },
+      "diagnostics": []
+    }
+  },
+  "preferred": {
+    "site": {
+      "type": "Polygon",
+      "coordinates": [[[0.0, 0.0], [40.0, 0.0], [40.0, 25.0], [0.0, 25.0], [0.0, 0.0]]]
+    },
+    "hard_constraints": {
+      "setback_m": 3,
+      "floor_to_floor_m": 3.5,
+      "max_height_m": null,
+      "max_floors": 6,
+      "site_coverage_ratio": null,
+      "max_footprint_m2": 500.0
+    },
+    "preferences": {
+      "preferred_floor_count": null,
+      "preferred_footprint_area_m2": 300.0
+    },
+    "targets": {
+      "gfa_target_m2": null
+    },
+    "site_geometry": {
+      "type": "Polygon",
+      "coordinates": [[[0.0, 0.0], [40.0, 0.0], [40.0, 25.0], [0.0, 25.0], [0.0, 0.0]]]
+    },
+    "buildable_geometry": {
+      "type": "Polygon",
+      "coordinates": [[[3.0, 3.0], [37.0, 3.0], [37.0, 22.0], [3.0, 22.0], [3.0, 3.0]]]
+    },
+    "selected_buildable_geometry": {
+      "type": "Polygon",
+      "coordinates": [[[3.0, 3.0], [37.0, 3.0], [37.0, 22.0], [3.0, 22.0], [3.0, 3.0]]]
+    },
+    "generated_footprint_geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [4.457523584929275, 4.457523584929275],
+          [35.54247641507072, 4.457523584929275],
+          [35.54247641507072, 20.542476415070723],
+          [4.457523584929275, 20.542476415070723],
+          [4.457523584929275, 4.457523584929275]
+        ]
+      ]
+    },
+    "footprint_geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [6.812706955911674, 6.812706955911674],
+          [33.18729304408833, 6.812706955911674],
+          [33.18729304408833, 18.187293044088324],
+          [6.812706955911674, 18.187293044088324],
+          [6.812706955911674, 6.812706955911674]
+        ]
+      ]
+    },
+    "floor_plate_geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [6.812706955911674, 6.812706955911674],
+          [33.18729304408833, 6.812706955911674],
+          [33.18729304408833, 18.187293044088324],
+          [6.812706955911674, 18.187293044088324],
+          [6.812706955911674, 6.812706955911674]
+        ]
+      ]
+    },
+    "metrics": {
+      "site_area_m2": 1000.0,
+      "buildable_area_m2": 646.0,
+      "selected_buildable_area_m2": 646.0,
+      "footprint_area_upper_bound_m2": 500.0,
+      "gfa_upper_bound_m2": 3000.0,
+      "generated_footprint_area_m2": 499.99999999999704,
+      "generated_gfa_capacity_m2": 2999.9999999999823,
+      "maximum_permitted_floor_count": 6,
+      "footprint_area_m2": 299.99999999999164,
+      "floor_count": 6,
+      "floor_to_floor_m": 3.5,
+      "height_m": 21.0,
+      "gfa_m2": 1799.99999999995,
+      "site_coverage_ratio": 0.29999999999999166
+    },
+    "setback": {
+      "component_count": 1,
+      "retained_area_m2": 646.0,
+      "discarded_area_m2": 0.0
+    },
+    "preference_results": {
+      "preferred_floor_count": null,
+      "footprint_area": {
+        "original_hard_area_upper_bound_m2": 500.0,
+        "requested_area_m2": 300.0,
+        "effective_target_m2": 300.0,
+        "actual_area_m2": 299.99999999999164,
+        "difference_m2": -8.355982572538778e-12,
+        "effective_target_undershoot_m2": null,
+        "status": "met",
+        "diagnostic_codes": []
+      }
+    },
+    "feasibility": {
+      "status": "feasible",
+      "reason": null,
+      "hard_constraints_satisfied": true,
+      "target_assessment": {
+        "requested_m2": null,
+        "actual_m2": 1799.99999999995,
+        "shortfall_m2": null,
+        "status": "not_requested",
+        "diagnostic_code": null
+      },
+      "diagnostics": []
+    }
+  },
+  "preferred_failed": {
+    "site": {
+      "type": "Polygon",
+      "coordinates": [[[0.0, 0.0], [40.0, 0.0], [40.0, 25.0], [0.0, 25.0], [0.0, 0.0]]]
+    },
+    "hard_constraints": {
+      "setback_m": 3,
+      "floor_to_floor_m": 3.5,
+      "max_height_m": null,
+      "max_floors": 6,
+      "site_coverage_ratio": null,
+      "max_footprint_m2": null
+    },
+    "preferences": {
+      "preferred_floor_count": null,
+      "preferred_footprint_area_m2": 1e-30
+    },
+    "targets": {
+      "gfa_target_m2": null
+    },
+    "site_geometry": {
+      "type": "Polygon",
+      "coordinates": [[[0.0, 0.0], [40.0, 0.0], [40.0, 25.0], [0.0, 25.0], [0.0, 0.0]]]
+    },
+    "buildable_geometry": {
+      "type": "Polygon",
+      "coordinates": [[[3.0, 3.0], [37.0, 3.0], [37.0, 22.0], [3.0, 22.0], [3.0, 3.0]]]
+    },
+    "selected_buildable_geometry": {
+      "type": "Polygon",
+      "coordinates": [[[3.0, 3.0], [37.0, 3.0], [37.0, 22.0], [3.0, 22.0], [3.0, 3.0]]]
+    },
+    "generated_footprint_geometry": {
+      "type": "Polygon",
+      "coordinates": [[[3.0, 3.0], [37.0, 3.0], [37.0, 22.0], [3.0, 22.0], [3.0, 3.0]]]
+    },
+    "footprint_geometry": null,
+    "floor_plate_geometry": null,
+    "metrics": {
+      "site_area_m2": 1000.0,
+      "buildable_area_m2": 646.0,
+      "selected_buildable_area_m2": 646.0,
+      "footprint_area_upper_bound_m2": 646.0,
+      "gfa_upper_bound_m2": 3876.0,
+      "generated_footprint_area_m2": 646.0,
+      "generated_gfa_capacity_m2": 3876.0,
+      "maximum_permitted_floor_count": 6,
+      "footprint_area_m2": null,
+      "floor_count": null,
+      "floor_to_floor_m": 3.5,
+      "height_m": null,
+      "gfa_m2": null,
+      "site_coverage_ratio": null
+    },
+    "setback": {
+      "component_count": 1,
+      "retained_area_m2": 646.0,
+      "discarded_area_m2": 0.0
+    },
+    "preference_results": {
+      "preferred_floor_count": null,
+      "footprint_area": {
+        "original_hard_area_upper_bound_m2": 646.0,
+        "requested_area_m2": 1e-30,
+        "effective_target_m2": 1e-30,
+        "actual_area_m2": null,
+        "difference_m2": null,
+        "effective_target_undershoot_m2": null,
+        "status": "unmet",
+        "diagnostic_codes": ["PREFERRED_FOOTPRINT_NOT_GENERATED"]
+      }
+    },
+    "feasibility": {
+      "status": "generation_failed",
+      "reason": "PREFERRED_FOOTPRINT_NOT_GENERATED",
+      "hard_constraints_satisfied": null,
+      "target_assessment": {
+        "requested_m2": null,
+        "actual_m2": null,
+        "shortfall_m2": null,
+        "status": "not_requested",
+        "diagnostic_code": null
+      },
+      "diagnostics": [
+        {
+          "code": "PREFERRED_FOOTPRINT_NOT_GENERATED",
+          "severity": "warning",
+          "message": "No positive footprint was constructed for the preferred area.",
+          "path": "preferences.preferred_footprint_area_m2",
+          "details": {
+            "requested_area_m2": 1e-30,
+            "effective_target_m2": 1e-30,
+            "actual_area_m2": null,
+            "difference_m2": null
+          }
+        }
+      ]
+    }
+  }
+}

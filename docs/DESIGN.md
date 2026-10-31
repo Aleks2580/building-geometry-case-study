@@ -11,9 +11,9 @@
 > child branches, retrieval, summary listing, and decision-tree retrieval are
 > implemented, together with read-only saved-option comparison. The frontend provides
 > a typed editable configuration workspace and explicit backend preview with detailed
-> metrics, preference/target assessments, feasibility, and diagnostics. An independent
-> SVG geometry renderer is available; workspace integration, saved-option workflows,
-> alternatives, and 3D visualization remain planned in the frontend.
+> metrics, preference/target assessments, feasibility, diagnostics, and an integrated
+> SVG site plan. Saved-option workflows, alternatives, and 3D visualization remain
+> planned in the frontend.
 
 ## Problem interpretation
 
@@ -796,10 +796,11 @@ it, changes floor or footprint preferences in a draft, previews the change, and 
 a child option. Selecting saved alternatives restores their corresponding results in
 both views; unsaved previews remain clearly separate from saved history.
 
-The implemented workspace provides the form and detailed backend metrics, with
-an explicit Generate Preview action. Edits do not change submitted configurations or
-results, and a notice beside the result marks a changed draft. New submissions clear
-previous metrics while loading; errors retain backend validation paths/messages.
+The implemented workspace provides the form, SVG site plan, and detailed backend
+metrics, with an explicit Generate Preview action. Edits do not change submitted
+configurations or results, and a notice beside the result marks a changed draft. New submissions clear
+the previous plan and metrics while loading; errors retain backend validation
+paths/messages.
 All four domain statuses remain successful API results and null metrics display as
 unavailable. Named result sections distinguish theoretical hard upper bounds,
 demonstrated default generation capacity, and selected actual massing. Setback
@@ -812,8 +813,12 @@ turning target shortfalls into hard violations or construction failure into a pr
 of infeasibility. Diagnostics retain backend severity, code, message, and optional
 path/details, with an explicit empty state. Native disclosures keep detail fields
 keyboard accessible. These presentational components read the current Query response;
-new pending or failed attempts display no previous metrics or diagnostics. Integration
-of the independent SVG renderer and the 3D view remain subsequent slices.
+new pending or failed attempts display no previous plan, metrics, or diagnostics.
+The plan appears above detailed metrics and passes the four geometry fields directly
+from the same successful Query response. Infeasible and generation-failed results
+retain available site/setback context with an explicit missing-footprint message.
+The desktop layout gives results more space and stacks at 900 px. The 3D view
+remains a subsequent slice.
 
 ### Types and state
 
@@ -882,7 +887,8 @@ selected or constructed in the renderer, and default-generation geometry never
 substitutes for an absent actual footprint. Holes use even-odd fills regardless of
 ring winding. A visible legend and SVG title/description identify available context.
 The [renderer usage contract](../frontend/README.md#svg-plan-renderer) documents fitting,
-empty layers, and the display-only boundary. Workspace integration is deferred.
+empty layers, and the display-only boundary. The workspace consumes this component
+without copying results into local state or substituting generated default geometry.
 
 The 3D view helps architects read volume, floor count, and height that overlap in a
 plan, making footprint/height trade-offs easier to judge. It complements precise plan
