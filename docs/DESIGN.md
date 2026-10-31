@@ -10,9 +10,9 @@
 > explicit application mapping. PostgreSQL migrations, immutable root saves and
 > child branches, retrieval, summary listing, and decision-tree retrieval are
 > implemented, together with read-only saved-option comparison. The frontend provides
-> a typed editable configuration workspace and explicit backend preview with a minimal
-> result summary. Detailed result inspection, saved-option workflows, alternatives,
-> and visualization remain planned in the frontend.
+> a typed editable configuration workspace and explicit backend preview with detailed
+> metrics and preference/target assessments. Detailed diagnostics, saved-option workflows,
+> alternatives, and visualization remain planned in the frontend.
 
 ## Problem interpretation
 
@@ -782,8 +782,8 @@ as described above.
 
 The current UI preserves drafts, shows input errors inline and backend validation
 paths in the request-error summary, and distinguishes domain failures from request
-failures. Detailed requested/effective/actual area differences and saving diagnostic
-snapshots remain planned.
+failures. Read-only assessments show requested/effective/actual area differences directly
+from the response. Saving diagnostic snapshots remains planned in the frontend.
 
 ## Visualization
 
@@ -795,12 +795,18 @@ it, changes floor or footprint preferences in a draft, previews the change, and 
 a child option. Selecting saved alternatives restores their corresponding results in
 both views; unsaved previews remain clearly separate from saved history.
 
-The first implemented slice provides the form and a minimal backend summary, with
+The implemented workspace provides the form and detailed backend metrics, with
 an explicit Generate Preview action. Edits do not change submitted configurations or
 results, and a notice beside the result marks a changed draft. New submissions clear
 previous metrics while loading; errors retain backend validation paths/messages.
 All four domain statuses remain successful API results and null metrics display as
-unavailable. Detailed metrics/diagnostics and SVG/3D views are subsequent slices.
+unavailable. Named result sections distinguish theoretical hard upper bounds,
+demonstrated default generation capacity, and selected actual massing. Setback
+measurements retain complete and selected-component areas. Preference and target
+assessments preserve backend status, nullable values, signed differences, and zero
+targets; missing values never become derived capacities or zero-area buildings.
+The expanded result panel scrolls with the page on desktop and mobile. Diagnostics
+and SVG/3D views are subsequent slices.
 
 ### Types and state
 

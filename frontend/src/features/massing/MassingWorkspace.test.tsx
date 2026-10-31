@@ -82,10 +82,31 @@ describe("MassingWorkspace", () => {
       const result = previewResponse();
       result.feasibility.status = status;
       if (emptyMetrics) {
+        result.generated_footprint_geometry = null;
+        result.footprint_geometry = null;
+        result.floor_plate_geometry = null;
+        result.metrics.generated_footprint_area_m2 = null;
+        result.metrics.generated_gfa_capacity_m2 = null;
         result.metrics.footprint_area_m2 = null;
         result.metrics.floor_count = null;
         result.metrics.height_m = null;
         result.metrics.gfa_m2 = null;
+        result.metrics.site_coverage_ratio = null;
+        result.feasibility.hard_constraints_satisfied = status === "infeasible" ? false : null;
+        result.feasibility.reason = status === "infeasible" ? "ZERO_PERMITTED_FLOORS" : "FOOTPRINT_NOT_GENERATED";
+        result.feasibility.target_assessment.actual_m2 = null;
+        if (status === "infeasible") {
+          result.hard_constraints.max_height_m = 1;
+          result.metrics.maximum_permitted_floor_count = 0;
+          result.metrics.gfa_upper_bound_m2 = 0;
+        }
+      }
+      if (status === "feasible_target_unmet") {
+        result.targets.gfa_target_m2 = 4000;
+        result.feasibility.target_assessment = {
+          requested_m2: 4000, actual_m2: 3876, shortfall_m2: 124,
+          status: "unmet", diagnostic_code: "TARGET_EXCEEDS_UPPER_BOUND",
+        };
       }
       fetchMock.mockResolvedValue(Response.json(result));
       renderWorkspace();
@@ -94,8 +115,9 @@ describe("MassingWorkspace", () => {
       expect(await screen.findByRole("heading", { name: title })).toBeInTheDocument();
       expect(screen.queryByRole("alert")).not.toBeInTheDocument();
       if (emptyMetrics) {
-        expect(screen.getAllByText("Not available")).toHaveLength(4);
-        expect(metric("GFA")).not.toHaveTextContent("0");
+        for (const label of ["Footprint area", "Floor count", "Height", "GFA", "Site coverage ratio"]) {
+          expect(metric(label)).toHaveTextContent("Not available");
+        }
       }
     },
   );
@@ -262,9 +284,14 @@ describe("MassingWorkspace", () => {
     await screen.findByText("Generating preview…");
 
     expect(screen.queryByText("Footprint area", { selector: "dt" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Site and setback" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Generated default capacity" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Preferences and target" })).not.toBeInTheDocument();
     await act(async () => pending.resolve(new Response("Unavailable", { status: 503 })));
     expect(await screen.findByRole("alert")).toHaveTextContent("HTTP 503");
     expect(screen.queryByText("Footprint area", { selector: "dt" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Hard constraints and capacity" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Preferences and target" })).not.toBeInTheDocument();
   });
 
   it("submits zero targets and Polygon holes through the real API client", async () => {

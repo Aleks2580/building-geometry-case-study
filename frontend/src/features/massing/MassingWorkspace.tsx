@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { ApiError, previewMassing } from "../../api/api";
 import type { FeasibilityStatus, MassingPreviewResponse } from "../../api/contracts";
 import ConfigurationForm from "./ConfigurationForm";
+import DetailedMetrics from "./DetailedMetrics";
+import PreferenceAssessments from "./PreferenceAssessments";
 import type { Configuration, ConfigurationDraft } from "./configuration";
 
 interface Submission {
@@ -30,16 +32,8 @@ const statusContent: Record<FeasibilityStatus, { title: string; description: str
   },
 };
 
-const metricFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
-
 function PreviewSummary({ result }: { result: MassingPreviewResponse }) {
   const status = statusContent[result.feasibility.status];
-  const metrics = [
-    { label: "Footprint area", value: result.metrics.footprint_area_m2, unit: "m²" },
-    { label: "Floor count", value: result.metrics.floor_count, unit: "" },
-    { label: "Height", value: result.metrics.height_m, unit: "m" },
-    { label: "GFA", value: result.metrics.gfa_m2, unit: "m²" },
-  ];
 
   return (
     <>
@@ -47,19 +41,10 @@ function PreviewSummary({ result }: { result: MassingPreviewResponse }) {
         <h3>{status.title}</h3>
         <p>{status.description}</p>
       </div>
-      <dl className="metrics">
-        {metrics.map(({ label, value, unit }) => (
-          <div key={label}>
-            <dt>{label}</dt>
-            <dd>{value === null ? "Not available" : `${
-              value > 0 && value < 0.01 ? "<0.01" : metricFormat.format(value)
-            }${unit ? ` ${unit}` : ""}`}</dd>
-          </div>
-        ))}
-      </dl>
+      <DetailedMetrics result={result} />
+      <PreferenceAssessments result={result} />
       <p className="preview-note">
         Result from the last submitted configuration. All geometry and metrics are calculated by the backend.
-        Values are displayed to at most two decimal places; positive values below 0.01 are shown as &lt;0.01.
       </p>
     </>
   );
