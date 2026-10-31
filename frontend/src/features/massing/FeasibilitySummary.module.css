@@ -1,0 +1,28 @@
+.previewStatus {
+  border-radius: 6px;
+  background: #edf6f2;
+  padding: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.previewStatus h3 {
+  margin-bottom: 0.35rem;
+}
+
+.previewStatus p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.previewStatus[data-status="feasible_target_unmet"] {
+  background: #fff4d8;
+}
+
+.previewStatus[data-status="infeasible"],
+.previewStatus[data-status="generation_failed"] {
+  background: #f9ebea;
+}
+
+.previewStatus dl {
+  margin-top: 1rem;
+}

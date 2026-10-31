@@ -8,6 +8,8 @@ import Diagnostics from "./Diagnostics";
 import FeasibilitySummary from "./FeasibilitySummary";
 import PreferenceAssessments from "./PreferenceAssessments";
 import type { Configuration, ConfigurationDraft } from "./configuration";
+import shared from "./massing.module.css";
+import styles from "./MassingWorkspace.module.css";
 
 interface Submission {
   configuration: Configuration;
@@ -22,7 +24,7 @@ function PreviewSummary({ result }: { result: MassingPreviewResponse }) {
       <DetailedMetrics result={result} />
       <PreferenceAssessments result={result} />
       <Diagnostics diagnostics={result.feasibility.diagnostics} />
-      <p className="preview-note">
+      <p className={styles.previewNote}>
         Result from the last submitted configuration. All geometry and metrics are calculated by the backend.
       </p>
     </>
@@ -32,7 +34,7 @@ function PreviewSummary({ result }: { result: MassingPreviewResponse }) {
 function PreviewError({ error }: { error: Error }) {
   const details = error instanceof ApiError ? error.error?.details : undefined;
   return (
-    <div className="preview-error" role="alert">
+    <div className={styles.previewError} role="alert">
       <h3>Preview request failed</h3>
       <p>{error.message}</p>
       {details && details.length > 0 && (
@@ -65,7 +67,7 @@ export default function MassingWorkspace() {
   });
 
   return (
-    <div className="workspace">
+    <div className={styles.workspace}>
       <ConfigurationForm
         submittedDraft={submission?.draft}
         isGenerating={preview.isFetching}
@@ -76,18 +78,18 @@ export default function MassingWorkspace() {
           id: crypto.randomUUID(),
         })}
       />
-      <section className="panel preview-panel" aria-labelledby="preview-title" aria-busy={preview.isFetching}>
-        <div className="panel-heading">
-          <p className="eyebrow">Backend result</p>
+      <section className={`${shared.panel} ${styles.previewPanel}`} aria-labelledby="preview-title" aria-busy={preview.isFetching}>
+        <div className={shared.panelHeading}>
+          <p className={shared.eyebrow}>Backend result</p>
           <h2 id="preview-title">Massing preview</h2>
         </div>
         {draftChanged && (
-          <p className="draft-notice" role="status">
+          <p className={styles.draftNotice} role="status">
             Draft inputs have changed since the last submission. Generate a preview to apply them.
           </p>
         )}
         {submission === null ? (
-          <p className="empty-state">No preview yet. Review the configuration and choose Generate Preview.</p>
+          <p className={styles.emptyState}>No preview yet. Review the configuration and choose Generate Preview.</p>
         ) : preview.isPending ? (
           <p role="status">Generating preview…</p>
         ) : preview.isError ? (

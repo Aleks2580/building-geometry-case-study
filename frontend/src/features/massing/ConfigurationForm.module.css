@@ -1,0 +1,88 @@
+.form fieldset {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  padding: 1.25rem 0 0;
+  margin: 0 0 1.5rem;
+  min-width: 0;
+}
+
+.form legend {
+  font-weight: 650;
+  padding: 0 0.65rem 0 0;
+}
+
+.fieldsetHint,
+.fieldHint {
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  margin: 0.4rem 0 0;
+}
+
+.fieldsetHint {
+  margin: 0 0 1rem;
+}
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.1rem;
+}
+
+.field label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+.field input,
+.field textarea {
+  width: 100%;
+  border: 1px solid #a9bbb5;
+  border-radius: 6px;
+  padding: 0.65rem 0.75rem;
+  color: var(--color-text);
+  background: #fcfdfc;
+}
+
+.field textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.field [aria-invalid="true"] {
+  border-color: #b12e30;
+}
+
+.fieldError {
+  color: #a51e29;
+  font-size: 0.85rem;
+  margin: 0.35rem 0 0;
+}
+
+.formActions {
+  border-top: 1px solid var(--color-border);
+  padding-top: 1.5rem;
+}
+
+.submitButton {
+  border: 0;
+  border-radius: 6px;
+  padding: 0.75rem 1.2rem;
+  background: #1d6654;
+  color: white;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.submitButton:hover {
+  background: #144b3e;
+}
+
+@media (max-width: 520px) {
+  .fieldGrid {
+    grid-template-columns: 1fr;
+  }
+}

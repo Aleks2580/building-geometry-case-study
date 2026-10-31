@@ -835,6 +835,12 @@ Massing configuration and workspace modules are grouped with their tests under
 Application setup stays at the source root. The [frontend README](../frontend/README.md)
 describes the file layout; modules use direct relative imports.
 
+Styles are co-located CSS Modules, with a small massing-local module for shared
+panel, result-section, and metric-row presentation. Global CSS contains document
+defaults, typography, design tokens, and accessibility defaults. This isolates
+component styles while retaining the existing layout and responsive behavior;
+the [frontend styling conventions](../frontend/README.md#styling) describe ownership.
+
 [TanStack Query](https://tanstack.com/query/latest/docs/framework/react/overview)
 now provides the application QueryClient and provider; the health display reads query
 state directly. Mutation retries are explicitly disabled because repeated saves insert

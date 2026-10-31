@@ -29,16 +29,33 @@ The backend base URL defaults to `http://localhost:8000`; override with
 - `src/features/massing/FeasibilitySummary.tsx` — feasibility, reason, and hard-constraint satisfaction.
 - `src/features/massing/Diagnostics.tsx` — backend diagnostics and accessible detail disclosures.
 - `src/features/massing/metricFormatting.ts` — display-only numeric formatting.
-- `src/styles.css` — workspace layout and basic responsive styling.
+- `src/styles.css` — document defaults, base typography, design tokens, and keyboard focus styling.
 - `src/vite-env.d.ts` — types the optional `VITE_API_BASE` environment variable.
 
 Feature modules and their tests live together under `src/features/massing/`; API
 transport tests live beside the client in `src/api/`. Shared fixtures and test setup
-stay in `src/test/`. Application entry points, styles, and QueryClient setup remain
+stay in `src/test/`. Application entry points, global styles, and QueryClient setup remain
 at the root. Imports use direct relative paths.
 
 SVG and 3D views, saving, branching, tree navigation,
 and comparison are planned separately; see [the design note](../docs/DESIGN.md).
+
+## Styling
+
+Component styles live beside their owners in `.module.css` files and are imported
+explicitly through scoped class names. `App.module.css` owns the page container and
+header; the massing components own their form, workspace, metrics, feasibility,
+and diagnostic styles. `PreferenceAssessments` uses the shared result styles directly.
+
+`src/features/massing/massing.module.css` contains the feature's common panels,
+panel headings, eyebrows, result sections, and metric rows. Reuse these classes
+within the feature rather than duplicating them or adding global component selectors.
+Global CSS remains limited to document defaults, typography, shared custom properties,
+and accessibility defaults. No additional styling dependency is required.
+
+Responsive rules stay with their owners: the header and workspace stack at 900 px;
+page/panel padding and the form field grid adjust at 520 px. Status and validation
+styles retain their existing data and accessibility attributes.
 
 ## Commands
 
@@ -173,9 +190,10 @@ With the frontend and backend running:
    A preferred floor count above the cap remains a backend validation error.
 4. Enter malformed JSON and remove both height/floor caps to check inline errors.
    Try zero setback/target and a valid Polygon with a hole.
-5. Check the layout and submission on a narrow viewport. Request races, cancellation,
-   network/malformed-response failures, and generation-failure rendering have focused
-   automated coverage.
+5. Check desktop layout and narrow viewports at 390 px and 320 px, including expanded
+   diagnostic details, inline errors, keyboard focus, and form submission. Request
+   races, cancellation, network/malformed-response failures, and generation-failure
+   rendering have focused automated coverage.
 
 ## Docker development
 

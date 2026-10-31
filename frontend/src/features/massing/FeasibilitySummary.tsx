@@ -1,5 +1,7 @@
 import { useId } from "react";
 import type { FeasibilityStatus, MassingFeasibility } from "../../api/contracts";
+import shared from "./massing.module.css";
+import styles from "./FeasibilitySummary.module.css";
 
 const statusContent: Record<FeasibilityStatus, { title: string; description: string }> = {
   feasible: {
@@ -27,14 +29,14 @@ export default function FeasibilitySummary({ feasibility }: { feasibility: Massi
 
   return (
     <section
-      className="preview-status"
+      className={styles.previewStatus}
       data-status={feasibility.status}
       role="status"
       aria-labelledby={titleId}
     >
       <h3 id={titleId}>{status.title}</h3>
       <p>{status.description}</p>
-      <dl className="metric-details">
+      <dl className={shared.metricDetails}>
         <div>
           <dt>Hard constraints satisfied</dt>
           <dd>{satisfied === null ? "Unknown" : satisfied ? "True" : "False"}</dd>

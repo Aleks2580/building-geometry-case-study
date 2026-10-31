@@ -1,0 +1,54 @@
+.diagnostics {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.diagnostic {
+  border-left: 3px solid #468273;
+  border-radius: 4px;
+  background: #f1f7f4;
+  padding: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.diagnostic + .diagnostic {
+  margin-top: 0.75rem;
+}
+
+.diagnostic[data-severity="warning"] {
+  border-color: #99701c;
+  background: #fff6e1;
+}
+
+.diagnostic[data-severity="error"] {
+  border-color: #ac3d3d;
+  background: #fff0ee;
+}
+
+.diagnostic p {
+  margin-bottom: 0.65rem;
+}
+
+.diagnosticMeta {
+  font-size: 0.85rem;
+}
+
+.diagnosticDetails {
+  margin: 0.5rem 0;
+  font-size: 0.8rem;
+}
+
+.diagnosticDetails dt {
+  color: var(--color-text-muted);
+}
+
+.diagnosticDetails dd {
+  margin: 0.15rem 0 0.5rem;
+}
+
+.diagnostic summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
