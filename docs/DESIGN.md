@@ -9,9 +9,10 @@
 > assessment. A typed massing preview API now exposes the domain result through
 > explicit application mapping. PostgreSQL migrations, immutable root saves and
 > child branches, retrieval, summary listing, and decision-tree retrieval are
-> implemented, together with read-only saved-option comparison. The frontend has a
-> validated preview client and Query provider. Alternatives and visualization remain
-> planned.
+> implemented, together with read-only saved-option comparison. The frontend provides
+> a typed editable configuration workspace and explicit backend preview with a minimal
+> result summary. Detailed result inspection, saved-option workflows, alternatives,
+> and visualization remain planned in the frontend.
 
 ## Problem interpretation
 
@@ -779,9 +780,10 @@ invalid pagination use `422 INVALID_REQUEST`. Database failures remain server er
 and failed inserts roll back. Comparison selection validation uses `INVALID_COMPARISON`
 as described above.
 
-The UI preserves requested drafts, shows floor errors inline and requested/effective/
-actual area differences. Failed construction clears stale building views; users can
-revise preferences, explicitly request the default, or save the diagnostic snapshot.
+The current UI preserves drafts, shows input errors inline and backend validation
+paths in the request-error summary, and distinguishes domain failures from request
+failures. Detailed requested/effective/actual area differences and saving diagnostic
+snapshots remain planned.
 
 ## Visualization
 
@@ -792,6 +794,13 @@ and option-tree navigation with comparison. A user previews a configuration, sav
 it, changes floor or footprint preferences in a draft, previews the change, and saves
 a child option. Selecting saved alternatives restores their corresponding results in
 both views; unsaved previews remain clearly separate from saved history.
+
+The first implemented slice provides the form and a minimal backend summary, with
+an explicit Generate Preview action. Edits do not change submitted configurations or
+results, and a notice beside the result marks a changed draft. New submissions clear
+previous metrics while loading; errors retain backend validation paths/messages.
+All four domain statuses remain successful API results and null metrics display as
+unavailable. Detailed metrics/diagnostics and SVG/3D views are subsequent slices.
 
 ### Types and state
 
@@ -812,9 +821,11 @@ deferred until their consuming workflows.
 [TanStack Query](https://tanstack.com/query/latest/docs/framework/react/overview)
 now provides the application QueryClient and provider; the health display reads query
 state directly. Mutation retries are explicitly disabled because repeated saves insert
-distinct snapshots. Remote previews/options will use this cache when their consumers
-are added; configuration keys must prevent stale responses replacing the current
-preview. Client usage, error handling, cancellation, and cache defaults are documented
+distinct snapshots. The preview reads Query data directly using the submitted
+configuration and a unique attempt identity, including across remounts. Superseding
+or unmounting consumes cancellation, and distinct keys prevent late results replacing
+the active preview. No result is copied into form/local state. Client usage, display
+precision, errors, cancellation, and cache defaults are documented
 in the [frontend README](../frontend/README.md).
 
 [React Hook Form](https://react-hook-form.com/get-started) owns editable drafts,
