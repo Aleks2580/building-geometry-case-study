@@ -11,8 +11,8 @@
 > child branches, retrieval, summary listing, and decision-tree retrieval are
 > implemented, together with read-only saved-option comparison. The frontend provides
 > a typed editable configuration workspace and explicit backend preview with detailed
-> metrics and preference/target assessments. Detailed diagnostics, saved-option workflows,
-> alternatives, and visualization remain planned in the frontend.
+> metrics, preference/target assessments, feasibility, and diagnostics. Saved-option
+> workflows, alternatives, and visualization remain planned in the frontend.
 
 ## Problem interpretation
 
@@ -805,8 +805,14 @@ demonstrated default generation capacity, and selected actual massing. Setback
 measurements retain complete and selected-component areas. Preference and target
 assessments preserve backend status, nullable values, signed differences, and zero
 targets; missing values never become derived capacities or zero-area buildings.
-The expanded result panel scrolls with the page on desktop and mobile. Diagnostics
-and SVG/3D views are subsequent slices.
+The expanded result panel scrolls with the page on desktop and mobile. Feasibility
+shows the backend reason and true/false/unknown hard-constraint satisfaction without
+turning target shortfalls into hard violations or construction failure into a proof
+of infeasibility. Diagnostics retain backend severity, code, message, and optional
+path/details, with an explicit empty state. Native disclosures keep detail fields
+keyboard accessible. These presentational components read the current Query response;
+new pending or failed attempts display no previous metrics or diagnostics. SVG/3D
+views remain subsequent slices.
 
 ### Types and state
 

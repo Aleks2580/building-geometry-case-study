@@ -114,6 +114,9 @@ describe("MassingWorkspace", () => {
 
       expect(await screen.findByRole("heading", { name: title })).toBeInTheDocument();
       expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(metric("Hard constraints satisfied")).toHaveTextContent(
+        status === "generation_failed" ? "Unknown" : status === "infeasible" ? "False" : "True",
+      );
       if (emptyMetrics) {
         for (const label of ["Footprint area", "Floor count", "Height", "GFA", "Site coverage ratio"]) {
           expect(metric(label)).toHaveTextContent("Not available");
@@ -213,6 +216,10 @@ describe("MassingWorkspace", () => {
 
   it("cancels superseded requests and ignores late responses even when fetch ignores the signal", async () => {
     const first = deferred<Response>();
+    const oldResult = previewResponse();
+    oldResult.feasibility.diagnostics = [{
+      code: "BUILDABLE_REGION_SPLIT", severity: "warning", message: "Old split-region warning.",
+    }];
     const second = previewResponse();
     second.metrics.floor_count = 2;
     second.metrics.height_m = 7;
@@ -228,11 +235,13 @@ describe("MassingWorkspace", () => {
     await screen.findByRole("heading", { name: "Feasible" });
     expect(firstSignal?.aborted).toBe(true);
     expect(metric("Floor count")).toHaveTextContent("2");
-    await act(async () => first.resolve(Response.json(previewResponse())));
+    await act(async () => first.resolve(Response.json(oldResult)));
     expect(metric("Floor count")).toHaveTextContent("2");
     expect(metric("GFA")).toHaveTextContent("1,292 m²");
     expect(screen.queryByText(/Draft inputs have changed/)).not.toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByText("Old split-region warning.")).not.toBeInTheDocument();
+    expect(screen.getByText("No diagnostics reported.")).toBeInTheDocument();
   });
 
   it("ignores a late rejection from a superseded request", async () => {
@@ -275,10 +284,21 @@ describe("MassingWorkspace", () => {
 
   it("clears previous metrics for a new submission and does not show them after its error", async () => {
     const pending = deferred<Response>();
-    fetchMock.mockResolvedValueOnce(Response.json(previewResponse())).mockReturnValueOnce(pending.promise);
+    const previous = previewResponse();
+    previous.targets.gfa_target_m2 = 4000;
+    previous.feasibility.status = "feasible_target_unmet";
+    previous.feasibility.target_assessment = {
+      requested_m2: 4000, actual_m2: 3876, shortfall_m2: 124,
+      status: "unmet", diagnostic_code: "TARGET_EXCEEDS_UPPER_BOUND",
+    };
+    previous.feasibility.diagnostics = [{
+      code: "TARGET_EXCEEDS_UPPER_BOUND", severity: "warning", message: "Previous target exceeds the hard GFA bound.",
+    }];
+    fetchMock.mockResolvedValueOnce(Response.json(previous)).mockReturnValueOnce(pending.promise);
     renderWorkspace();
     submit();
-    await screen.findByRole("heading", { name: "Feasible" });
+    await screen.findByRole("heading", { name: "Feasible — GFA target unmet" });
+    expect(screen.getByText("Previous target exceeds the hard GFA bound.")).toBeInTheDocument();
     change(/Maximum floor count/, "2");
     submit();
     await screen.findByText("Generating preview…");
@@ -287,11 +307,15 @@ describe("MassingWorkspace", () => {
     expect(screen.queryByRole("region", { name: "Site and setback" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Generated default capacity" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Preferences and target" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Diagnostics" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Previous target exceeds the hard GFA bound.")).not.toBeInTheDocument();
     await act(async () => pending.resolve(new Response("Unavailable", { status: 503 })));
     expect(await screen.findByRole("alert")).toHaveTextContent("HTTP 503");
     expect(screen.queryByText("Footprint area", { selector: "dt" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Hard constraints and capacity" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Preferences and target" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Diagnostics" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Previous target exceeds the hard GFA bound.")).not.toBeInTheDocument();
   });
 
   it("submits zero targets and Polygon holes through the real API client", async () => {

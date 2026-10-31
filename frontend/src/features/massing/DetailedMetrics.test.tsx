@@ -105,7 +105,11 @@ describe("DetailedMetrics", () => {
     result.footprint_geometry = null;
     result.floor_plate_geometry = null;
     result.feasibility.target_assessment.actual_m2 = null;
-    if (status === "infeasible") result.metrics.maximum_permitted_floor_count = 0;
+    if (status === "infeasible") {
+      result.hard_constraints.max_height_m = 1;
+      result.metrics.maximum_permitted_floor_count = 0;
+      result.metrics.gfa_upper_bound_m2 = 0;
+    }
     render(<DetailedMetrics result={massingPreviewResponseSchema.parse(result)} />);
 
     for (const label of ["Footprint area", "Floor count", "Height", "GFA", "Site coverage ratio"]) {

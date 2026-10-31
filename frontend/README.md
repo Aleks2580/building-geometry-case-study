@@ -26,6 +26,8 @@ The backend base URL defaults to `http://localhost:8000`; override with
 - `src/features/massing/MassingWorkspace.tsx` — explicit preview submission and request states.
 - `src/features/massing/DetailedMetrics.tsx` — site/setback, hard bounds, generated capacity, and actual metrics.
 - `src/features/massing/PreferenceAssessments.tsx` — backend footprint preference and GFA target assessments.
+- `src/features/massing/FeasibilitySummary.tsx` — feasibility, reason, and hard-constraint satisfaction.
+- `src/features/massing/Diagnostics.tsx` — backend diagnostics and accessible detail disclosures.
 - `src/features/massing/metricFormatting.ts` — display-only numeric formatting.
 - `src/styles.css` — workspace layout and basic responsive styling.
 - `src/vite-env.d.ts` — types the optional `VITE_API_BASE` environment variable.
@@ -35,7 +37,7 @@ transport tests live beside the client in `src/api/`. Shared fixtures and test s
 stay in `src/test/`. Application entry points, styles, and QueryClient setup remain
 at the root. Imports use direct relative paths.
 
-Detailed diagnostics, SVG and 3D views, saving, branching, tree navigation,
+SVG and 3D views, saving, branching, tree navigation,
 and comparison are planned separately; see [the design note](../docs/DESIGN.md).
 
 ## Commands
@@ -106,6 +108,14 @@ targets display **Not requested**, while a zero target displays **0 m²**. Null
 shortfalls and undershoots stay unavailable instead of being inferred as zero.
 No frontend geometry or capacity calculations are performed, and previews are not saved.
 
+Feasibility shows the backend reason when supplied and hard-constraint satisfaction
+as **True**, **False**, or **Unknown**. A missed GFA target does not imply a hard
+constraint violation, and generation failure does not establish mathematical
+infeasibility. Diagnostics show severity, code, message, and optional path verbatim.
+Native **Details** disclosures expose additional backend fields, preserving primitive
+values and numeric precision. An empty list displays **No diagnostics reported**.
+Superseding requests and request failures remove all previous result sections.
+
 ## Massing preview API
 
 `previewMassing` posts a `MassingPreviewRequest` to `/api/v1/massing/preview`
@@ -157,8 +167,10 @@ With the frontend and backend running:
    21 m height, and 3,876 m² GFA.
 2. Edit a constraint without submitting: metrics stay unchanged and the draft notice
    appears beside the result. Submit to apply the change.
-3. Try a GFA target of 1,000,000 (target unmet), a setback of 100 (infeasible), and a
-   preferred floor count above the cap (backend validation error).
+3. Try a GFA target of 1,000,000 (target unmet, hard constraints satisfied), a preferred
+   footprint of 300 m² (requested/effective/actual assessment), and a setback of 100
+   (infeasible, actual metrics unavailable). Inspect diagnostic codes and details.
+   A preferred floor count above the cap remains a backend validation error.
 4. Enter malformed JSON and remove both height/floor caps to check inline errors.
    Try zero setback/target and a valid Polygon with a hole.
 5. Check the layout and submission on a narrow viewport. Request races, cancellation,
