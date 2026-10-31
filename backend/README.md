@@ -5,8 +5,8 @@ plumbing wired, and provides pure site geometry, setbacks, component selection,
 deterministic default footprint construction, maximum-permitted-floor calculation,
 default massing metrics, preference-aware massing integration, and target-driven GFA
 assessment through a typed preview API. Options can be saved, branched, retrieved, and
-listed as immutable PostgreSQL snapshots. Tree retrieval, comparison, alternatives, and
-visualization remain planned; see
+listed as immutable PostgreSQL snapshots, with read-only decision-tree retrieval.
+Comparison, alternatives, and visualization remain planned; see
 [the design note](../docs/DESIGN.md).
 
 ## Stack
@@ -61,10 +61,11 @@ these tests with the complete backend suite.
 - `app/server.py` — FastAPI app, CORS, lifespan; creates + opens the DB connection pool.
 - `app/db.py` — async psycopg pool and scoped connections, using raw SQL without an ORM.
 - `app/migrations.py` and `app/sql/migrations/` — explicit locked, checksummed migrations.
-- `app/persistence/options.py` — insert-only snapshots, ID lookup, and summary queries.
+- `app/persistence/options.py` — insert-only snapshots, ID lookup, summary queries,
+  and recursive descendant summaries.
 - `app/application/options.py` and `app/v1/routes/options.py` — root saves, child
-  branching, and typed save/retrieve/list endpoints with version metadata and
-  structured not-found errors.
+  branching, tree assembly, and typed save/retrieve/list/tree endpoints with version
+  metadata and structured not-found errors.
 - `app/v1/routes/health.py` — `GET /api/v1/health`.
 - `app/v1/schemas/massing.py` and `app/v1/routes/massing.py` — typed
   `POST /api/v1/massing/preview` contracts, OpenAPI example, and structured 422 errors.
@@ -176,8 +177,21 @@ Retrieval returns the stored configuration/result and versions without recomputa
 Listing returns metadata and metrics. An unknown UUID returns `404 OPTION_NOT_FOUND`.
 The [public API contract](../docs/DESIGN.md#api-contract) defines the complete snapshot,
 request/name validation, pagination, and numerical behavior. Branching requires no new
-migration. There are no update/delete, tree, comparison, or automatic-alternative
+migration. There are no update/delete, comparison, or automatic-alternative
 endpoints; frontend workflows remain planned.
+
+Retrieve a saved decision tree, or use a child UUID to retrieve only its subtree:
+
+```bash
+curl -sS 'http://localhost:8000/api/v1/options/tree?root_id=OPTION_UUID'
+```
+
+The response is one option summary with nested `children` arrays, metadata, saved
+feasibility status, and metrics. Leaves have `children: []`. Geometry and complete
+snapshots remain available through individual retrieval. The endpoint requires
+`root_id`; unknown IDs return `404 OPTION_NOT_FOUND`, and missing/malformed UUIDs
+return structured `422 INVALID_REQUEST` errors. See the
+[API contract](../docs/DESIGN.md#api-contract) for ordering and subtree semantics.
 
 Compose retains snapshots in its `db-data` volume across `docker compose restart db backend`
 and `docker compose down` followed by `up`. `docker compose down -v` removes that

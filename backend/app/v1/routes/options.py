@@ -5,13 +5,19 @@ from fastapi import APIRouter, Depends, Query, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 
-from app.application.options import ParentOptionNotFound, branch_option, save_root_option
+from app.application.options import OptionTree, ParentOptionNotFound, branch_option, get_option_tree, save_root_option
 from app.persistence.options import OptionRepository
 from app.v1.dependencies import get_option_repository
 from app.v1.errors import not_found_response
 from app.v1.massing import MASSING_VALIDATION_ERRORS, compute_preview, massing_error_response, preview_arguments
 from app.v1.schemas.massing import ErrorResponse
-from app.v1.schemas.options import BranchOptionRequest, OptionResponse, OptionSummaryResponse, RootOptionRequest
+from app.v1.schemas.options import (
+    BranchOptionRequest,
+    OptionResponse,
+    OptionSummaryResponse,
+    OptionTreeResponse,
+    RootOptionRequest,
+)
 
 router = APIRouter(prefix="/options", tags=["options"])
 type RepositoryDependency = Annotated[OptionRepository, Depends(get_option_repository)]
@@ -54,6 +60,38 @@ async def list_options(
 ) -> list[OptionSummaryResponse]:
     summaries = await repository.list_summaries(limit=limit, offset=offset)
     return [OptionSummaryResponse.model_validate(summary, from_attributes=True) for summary in summaries]
+
+
+@router.get(
+    "/tree",
+    response_model=OptionTreeResponse,
+    summary="Retrieve a saved option decision tree",
+    description=(
+        "Return the selected option and all descendants as nested summaries without recomputation. "
+        "Children are ordered by ascending creation time, then UUID. A child option can be the selected "
+        "root; its stored parent identifier is retained. Leaves have an empty children array."
+    ),
+    responses={
+        404: {"model": ErrorResponse, "description": "Option not found (OPTION_NOT_FOUND)."},
+        422: {"model": ErrorResponse, "description": "Missing or malformed root UUID."},
+    },
+)
+async def get_tree(
+    root_id: Annotated[UUID, Query()], repository: RepositoryDependency
+) -> OptionTreeResponse | JSONResponse:
+    tree = await get_option_tree(repository, root_id)
+    if tree is None:
+        return not_found_response(
+            "OPTION_NOT_FOUND", "Option not found.", path="root_id", detail="No saved option has this identifier."
+        )
+    return _tree_response(tree)
+
+
+def _tree_response(tree: OptionTree) -> OptionTreeResponse:
+    return OptionTreeResponse(
+        **OptionSummaryResponse.model_validate(tree.summary, from_attributes=True).model_dump(),
+        children=[_tree_response(child) for child in tree.children],
+    )
 
 
 @router.get(
