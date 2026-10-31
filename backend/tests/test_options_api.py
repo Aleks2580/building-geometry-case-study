@@ -234,4 +234,5 @@ def test_option_openapi_reuses_preview_models_and_error_contracts():
         "MassingPreviewResponse"
     )
     assert "name" in RootOptionRequest.model_json_schema()["properties"]
-    assert not any("branches" in path or "compare" in path or "tree" in path for path in paths)
+    assert f"{OPTIONS_URL}/{{option_id}}/branches" in paths
+    assert not any("compare" in path or "tree" in path for path in paths)

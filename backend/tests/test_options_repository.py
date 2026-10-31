@@ -168,13 +168,20 @@ async def test_failed_insert_rolls_back_savepoint_without_losing_valid_sibling(m
     async with await AsyncConnection.connect(migrated_database) as connection:
         repository = OptionRepository(connection)
         async with connection.transaction():
-            saved = await _insert(repository)
+            parent = await _insert(repository)
+            sibling = await _insert(repository, parent_id=parent.id)
             with pytest.raises(ForeignKeyViolation):
                 await _insert(repository, parent_id=uuid4())
-            assert await repository.get(saved.id) == saved
+            nested = await _insert(repository, parent_id=sibling.id)
+            assert await repository.get(parent.id) == parent
+            assert await repository.get(sibling.id) == sibling
         summaries = await repository.list_summaries()
 
-    assert [summary.id for summary in summaries] == [saved.id]
+    assert {summary.id: summary.parent_id for summary in summaries} == {
+        parent.id: None,
+        sibling.id: parent.id,
+        nested.id: sibling.id,
+    }
 
 
 async def test_existing_parent_is_preserved_by_child_insert(migrated_database):

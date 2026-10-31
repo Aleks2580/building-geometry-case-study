@@ -1,9 +1,14 @@
-"""Save complete server-computed previews as immutable root snapshots."""
+"""Save and branch complete server-computed immutable option snapshots."""
 
+import asyncio
 from typing import cast
+from uuid import UUID
 
 import shapely
 
+from app.application.massing import preview_massing
+from app.geometry import FootprintLimits
+from app.massing import DesignPreferences, DesignTargets, FloorLimits
 from app.persistence.options import OptionRepository, OptionSnapshot
 
 SCHEMA_VERSION = 1
@@ -12,11 +17,52 @@ SCHEMA_VERSION = 1
 ALGORITHM_VERSION = f"massing-v1;shapely={shapely.__version__};geos={shapely.geos_version_string}"
 
 
+class ParentOptionNotFound(LookupError):
+    """No saved parent exists for a requested branch."""
+
+
 async def save_root_option(
     repository: OptionRepository,
     preview: dict[str, object],
     *,
     name: str | None = None,
+) -> OptionSnapshot:
+    return await _save_option(repository, preview, name=name)
+
+
+async def branch_option(
+    repository: OptionRepository,
+    parent_id: UUID,
+    *,
+    setback_m: float,
+    footprint_limits: FootprintLimits,
+    floor_limits: FloorLimits,
+    preferences: DesignPreferences,
+    targets: DesignTargets,
+    name: str | None = None,
+) -> OptionSnapshot:
+    """Recompute an inherited site with complete replacement configuration."""
+    parent = await repository.get(parent_id)
+    if parent is None:
+        raise ParentOptionNotFound("Parent option not found.")
+    preview = await asyncio.to_thread(
+        preview_massing,
+        parent.site_geometry,
+        setback_m=setback_m,
+        footprint_limits=footprint_limits,
+        floor_limits=floor_limits,
+        preferences=preferences,
+        targets=targets,
+    )
+    return await _save_option(repository, preview, name=name, parent_id=parent.id)
+
+
+async def _save_option(
+    repository: OptionRepository,
+    preview: dict[str, object],
+    *,
+    name: str | None = None,
+    parent_id: UUID | None = None,
 ) -> OptionSnapshot:
     return await repository.insert(
         site_geometry=cast(dict[str, object], preview["site"]),
@@ -27,4 +73,5 @@ async def save_root_option(
         schema_version=SCHEMA_VERSION,
         algorithm_version=ALGORITHM_VERSION,
         name=name,
+        parent_id=parent_id,
     )

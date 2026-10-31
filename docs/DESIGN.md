@@ -7,8 +7,8 @@
 > validated design preferences, preferred footprint construction, preference-aware
 > massing metrics, validated GFA targets, target-driven floor selection, and target
 > assessment. A typed massing preview API now exposes the domain result through
-> explicit application mapping. PostgreSQL migrations, immutable root option saves,
-> retrieval, and summary listing are implemented. Branching, tree traversal,
+> explicit application mapping. PostgreSQL migrations, immutable root saves and
+> child branches, retrieval, and summary listing are implemented. Tree traversal,
 > comparison, alternatives, and visualization remain planned.
 
 ## Problem interpretation
@@ -115,9 +115,10 @@ flowchart LR
 Transport owns Pydantic contracts, versioning, and error translation; no geometry or
 SQL. `app.application.massing.preview_massing` parses site input, calls the existing
 preference-aware domain service, and explicitly maps the result to JSON-compatible
-values without importing Pydantic or FastAPI. The root-save application use case
-persists the server-computed preview with schema and algorithm metadata. Branch,
-tree, and comparison use cases remain planned.
+values without importing Pydantic or FastAPI. The branching application use case
+loads the parent site and calls this same preview function through `asyncio.to_thread`.
+Root saves and branches share snapshot insertion and version metadata. Tree and
+comparison use cases remain planned.
 Pure domain services separate polygon operations from massing rules: `app.geometry`
 owns polygons, while `app.massing.floors` owns scalar floor-limit rules and
 `app.massing.defaults` orchestrates the current default result over those geometry
@@ -569,24 +570,35 @@ outer transaction retains commit ownership through nested savepoints. Reads retu
 stored values without calling the geometry engine, and summaries select metadata
 and metrics without loading full geometry. Listing uses descending creation time
 and UUID, with limit/offset pagination. Future database permissions or an append-only
-trigger can reinforce immutability against direct SQL writes. Root saves set
-`schema_version=1` and record a massing-policy version plus the runtime Shapely and
+trigger can reinforce immutability against direct SQL writes. Root saves and branches
+set `schema_version=1` and record a massing-policy version plus the runtime Shapely and
 GEOS versions in `algorithm_version`. The policy version must change when algorithm
 behavior changes. Saved results preserve historical interpretation without promising
 identical recomputation across changed geometry-engine versions. Breaking snapshot
 schema changes will require compatible readers or explicit migration.
 
+Branching reuses the existing parent foreign key and repository without a schema
+change. Without a caller-owned transaction, parent lookup completes before geometry
+computation and child insertion commits separately. The public API has no updates
+or deletes, so the parent remains stable without holding locks across CPU work;
+the foreign key prevents orphan insertion and restricts deletion of referenced
+parents. Caller-owned transactions still control commit or rollback through the
+repository's savepoints. Each child is a new snapshot; siblings and nested branches
+never modify their ancestors.
+
 ## API contract
 
 All routes use `/api/v1`; breaking changes require a new version, additive response
-fields remain compatible. Preview, root save, option retrieval, and option listing
-are implemented. Branching, tree, comparison, and alternatives remain planned.
-Preview and root-save requests require `site` and
-`hard_constraints`. Omitted `preferences` and `targets` default to empty objects;
+fields remain compatible. Preview, root save, branching, option retrieval, and option
+listing are implemented. Tree, comparison, and alternatives remain planned.
+Preview and root-save requests require `site` and `hard_constraints`. Branch requests
+require `hard_constraints` and inherit the site from the parent identified in the URL.
+Omitted `preferences` and `targets` default to empty objects in all three requests;
 explicit null objects are invalid. Optional scalar fields accept null. Unknown fields,
-including client-computed results, are rejected. Root saves also accept an optional
-nullable `name`, trimmed and limited to 1–200 characters without NUL when supplied.
-A root request cannot supply a parent identifier.
+including client-computed results, are rejected. Root saves and branches accept an
+optional nullable `name`, trimmed and limited to 1–200 characters without NUL when supplied.
+Save bodies cannot supply parent identifiers. Branch bodies also reject `site` and
+`site_geometry`; the saved parent's geometry is authoritative.
 
 Computed preview example, also exercised through the OpenAPI example:
 
@@ -617,9 +629,9 @@ schemas and example; `/openapi.json` exposes the machine-readable schema.
 | `POST /options/{option_id}/branches` | Parent site plus complete new constraints/preferences/targets → child snapshot, `201`. |
 | `GET /options` | Summary array; `limit` (default 50, maximum 200) and `offset` (default 0). |
 | `GET /options/{option_id}` | Complete immutable snapshot. |
-| `GET /options/tree?root_id=...` | Tree of option summaries. |
-| `POST /options/compare` | Selected options → snapshots and input/metric/diagnostic comparison. |
-| `POST /massing/alternatives` | Secondary bounded suggestions; no persistence. |
+| `GET /options/tree?root_id=...` | Planned: tree of option summaries. |
+| `POST /options/compare` | Planned: selected options → snapshots and input/metric/diagnostic comparison. |
+| `POST /massing/alternatives` | Planned: secondary bounded suggestions; no persistence. |
 
 `POST /options` uses the same configuration conversion, preview computation, and
 error translation as the preview endpoint, then inserts one snapshot transactionally.
@@ -630,7 +642,18 @@ null `parent_id`, name, schema/algorithm versions, timezone-aware `created_at`, 
 create separate roots. Retrieval returns the stored snapshot without recomputation;
 listing returns metadata and metrics, newest first with UUID as a tie-breaker.
 Offset pagination is intended for this small prototype; concurrent inserts may shift
-page boundaries. Parent/root filters are deferred with the branching workflow.
+page boundaries. Parent/root filters remain deferred with tree retrieval.
+
+`POST /options/{option_id}/branches` replaces the complete hard constraints,
+preferences, and targets; it never merges configuration with the parent. The child
+name also defaults to null independently of the parent. It recomputes through the
+same preview logic, configuration mapping, and domain error translation as root saves,
+then inserts a snapshot with `parent_id` equal to the URL identifier. The response
+uses the complete snapshot contract above with status `201` and
+`Location: /api/v1/options/{child_id}`. Repeated requests create distinct siblings;
+any saved child can itself be branched. Parent results remain unchanged, including
+when a diagnostic parent produces a feasible child. Tree retrieval, navigation,
+comparison, frontend workflows, and automatic alternatives remain outside this endpoint.
 
 Results echo normalized configuration (including the canonical site) and return
 `site_geometry`, `buildable_geometry`,
@@ -649,7 +672,7 @@ signed difference, effective-target undershoot, status, and diagnostic codes.
 assessment (`requested_m2`, `actual_m2`, `shortfall_m2`, status, `diagnostic_code`),
 and diagnostics with code, severity, message, and optional path/details.
 
-All four domain statuses use preview `200` and root-save `201`, including diagnostic
+All four domain statuses use preview `200` and save/branch `201`, including diagnostic
 snapshots. For `infeasible`/`generation_failed`, actual footprint/floor-plate geometry,
 area, count, height, and GFA are null; retain available context/bounds. Empty buildable
 geometry is null; generated capacity is null if no default was constructed. Persisted
@@ -660,7 +683,9 @@ Errors use `{error: {code, message, details: [{path, message}]}}`. Validation is
 `INVALID_TARGET`, or `PREFERENCE_EXCEEDS_HARD_LIMIT`. Malformed/non-positive
 preferences use `INVALID_PREFERENCE`; absent height and floor limits use
 `INVALID_CONSTRAINTS`. Invalid GFA targets use `INVALID_TARGET`. Malformed JSON,
-invalid root bodies, and unknown root fields use `INVALID_REQUEST`. For multiple
+invalid request bodies, and other unknown top-level fields use `INVALID_REQUEST`.
+A forbidden branch `site` field retains `INVALID_SITE_GEOMETRY` under the shared
+section-based validation policy. For multiple
 invalid sections, the code identifies the first validation error in schema order;
 details retain all field paths and messages, without input values or exception
 contexts. Paths use dotted fields and bracketed array indexes.
@@ -672,15 +697,16 @@ Floor-limit and GFA tolerances remain the domain policies above. A required deri
 metric outside finite binary64 range returns `422 NUMERICAL_RANGE_ERROR`, never
 infeasibility or non-finite JSON. Unexpected geometry failures remain server errors.
 Preview computation runs through FastAPI's worker thread pool and performs no
-database operation. Root saves compute through the same function before repository
-insertion; database operations use the existing async pool. Pool shutdown runs even
-when application lifespan exits with an error. Preview tests need no database;
+database operation. Root saves and branches compute through the same application
+preview before repository insertion; database operations use the existing async
+pool. Pool shutdown runs even when application lifespan exits with an error. Preview tests need no database;
 option tests use isolated disposable PostgreSQL databases, also supplied in CI.
 
-Missing option UUIDs return `404 OPTION_NOT_FOUND` through the same error envelope;
-malformed UUIDs and invalid pagination use `422 INVALID_REQUEST`. Database failures
-remain server errors and failed inserts roll back. Planned comparison validation
-uses `INVALID_COMPARISON`, and planned missing parents use `PARENT_OPTION_NOT_FOUND`.
+Missing option UUIDs return `404 OPTION_NOT_FOUND`; missing branch parents return
+`404 PARENT_OPTION_NOT_FOUND` with detail path `option_id`, before any geometry
+computation or insertion. Both use the same error envelope. Malformed UUIDs and
+invalid pagination use `422 INVALID_REQUEST`. Database failures remain server errors
+and failed inserts roll back. Planned comparison validation uses `INVALID_COMPARISON`.
 
 The UI preserves requested drafts, shows floor errors inline and requested/effective/
 actual area differences. Failed construction clears stale building views; users can
@@ -812,8 +838,9 @@ areas, targets between generated GFA capacity and its hard bound, and constructi
 with null fields. Verify all status/diagnostic branches and preference preservation.
 
 API/database tests cover validation, all snapshot statuses, transactional save/branch,
-unchanged parents, sibling branches, tree/comparison, and reload using disposable
-PostgreSQL. Frontend checks cover strict types, lint/build, forms, stale responses,
+unchanged parents, sibling and nested branches, configuration replacement, and reload
+using disposable PostgreSQL. Tree/comparison tests remain planned. Frontend checks
+cover strict types and lint/build; planned interaction tests cover forms, stale responses,
 keyboard tree navigation, node selection/comparison, null-state rendering, and matching
 SVG/3D geometry, floors, holes, and resource lifecycle.
 
