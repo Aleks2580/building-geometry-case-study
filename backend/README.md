@@ -5,8 +5,8 @@ plumbing wired, and provides pure site geometry, setbacks, component selection,
 deterministic default footprint construction, maximum-permitted-floor calculation,
 default massing metrics, preference-aware massing integration, and target-driven GFA
 assessment through a typed preview API. Options can be saved, branched, retrieved, and
-listed as immutable PostgreSQL snapshots, with read-only decision-tree retrieval.
-Comparison, alternatives, and visualization remain planned; see
+listed as immutable PostgreSQL snapshots, with read-only decision-tree retrieval and
+saved-option comparison. Alternatives and visualization remain planned; see
 [the design note](../docs/DESIGN.md).
 
 ## Stack
@@ -66,6 +66,9 @@ these tests with the complete backend suite.
 - `app/application/options.py` and `app/v1/routes/options.py` — root saves, child
   branching, tree assembly, and typed save/retrieve/list/tree endpoints with version
   metadata and structured not-found errors.
+- `app/application/comparison.py` and `app/v1/schemas/comparison.py` — ordered,
+  read-only comparisons with explicit typed input, metric, feasibility, and diagnostic
+  pairs and complete saved snapshots.
 - `app/v1/routes/health.py` — `GET /api/v1/health`.
 - `app/v1/schemas/massing.py` and `app/v1/routes/massing.py` — typed
   `POST /api/v1/massing/preview` contracts, OpenAPI example, and structured 422 errors.
@@ -177,7 +180,7 @@ Retrieval returns the stored configuration/result and versions without recomputa
 Listing returns metadata and metrics. An unknown UUID returns `404 OPTION_NOT_FOUND`.
 The [public API contract](../docs/DESIGN.md#api-contract) defines the complete snapshot,
 request/name validation, pagination, and numerical behavior. Branching requires no new
-migration. There are no update/delete, comparison, or automatic-alternative
+migration. There are no update/delete or automatic-alternative
 endpoints; frontend workflows remain planned.
 
 Retrieve a saved decision tree, or use a child UUID to retrieve only its subtree:
@@ -192,6 +195,22 @@ snapshots remain available through individual retrieval. The endpoint requires
 `root_id`; unknown IDs return `404 OPTION_NOT_FOUND`, and missing/malformed UUIDs
 return structured `422 INVALID_REQUEST` errors. See the
 [API contract](../docs/DESIGN.md#api-contract) for ordering and subtree semantics.
+
+Compare two saved options in the desired left-to-right order:
+
+```bash
+curl -sS http://localhost:8000/api/v1/options/compare \
+  -H 'Content-Type: application/json' \
+  -d '{"option_ids": ["LEFT_OPTION_UUID", "RIGHT_OPTION_UUID"]}'
+```
+
+The response includes both complete saved snapshots, side-by-side inputs, metrics,
+feasibility, and diagnostics. Numeric differences are right minus left, with null
+differences when either value is missing. Roots, siblings, and nested branches can
+be compared without recomputation or writes. Invalid selections return
+`422 INVALID_COMPARISON`; missing options return `404 OPTION_NOT_FOUND`. See the
+[API contract](../docs/DESIGN.md#api-contract) for the response shape and exact
+comparison semantics.
 
 Compose retains snapshots in its `db-data` volume across `docker compose restart db backend`
 and `docker compose down` followed by `up`. `docker compose down -v` removes that

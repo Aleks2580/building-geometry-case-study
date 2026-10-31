@@ -9,7 +9,8 @@
 > assessment. A typed massing preview API now exposes the domain result through
 > explicit application mapping. PostgreSQL migrations, immutable root saves and
 > child branches, retrieval, summary listing, and decision-tree retrieval are
-> implemented. Comparison, alternatives, and visualization remain planned.
+> implemented, together with read-only saved-option comparison. Alternatives and
+> visualization remain planned.
 
 ## Problem interpretation
 
@@ -118,7 +119,8 @@ preference-aware domain service, and explicitly maps the result to JSON-compatib
 values without importing Pydantic or FastAPI. The branching application use case
 loads the parent site and calls this same preview function through `asyncio.to_thread`.
 Root saves and branches share snapshot insertion and version metadata. Tree retrieval
-assembles saved summaries without invoking the domain; comparison remains planned.
+assembles saved summaries without invoking the domain. Comparison reads complete
+saved snapshots and maps explicit side-by-side values without invoking the domain.
 Pure domain services separate polygon operations from massing rules: `app.geometry`
 owns polygons, while `app.massing.floors` owns scalar floor-limit rules and
 `app.massing.defaults` orchestrates the current default result over those geometry
@@ -620,7 +622,7 @@ domain contract rather than a recursive diff of arbitrary snapshot fields.
 
 All routes use `/api/v1`; breaking changes require a new version, additive response
 fields remain compatible. Preview, root save, branching, option retrieval, summary
-listing, and tree retrieval are implemented. Comparison and alternatives remain planned.
+listing, tree retrieval, and comparison are implemented. Alternatives remain planned.
 Preview and root-save requests require `site` and `hard_constraints`. Branch requests
 require `hard_constraints` and inherit the site from the parent identified in the URL.
 Omitted `preferences` and `targets` default to empty objects in all three requests;
@@ -660,7 +662,7 @@ schemas and example; `/openapi.json` exposes the machine-readable schema.
 | `GET /options` | Summary array; `limit` (default 50, maximum 200) and `offset` (default 0). |
 | `GET /options/{option_id}` | Complete immutable snapshot. |
 | `GET /options/tree?root_id={uuid}` | Selected option and all descendants as nested summaries, `200`; `root_id` required. |
-| `POST /options/compare` | Planned: selected options → snapshots and input/metric/diagnostic comparison. |
+| `POST /options/compare` | Exactly two distinct saved UUIDs → ordered snapshots and side-by-side comparison, `200`. |
 | `POST /massing/alternatives` | Planned: secondary bounded suggestions; no persistence. |
 
 `POST /options` uses the same configuration conversion, preview computation, and
@@ -686,6 +688,30 @@ are preserved. An unknown UUID returns `404 OPTION_NOT_FOUND` with detail path
 `root_id`; absent or malformed values return `422 INVALID_REQUEST` with detail path
 `query.root_id`. The static `/tree` route is registered before `/{option_id}`.
 
+`POST /options/compare` accepts only `{"option_ids": ["LEFT_UUID", "RIGHT_UUID"]}`.
+The typed `OptionComparisonResponse` contains:
+
+| Field | Contents |
+|---|---|
+| `options` | Exactly two complete `OptionResponse` snapshots in request order; index 0 is left, index 1 is right. |
+| `inputs` | Site geometry plus every hard-constraint, preference, and target field. |
+| `metrics` | Every field in the existing `MassingMetrics` contract. |
+| `feasibility` | Status, reason, hard-constraint satisfaction, and complete target assessment. |
+| `diagnostics` | Complete ordered diagnostic lists. |
+
+Each field uses the comparison semantics defined in the persistence section above.
+For example, four versus two floors produces
+`{"left": 4, "right": 2, "changed": true, "difference": -2}`. A null actual GFA
+remains null and yields a null difference. The returned complete snapshots supply
+all geometry and result context for subsequent visualization.
+
+Missing bodies, malformed JSON/UUIDs, duplicate IDs (including equivalent UUID
+spellings), incorrect counts, and extra fields return `422 INVALID_COMPARISON` using
+the existing error envelope. Missing saved options return `404 OPTION_NOT_FOUND`
+with detail path `option_ids[0]` or `option_ids[1]`; reads stop at the first missing
+selection in request order. The static `/compare` route precedes dynamic option
+routes. No geometry is recomputed, no snapshots are changed, and no comparison is saved.
+
 `POST /options/{option_id}/branches` replaces the complete hard constraints,
 preferences, and targets; it never merges configuration with the parent. The child
 name also defaults to null independently of the parent. It recomputes through the
@@ -695,7 +721,7 @@ uses the complete snapshot contract above with status `201` and
 `Location: /api/v1/options/{child_id}`. Repeated requests create distinct siblings;
 any saved child can itself be branched. Parent results remain unchanged, including
 when a diagnostic parent produces a feasible child. Tree retrieval is a separate
-read-only endpoint; navigation, comparison, frontend workflows, and automatic
+read-only endpoint; navigation, frontend workflows, and automatic
 alternatives remain outside this endpoint.
 
 Results echo normalized configuration (including the canonical site) and return
@@ -749,7 +775,8 @@ Missing option UUIDs return `404 OPTION_NOT_FOUND`; missing branch parents retur
 `404 PARENT_OPTION_NOT_FOUND` with detail path `option_id`, before any geometry
 computation or insertion. Both use the same error envelope. Malformed UUIDs and
 invalid pagination use `422 INVALID_REQUEST`. Database failures remain server errors
-and failed inserts roll back. Planned comparison validation uses `INVALID_COMPARISON`.
+and failed inserts roll back. Comparison selection validation uses `INVALID_COMPARISON`
+as described above.
 
 The UI preserves requested drafts, shows floor errors inline and requested/effective/
 actual area differences. Failed construction clears stale building views; users can
@@ -884,9 +911,12 @@ API/database tests cover validation, all snapshot statuses, transactional save/b
 unchanged parents, sibling and nested branches, configuration replacement, and reload
 using disposable PostgreSQL. Tree tests cover isolated roots/subtrees, stable sibling
 ordering including timestamp ties, lightweight status/metrics, read-only retrieval,
-structured errors, and reload without changing snapshots. Comparison tests remain
-planned. Frontend checks cover strict types and lint/build; planned interaction tests
-cover forms, stale responses,
+structured errors, and reload without changing snapshots. Comparison tests cover roots,
+siblings and nested branches, every numeric field, exact ordering, null metrics, all
+statuses, complete diagnostics, structured errors, and reload. Read-only PostgreSQL
+transactions, repository-call assertions, and blocked generation/insertion guard the
+saved-snapshot boundary. Frontend checks cover strict types and lint/build; planned
+interaction tests cover forms, stale responses,
 keyboard tree navigation, node selection/comparison, null-state rendering, and matching
 SVG/3D geometry, floors, holes, and resource lifecycle.
 
