@@ -1,17 +1,17 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { getHealth } from "./api";
+import type { HealthResponse } from "./api";
 
 export default function App() {
-  const [health, setHealth] = useState("checking…");
-
-  useEffect(() => {
-    getHealth()
-      .then((data) => setHealth(data.status))
-      .catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : String(err);
-        setHealth(`unreachable (${message})`);
-      });
-  }, []);
+  const { data, error, isPending, isError } = useQuery<HealthResponse, unknown>({
+    queryKey: ["health"],
+    queryFn: getHealth,
+    refetchOnReconnect: false,
+  });
+  const message = error instanceof Error ? error.message : String(error);
+  const health = isPending
+    ? "checking…"
+    : isError ? `unreachable (${message})` : data.status;
 
   return (
     <main style={{ fontFamily: "system-ui, sans-serif", padding: "2rem", lineHeight: 1.5 }}>

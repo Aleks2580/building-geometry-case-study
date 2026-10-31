@@ -1,7 +1,7 @@
 # Frontend — building geometry case study
 
-Minimal Vite + React with strict TypeScript. It boots, calls the backend health
-check, and gives you an empty canvas to build the visualization in.
+Vite + React with strict TypeScript, a typed preview API client, and TanStack Query
+for server state. The app displays backend health and a placeholder for visualization.
 
 ## Getting started
 
@@ -19,6 +19,7 @@ The backend base URL defaults to `http://localhost:8000`; override with
 
 - `src/api.ts` — health check and cancellable `previewMassing(request, signal?)`.
 - `src/api/contracts.ts` — Zod contracts inferred as strict TypeScript types.
+- `src/queryClient.ts` — reusable QueryClient factory and application instance.
 - `src/App.tsx` — shows backend health + a placeholder canvas marked `TODO`.
 - `src/vite-env.d.ts` — types the optional `VITE_API_BASE` environment variable.
 
@@ -41,9 +42,12 @@ npm run preview    # preview the build
 ESLint uses a flat configuration with TypeScript, React Hooks, and React Refresh
 rules. Generated files and dependencies are excluded.
 
-Vitest and React Testing Library cover the health API and its loading, success,
-and error UI states. Tests use jsdom and stub only the fetch boundary; no running
-backend is required. Test files and setup are included in TypeScript checks.
+Vitest and React Testing Library cover preview transport, the QueryClient setup,
+and health loading, success, and error UI states. Tests use jsdom and stub the fetch
+boundary; no running backend is required. Test sources are type checked.
+
+Vite 6 and Vitest 4 share `vite.config.js`. Their minimum versions include
+development-tooling security fixes. Jest DOM stays on 6.9 to retain Node 20 support.
 
 ## Massing preview API
 
@@ -70,8 +74,19 @@ JavaScript numbers use binary64 precision; integer counts outside the safe integ
 range are rejected rather than silently rounded. Option API methods and preview UI
 integration will be added with their consuming features.
 
-Vite 6 and Vitest 4 share `vite.config.js`. Their minimum versions include
-development-tooling security fixes. Jest DOM stays on 6.9 to retain Node 20 support.
+## Server state
+
+`main.tsx` mounts `QueryClientProvider` with the stable application `queryClient`.
+`createQueryClient()` supplies the same defaults for isolated tests: queries remain
+fresh for 30 seconds, inactive queries use the library's five-minute retention,
+and automatic retries and window-focus refetches are disabled. Mutations explicitly
+disable retries because a repeated save would create another immutable snapshot.
+
+The health display reads Query state directly, without copying it into local state.
+Its reconnect refetch is disabled to preserve the existing check-on-mount behavior.
+Future forms and selection state stay local; remote preview and option results belong
+in Query. Preview keys and hooks will be added with the configuration workflow so
+their identity includes the actual submitted configuration.
 
 ## Docker development
 

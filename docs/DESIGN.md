@@ -9,8 +9,9 @@
 > assessment. A typed massing preview API now exposes the domain result through
 > explicit application mapping. PostgreSQL migrations, immutable root saves and
 > child branches, retrieval, summary listing, and decision-tree retrieval are
-> implemented, together with read-only saved-option comparison. Alternatives and
-> visualization remain planned.
+> implemented, together with read-only saved-option comparison. The frontend has a
+> validated preview client and Query provider. Alternatives and visualization remain
+> planned.
 
 ## Problem interpretation
 
@@ -800,23 +801,21 @@ checks and adding typed API/environment boundaries, typecheck, lint, tests, and 
 geometry and inconsistent statuses across forms/renderers more reliably than
 JavaScript/JSDoc, but does not replace runtime or geometric validation.
 
-The preview client in `frontend/src/api.ts` uses the existing `VITE_API_BASE` and
-accepts an `AbortSignal`. Zod schemas in `frontend/src/api/contracts.ts` mirror the
-backend preview contract and infer TypeScript types from one frontend definition.
-Response parsing retains nullable results and all four feasibility statuses,
-applies optional configuration defaults, and tolerates additive response fields.
-Geometry validity and massing calculations remain on the backend. JavaScript's
-binary64 numbers cannot preserve arbitrary Python integer counts; counts outside
-the safe integer range are rejected as malformed responses. Preview HTTP, network,
-and malformed-response failures use `ApiError`, retaining structured server error
-details when available. Cancellation preserves its original reason; the existing
-health client keeps its established behavior. Option client methods are deferred
-until their consuming workflows.
+The preview client in `frontend/src/api.ts` uses Zod schemas in
+`frontend/src/api/contracts.ts` to infer TypeScript types from one frontend definition.
+Parsing retains nullable results and all four feasibility statuses, applies optional
+configuration defaults, and tolerates additive response fields. Geometry validity and
+massing calculations remain on the backend. Integer counts outside JavaScript's safe
+integer range are rejected rather than silently rounded. Option client methods are
+deferred until their consuming workflows.
 
 [TanStack Query](https://tanstack.com/query/latest/docs/framework/react/overview)
-owns remote previews/options and cache lifecycle. Fetch/effects would repeat that
-logic across consumers. Configuration keys must prevent stale responses replacing
-the current preview; configure retries deliberately, especially save mutations.
+now provides the application QueryClient and provider; the health display reads query
+state directly. Mutation retries are explicitly disabled because repeated saves insert
+distinct snapshots. Remote previews/options will use this cache when their consumers
+are added; configuration keys must prevent stale responses replacing the current
+preview. Client usage, error handling, cancellation, and cache defaults are documented
+in the [frontend README](../frontend/README.md).
 
 [React Hook Form](https://react-hook-form.com/get-started) owns editable drafts,
 dirty state, errors, and submission; [Zod](https://zod.dev/) provides typed parsing
