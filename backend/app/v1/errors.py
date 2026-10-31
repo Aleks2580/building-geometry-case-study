@@ -36,6 +36,9 @@ async def request_validation_error_handler(request: Request, error: RequestValid
     first_path = errors[0]["loc"] if errors else ()
     section = first_path[1] if len(first_path) > 1 and first_path[0] == "body" else None
     code = section_codes.get(section, "INVALID_REQUEST") if isinstance(section, str) else "INVALID_REQUEST"
+    # Selection errors share one code, including malformed JSON and forbidden fields.
+    if getattr(request.scope.get("route"), "name", None) == "compare_saved_options":
+        code = "INVALID_COMPARISON"
     # Validation inputs and exception contexts can contain complete user payloads
     # or non-finite numbers. Expose only paths and messages in the public envelope.
     payload = {

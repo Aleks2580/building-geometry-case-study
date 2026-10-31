@@ -5,11 +5,13 @@ from fastapi import APIRouter, Depends, Query, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 
+from app.application.comparison import ComparisonOptionNotFound, compare_options
 from app.application.options import OptionTree, ParentOptionNotFound, branch_option, get_option_tree, save_root_option
 from app.persistence.options import OptionRepository
 from app.v1.dependencies import get_option_repository
 from app.v1.errors import not_found_response
 from app.v1.massing import MASSING_VALIDATION_ERRORS, compute_preview, massing_error_response, preview_arguments
+from app.v1.schemas.comparison import OptionComparisonRequest, OptionComparisonResponse
 from app.v1.schemas.massing import ErrorResponse
 from app.v1.schemas.options import (
     BranchOptionRequest,
@@ -92,6 +94,36 @@ def _tree_response(tree: OptionTree) -> OptionTreeResponse:
         **OptionSummaryResponse.model_validate(tree.summary, from_attributes=True).model_dump(),
         children=[_tree_response(child) for child in tree.children],
     )
+
+
+@router.post(
+    "/compare",
+    response_model=OptionComparisonResponse,
+    summary="Compare two saved option snapshots",
+    description=(
+        "Select exactly two distinct saved UUIDs. Return complete snapshots in request order and "
+        "side-by-side inputs, metrics, feasibility, and diagnostics without recomputation or writes. "
+        "Numeric differences are right minus left, or null when either value is missing. "
+        "Changed flags use exact stored-value equality; site geometry is compared structurally."
+    ),
+    responses={
+        404: {"model": ErrorResponse, "description": "Requested option not found (OPTION_NOT_FOUND)."},
+        422: {"model": ErrorResponse, "description": "Invalid selection or body (INVALID_COMPARISON)."},
+    },
+)
+async def compare_saved_options(
+    request: OptionComparisonRequest, repository: RepositoryDependency
+) -> OptionComparisonResponse | JSONResponse:
+    try:
+        comparison = await compare_options(repository, request.option_ids)
+    except ComparisonOptionNotFound as error:
+        return not_found_response(
+            "OPTION_NOT_FOUND",
+            "Option not found.",
+            path=f"option_ids[{error.index}]",
+            detail="No saved option has this identifier.",
+        )
+    return OptionComparisonResponse.model_validate(comparison, from_attributes=True)
 
 
 @router.get(
