@@ -22,7 +22,9 @@ The backend base URL defaults to `http://localhost:8000`; override with
 - `src/queryClient.ts` — reusable QueryClient factory and application instance.
 - `src/App.tsx` — backend health and the responsive configuration workspace.
 - `src/features/massing/configuration.ts` — typed draft parsing using existing Zod API contracts.
+- `src/features/massing/siteGeometry.ts` — deterministic rectangle and supplied-example input coordinates.
 - `src/features/massing/ConfigurationForm.tsx` — accessible site, constraint, preference, and target inputs.
+- `src/features/massing/DraftSitePreview.tsx` — immediate outline of the active site draft, with its own CSS Module.
 - `src/features/massing/MassingWorkspace.tsx` — explicit preview submission and request states.
 - `src/features/massing/DetailedMetrics.tsx` — site/setback, hard bounds, generated capacity, and actual metrics.
 - `src/features/massing/PreferenceAssessments.tsx` — backend footprint preference and GFA target assessments.
@@ -94,28 +96,62 @@ development-tooling security fixes. Jest DOM stays on 6.9 to retain Node 20 supp
 
 ## Configuration inputs
 
-`ConfigurationForm` uses React Hook Form with the Zod resolver. Its typed string
-draft is parsed by `src/features/massing/configuration.ts`, reusing the API contracts
-for numeric bounds. The initial example is a 40 × 25 m rectangle, a 3 m setback, 3.5 m
-floor-to-floor height, and a six-floor cap. All other inputs start blank.
+`ConfigurationForm` uses React Hook Form with the Zod resolver. Its typed draft is
+parsed by `src/features/massing/configuration.ts`, reusing the API contracts for
+numeric bounds. The **Site shape** selector offers:
 
-The JSON editor accepts a Polygon object with closed two-dimensional coordinate
-rings, including holes. Client checks cover JSON/coordinate structure, numeric
+- **Rectangle**: editable Width and Length in metres, initially 40 × 25 m. Positive
+  finite decimal dimensions produce a closed, axis-aligned Polygon at the local
+  origin. Empty, zero, negative, or invalid dimensions block submission and show
+  inline errors; a previously valid rectangle is never submitted instead.
+- **L-shaped example**: the supplied concave site, demonstrating setbacks around a
+  reflex corner.
+- **Notched example**: the supplied deep-notch site, whose setback can split or
+  collapse the buildable region.
+- **Custom Polygon (advanced)**: an editable GeoJSON Polygon with a closed exterior
+  ring and optional closed hole rings. It starts from the current valid Polygon.
+  If rectangle dimensions are invalid, it starts empty and asks for valid JSON.
+
+The example vertices match `data/sites/` exactly, with only the first position
+appended to close each ring. Small frontend coordinate constants keep the existing
+Docker build context unchanged; tests compare them with the source files.
+Choosing another preset intentionally replaces the active site draft; returning to
+Rectangle restores 40 × 25 m. Switching shapes preserves constraints, preferences,
+and the target, and never submits a preview automatically.
+
+**Live draft site** shows a compact outline inside the site inputs, before any
+submission. Its SVG is named **Draft site preview** for assistive technology. It
+reads the watched RHF site through the same `siteInputSchema` used for submission
+and reuses the existing SVG bounds, fitting, and path utilities. Holes remain open
+through even-odd filling. Invalid dimensions or JSON/coordinate structure, and
+coordinates that cannot be fitted safely, show an unavailable message instead of
+retaining the last valid outline. This is unvalidated input: an outline does not
+establish valid topology, buildability, or feasibility.
+
+Only the selected site's fields are active in the form. Zod builds the request's
+existing `site` Polygon from that draft; selection and dimension fields are not sent
+to the API. Client checks cover JSON/coordinate structure, ring closure, numeric
 inputs, and the required height-or-floor cap. Topology, capacity, preference
-compatibility, and feasibility remain backend decisions. Blank optional numbers
-become `null`; zero setbacks and zero GFA targets are preserved. Inline errors are
-associated with their labeled inputs, and invalid submission focuses the first error.
+compatibility, and feasibility remain backend decisions.
+
+The initial constraints are a 3 m setback, 3.5 m floor-to-floor height, and six-floor
+cap; other constraints, preferences, and the target start blank. Blank optional
+numbers become `null`; zero setbacks and zero GFA targets are preserved. Inline
+errors are associated with their labeled inputs, and invalid submission focuses
+the first error.
 
 ## Preview workflow
 
 Choose **Generate Preview** to submit the validated draft. Editing does not send
-requests or change the displayed plan or metrics. A notice beside the result identifies
-changes since the last submission, including invalid drafts. Returning to exactly
-the submitted text clears the notice; formatting-only edits also count as changes.
+requests or change the generated backend plan or metrics. The separate draft
+outline updates immediately. A notice beside the backend result identifies
+changes since the last submission, including site selection, dimension edits, and
+invalid drafts. Returning to exactly the submitted draft clears the notice;
+formatting-only edits also count as changes.
 
 Each submission starts a new request, including retries with unchanged inputs.
 Pending requests are cancelled when superseded or unmounted, and their results
-cannot replace the active request. A new submission clears the previous plan,
+cannot replace the active request. A new submission clears the previous backend plan,
 metrics, and diagnostics while loading. Failed requests show a summary and backend
 field paths/messages when available; correcting the inputs and submitting again
 retries explicitly.
@@ -137,7 +173,8 @@ site coverage is a ratio with up to four decimals, using **<0.0001** for smaller
 positive values. Formatting never changes response values. Missing preferences and
 targets display **Not requested**, while a zero target displays **0 m²**. Null
 shortfalls and undershoots stay unavailable instead of being inferred as zero.
-No frontend geometry or capacity calculations are performed, and previews are not saved.
+The frontend constructs site input coordinates only; result geometry, capacity, and
+metrics come from the backend. Previews are not saved.
 
 Feasibility shows the backend reason when supplied and hard-constraint satisfaction
 as **True**, **False**, or **Unknown**. A missed GFA target does not imply a hard
@@ -153,7 +190,8 @@ Superseding requests and request failures remove all previous result sections.
 response, alongside that response's metrics and diagnostics. All four geometry
 fields pass through unchanged. Empty, pending, and request-error states mount no
 viewer; infeasible and generation-failed results show available site/setback context
-with an explicit missing-footprint message. Draft edits retain the submitted plan.
+with an explicit missing-footprint message. Draft edits retain this submitted backend
+plan while the separate outline in the form reflects the current site inputs.
 
 `SitePlan` also works independently. It needs no Query provider, API request, or
 application state:
@@ -196,15 +234,15 @@ it never fits an optional layer instead. These display guards do not validate
 topology or determine feasibility. Pan/zoom, editing, and 3D
 remain outside this component.
 
-For browser smoke checks, run the app with its backend and submit the supplied
-`data/sites/` examples through the JSON field, wrapping their vertices in a Polygon
-ring and closing it. The default rectangle and L-shaped site use a 3 m setback;
-the notched site at 3 m shows two setback components. The holed-site case in
-`backend/tests/test_massing_preview_api.py` uses a zero setback. Check the legend,
+For browser smoke checks, run the app with its backend and select Rectangle,
+L-shaped example, and Notched example in turn, submitting each explicitly.
+The default rectangle and L-shaped site use a 3 m setback; the notched site at 3 m
+shows two setback components. Select Custom Polygon to try the holed-site case in
+`backend/tests/test_massing_preview_api.py`, using a zero setback. Check the legend,
 hole openings, and selected component at desktop, tablet, 390 px, and 320 px widths.
 Use a maximum height of 3 m with the floor cap blank to check infeasible context,
 or a preferred footprint of `1e-30` to check generation failure with available
-default capacity. A backend validation failure must remove the previous plan and
+default capacity. A backend validation failure must remove the previous backend plan and
 diagnostics; an unsubmitted edit must retain them with the changed-draft notice.
 
 ## Massing preview API
@@ -254,20 +292,34 @@ indicator are local interaction state; future option results also belong in Quer
 
 With the frontend and backend running:
 
-1. Check backend health, submit the example, and expect 646 m² footprint, six floors,
-   21 m height, and 3,876 m² GFA.
-2. Edit a constraint without submitting: metrics stay unchanged and the draft notice
-   appears beside the result. Submit to apply the change.
-3. Try a GFA target of 1,000,000 (target unmet, hard constraints satisfied), a preferred
+1. Check backend health and the default Rectangle's **Live draft site** outline
+   before submitting. Generate Preview and expect a separate backend plan with
+   646 m² footprint, six floors, 21 m height, and 3,876 m² GFA.
+2. Edit Width and Length, including decimals, without submitting: the draft outline
+   updates while the backend plan and metrics stay unchanged and the draft notice
+   appears. Empty, zero, negative, and non-numeric dimensions must replace the
+   draft outline with its unavailable state, show inline errors on validation, and
+   block submission. Correct them and submit to update the backend result.
+3. Select L-shaped example and Notched example, checking that each selection alone
+   updates only the draft outline and sends no preview request. Submit each and
+   check the generated backend plan matches the selected site. Enter Custom Polygon
+   and verify the current coordinates are available for editing. Switch presets
+   again and check unrelated constraints and preferences remain intact.
+4. Try a GFA target of 1,000,000 (target unmet, hard constraints satisfied), a preferred
    footprint of 300 m² (requested/effective/actual assessment), and a setback of 100
    (infeasible, actual metrics unavailable). Inspect diagnostic codes and details.
    A preferred floor count above the cap remains a backend validation error.
-4. Enter malformed JSON and remove both height/floor caps to check inline errors.
-   Try zero setback/target and a valid Polygon with a hole.
-5. Check desktop layout and narrow viewports at 390 px and 320 px, including expanded
-   diagnostic details, inline errors, keyboard focus, and form submission. Request
-   races, cancellation, network/malformed-response failures, and generation-failure
-   rendering have focused automated coverage.
+5. In Custom Polygon, enter malformed JSON to check inline errors and an unavailable
+   draft outline. Remove both height/floor caps to check constraint errors; a valid
+   site outline must remain visible. Try zero setback/target and a valid Polygon
+   with a hole, checking its opening in both views after submission.
+   Enter Custom from an invalid rectangle and verify no previous Polygon or outline
+   is reused. A structurally valid outline still needs backend topology validation.
+6. Check desktop layout and narrow viewports at 390 px and 320 px, including the
+   selector, dimension fields, draft outline and unavailable state, backend plan,
+   expanded diagnostic details, inline errors, keyboard focus, and form submission.
+   Request races, cancellation, network/malformed-response failures, and
+   generation-failure rendering have focused automated coverage.
 
 ## Docker development
 
