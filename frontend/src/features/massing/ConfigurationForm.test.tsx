@@ -16,6 +16,10 @@ function selectShape(kind: "rectangle" | "l-shaped" | "notched" | "custom") {
   fireEvent.change(screen.getByRole("combobox", { name: "Site shape" }), { target: { value: kind } });
 }
 
+function draftOutline() {
+  return screen.getByRole("img", { name: "Draft site preview" }).querySelector("path")?.getAttribute("d") ?? "";
+}
+
 function renderForm(submittedDraft?: ConfigurationDraft) {
   const onSubmit = vi.fn<(configuration: Configuration, draft: ConfigurationDraft) => void>();
   const onDraftChange = vi.fn<(changed: boolean) => void>();
@@ -76,6 +80,88 @@ describe("ConfigurationForm", () => {
       preferences: { preferred_floor_count: null, preferred_footprint_area_m2: null },
       targets: { gfa_target_m2: null },
     }, initialConfigurationDraft);
+  });
+
+  it("shows the live draft rectangle and updates its proportions while editing without submitting", () => {
+    const { onSubmit } = renderForm();
+    expect(screen.getByText("Live draft site")).toBeInTheDocument();
+    expect(screen.getByText(/Site outline only\. Generate Preview to .*calculate massing\./)).toBeInTheDocument();
+    const initialPath = draftOutline();
+    const initialPositions = [...initialPath.matchAll(/[ML]([^ ]+) ([^ ]+)/g)]
+      .map((match) => [Number(match[1]), Number(match[2])]);
+    expect(initialPositions).toHaveLength(5);
+    expect(Math.abs((initialPositions[1][0] - initialPositions[0][0])
+      / (initialPositions[2][1] - initialPositions[1][1]))).toBeCloseTo(40 / 25);
+
+    change("Width (m)", "50");
+    change("Length (m)", "12.5");
+
+    const changedPath = draftOutline();
+    const changedPositions = [...changedPath.matchAll(/[ML]([^ ]+) ([^ ]+)/g)]
+      .map((match) => [Number(match[1]), Number(match[2])]);
+    expect(changedPath).not.toBe(initialPath);
+    expect(Math.abs((changedPositions[1][0] - changedPositions[0][0])
+      / (changedPositions[2][1] - changedPositions[1][1]))).toBeCloseTo(4);
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("updates the live outline for examples and edited Custom holes without submitting", () => {
+    const { onSubmit } = renderForm();
+    const rectanglePath = draftOutline();
+
+    selectShape("l-shaped");
+    const lShapedPath = draftOutline();
+    expect(lShapedPath).not.toBe(rectanglePath);
+    expect(lShapedPath.match(/L/g)).toHaveLength(6);
+    selectShape("notched");
+    const notchedPath = draftOutline();
+    expect(notchedPath).not.toBe(lShapedPath);
+    expect(notchedPath.match(/L/g)).toHaveLength(8);
+    selectShape("custom");
+    expect(draftOutline()).toBe(notchedPath);
+    change("Site Polygon JSON", JSON.stringify({
+      type: "Polygon",
+      coordinates: [
+        [[0, 0], [40, 0], [40, 25], [0, 25], [0, 0]],
+        [[5, 5], [10, 5], [10, 10], [5, 10], [5, 5]],
+      ],
+    }));
+
+    expect(draftOutline()).not.toBe(notchedPath);
+    expect(draftOutline().match(/M/g)).toHaveLength(2);
+    expect(screen.getByRole("img", { name: "Draft site preview" }).querySelector("path"))
+      .toHaveAttribute("fill-rule", "evenodd");
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["Width (m)", ""], ["Length (m)", "0"], ["Width (m)", "Infinity"],
+    ["Site Polygon JSON", "{"],
+    ["Site Polygon JSON", JSON.stringify({ type: "Polygon", coordinates: [] })],
+    ["Site Polygon JSON", JSON.stringify({ type: "Polygon", coordinates: [[[0, 0], [40, 0], [40, 25], [0, 25]]] })],
+  ])("removes the live outline immediately for invalid %s=%j", (name, value) => {
+    const { onSubmit } = renderForm();
+    if (name === "Site Polygon JSON") selectShape("custom");
+    expect(screen.getByRole("img", { name: "Draft site preview" })).toBeInTheDocument();
+
+    change(name, value);
+
+    expect(screen.queryByRole("img", { name: "Draft site preview" })).not.toBeInTheDocument();
+    expect(screen.getByText("Draft site preview unavailable. Enter valid site dimensions or Polygon JSON."))
+      .toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("retains a valid live outline when an unrelated constraint is invalid", async () => {
+    const { onSubmit } = renderForm();
+    const outline = draftOutline();
+    change("Setback (m)", "invalid");
+
+    fireEvent.blur(screen.getByRole("textbox", { name: "Setback (m)" }));
+
+    await screen.findByRole("alert");
+    expect(draftOutline()).toBe(outline);
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it("submits decimal rectangle dimensions as the current closed Polygon", async () => {

@@ -13,8 +13,9 @@
 > a typed editable configuration workspace and explicit backend preview with detailed
 > metrics, preference/target assessments, feasibility, diagnostics, and an integrated
 > SVG site plan. Site input supports rectangle dimensions, the supplied concave and
-> notched examples, and advanced Polygon JSON with holes. Saved-option workflows,
-> alternatives, and 3D visualization remain planned in the frontend.
+> notched examples, advanced Polygon JSON with holes, and an immediate draft outline.
+> Saved-option workflows, alternatives, and 3D visualization remain planned in
+> the frontend.
 
 ## Problem interpretation
 
@@ -797,11 +798,13 @@ it, changes floor or footprint preferences in a draft, previews the change, and 
 a child option. Selecting saved alternatives restores their corresponding results in
 both views; unsaved previews remain clearly separate from saved history.
 
-The implemented workspace provides the form, SVG site plan, and detailed backend
-metrics, with an explicit Generate Preview action. Edits do not change submitted
-configurations or results, and a notice beside the result marks a changed draft. New submissions clear
-the previous plan and metrics while loading; errors retain backend validation
-paths/messages.
+The implemented workspace provides the form, a live draft site outline, and a
+generated SVG site plan with detailed backend metrics. The compact outline updates
+inside the site inputs and is explicitly identified as unvalidated input. Generate
+Preview remains the action that checks geometry and computes massing. Edits do not
+change submitted configurations, the backend plan, or metrics, and a notice beside
+the result marks a changed draft. New submissions clear the previous backend plan
+and metrics while loading; errors retain backend validation paths/messages.
 All four domain statuses remain successful API results and null metrics display as
 unavailable. Named result sections distinguish theoretical hard upper bounds,
 demonstrated default generation capacity, and selected actual massing. Setback
@@ -866,7 +869,12 @@ Zod constructs the existing `site` request Polygon and excludes UI-only fields;
 invalid dimensions cannot leave a previous valid Polygon available for submission.
 Preset changes intentionally replace the site while retaining other configuration
 fields, and Custom starts from the current valid Polygon. These input helpers do
-not compute setbacks, massing, or feasibility. The
+not compute setbacks, massing, or feasibility. `DraftSitePreview` derives its outline
+directly from the watched RHF site through the existing site schema, without another
+geometry state. It reuses the SVG display utilities and even-odd hole filling;
+invalid structure or unsafe display bounds show an unavailable state instead of
+stale geometry. The outline does not validate topology or change the backend result
+and request lifecycle. The
 [configuration input reference](../frontend/README.md#configuration-inputs) describes
 switching and validation behavior. Empty optional numbers become null, while zero
 setbacks and GFA targets remain valid. Client checks cover transport structure and

@@ -1,0 +1,44 @@
+.preview {
+  margin: 1.1rem 0 0;
+  min-width: 0;
+}
+
+.heading {
+  font-size: 0.85rem;
+  font-weight: 650;
+  margin-bottom: 0.25rem;
+}
+
+.hint {
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  margin-bottom: 0.65rem;
+}
+
+.viewport,
+.unavailable {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: #f8faf9;
+}
+
+.viewport {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 180px;
+}
+
+.viewport path {
+  fill: rgb(41 125 145 / 15%);
+  stroke: #297d91;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.unavailable {
+  padding: 1rem;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  margin: 0;
+}

@@ -8,6 +8,7 @@ import {
   siteInputSchema,
 } from "./configuration";
 import type { Configuration, ConfigurationDraft } from "./configuration";
+import DraftSitePreview from "./DraftSitePreview";
 import shared from "./massing.module.css";
 import styles from "./ConfigurationForm.module.css";
 
@@ -31,7 +32,8 @@ export default function ConfigurationForm({
       mode: "onBlur",
     });
   const draft = useWatch({ control });
-  const siteKind = useWatch({ control, name: "site.kind" });
+  const siteKind = draft.site?.kind;
+  const parsedSite = siteInputSchema.safeParse(draft.site);
   const customSiteError = getFieldState("site.json", formState).error;
   const draftChanged = submittedDraft !== undefined &&
     JSON.stringify(draft) !== JSON.stringify(submittedDraft);
@@ -159,6 +161,7 @@ export default function ConfigurationForm({
             <p className={styles.fieldError} id="site-error" role="alert">{customSiteError.message}</p>
           )}
         </div>}
+        <DraftSitePreview geometry={parsedSite.success ? parsedSite.data : null} />
       </fieldset>
 
       <fieldset>

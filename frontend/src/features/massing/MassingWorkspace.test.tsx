@@ -45,6 +45,10 @@ function planPaths() {
     .map((path) => [path.getAttribute("data-layer"), path.getAttribute("d")]);
 }
 
+function draftOutline() {
+  return screen.getByRole("img", { name: "Draft site preview" }).querySelector("path")?.getAttribute("d") ?? "";
+}
+
 function expectPlanGeometry(result: MassingPreviewResponse) {
   const bounds = geometryBounds(result.site_geometry);
   if (bounds === null) throw new Error("Expected a displayable site fixture.");
@@ -78,6 +82,7 @@ describe("MassingWorkspace", () => {
     renderWorkspace();
 
     expect(screen.getByText(/No preview yet/)).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Draft site preview" })).toBeInTheDocument();
     expect(screen.queryByRole("img", { name: "Site plan" })).not.toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
     submit();
@@ -269,9 +274,13 @@ describe("MassingWorkspace", () => {
     submit();
     await screen.findByRole("heading", { name: "Feasible" });
     const rectanglePaths = planPaths();
+    const rectangleDraftPath = draftOutline();
 
     change(/Width \(m\)/, "45.25");
+    expect(draftOutline()).not.toBe(rectangleDraftPath);
+    expect(planPaths()).toEqual(rectanglePaths);
     change(/Length \(m\)/, "");
+    expect(screen.queryByRole("img", { name: "Draft site preview" })).not.toBeInTheDocument();
     submit();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Enter a number.");
@@ -280,13 +289,18 @@ describe("MassingWorkspace", () => {
     expect(metric("Footprint area")).toHaveTextContent("646 m²");
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
+    const exampleDraftPaths: string[] = [];
     for (const kind of ["l-shaped", "notched", "custom"] as const) {
       selectShape(kind);
+      exampleDraftPaths.push(draftOutline());
       expect(planPaths()).toEqual(rectanglePaths);
       expect(metric("GFA")).toHaveTextContent("3,876 m²");
       expect(screen.getByText(/Draft inputs have changed/)).toBeInTheDocument();
       expect(fetchMock).toHaveBeenCalledTimes(1);
     }
+    expect(exampleDraftPaths[0]).not.toBe(rectangleDraftPath);
+    expect(exampleDraftPaths[1]).not.toBe(exampleDraftPaths[0]);
+    expect(exampleDraftPaths[2]).toBe(exampleDraftPaths[1]);
     submit();
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
@@ -300,6 +314,7 @@ describe("MassingWorkspace", () => {
 
     selectShape("rectangle");
 
+    expect(draftOutline()).toBe(rectangleDraftPath);
     expect(planPaths()).toEqual(notchedPaths);
     expect(screen.getByText(/Draft inputs have changed/)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -337,6 +352,7 @@ describe("MassingWorkspace", () => {
     await screen.findByText("Generating preview…");
     const signal = fetchMock.mock.calls[0][1]?.signal;
     change(/Width \(m\)/, "invalid");
+    expect(screen.queryByRole("img", { name: "Draft site preview" })).not.toBeInTheDocument();
 
     submit();
 
@@ -346,6 +362,7 @@ describe("MassingWorkspace", () => {
     await act(async () => pending.resolve(Response.json(previewResponse())));
     await screen.findByRole("heading", { name: "Feasible" });
     expectPlanGeometry(previewResponse());
+    expect(screen.queryByRole("img", { name: "Draft site preview" })).not.toBeInTheDocument();
     expect(screen.getByText(/Draft inputs have changed/)).toBeInTheDocument();
   });
 
@@ -357,11 +374,13 @@ describe("MassingWorkspace", () => {
     await screen.findByText("Generating preview…");
     change(/Maximum floor count/, "2");
     selectShape("l-shaped");
+    const lShapedDraftPath = draftOutline();
     expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).site).toEqual(previewResponse().site);
     await act(async () => pending.resolve(Response.json(previewResponse())));
 
     await screen.findByRole("heading", { name: "Feasible" });
     expectPlanGeometry(previewResponse());
+    expect(draftOutline()).toBe(lShapedDraftPath);
     expect(metric("Floor count")).toHaveTextContent("6");
     expect(screen.getByLabelText(/Maximum floor count/)).toHaveValue("2");
     expect(screen.getByRole("combobox", { name: "Site shape" })).toHaveValue("l-shaped");
