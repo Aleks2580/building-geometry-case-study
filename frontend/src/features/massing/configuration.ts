@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { massingPreviewRequestSchema } from "./api/contracts";
+import { massingPreviewRequestSchema } from "../../api/contracts";
 
 const decimalNumber = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 

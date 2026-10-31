@@ -1,5 +1,5 @@
-import { errorResponseSchema, massingPreviewResponseSchema } from "./api/contracts";
-import type { ErrorBody, MassingPreviewRequest, MassingPreviewResponse } from "./api/contracts";
+import { errorResponseSchema, massingPreviewResponseSchema } from "./contracts";
+import type { ErrorBody, MassingPreviewRequest, MassingPreviewResponse } from "./contracts";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 

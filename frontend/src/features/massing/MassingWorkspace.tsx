@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ApiError, previewMassing } from "./api";
-import type { FeasibilityStatus, MassingPreviewResponse } from "./api/contracts";
+import { ApiError, previewMassing } from "../../api/api";
+import type { FeasibilityStatus, MassingPreviewResponse } from "../../api/contracts";
 import ConfigurationForm from "./ConfigurationForm";
 import type { Configuration, ConfigurationDraft } from "./configuration";
 

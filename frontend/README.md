@@ -17,15 +17,20 @@ The backend base URL defaults to `http://localhost:8000`; override with
 
 ## Frontend structure
 
-- `src/api.ts` — health check and cancellable `previewMassing(request, signal?)`.
+- `src/api/api.ts` — health check and cancellable `previewMassing(request, signal?)`.
 - `src/api/contracts.ts` — Zod contracts inferred as strict TypeScript types.
 - `src/queryClient.ts` — reusable QueryClient factory and application instance.
 - `src/App.tsx` — backend health and the responsive configuration workspace.
-- `src/configuration.ts` — typed draft parsing using existing Zod API contracts.
-- `src/ConfigurationForm.tsx` — accessible site, constraint, preference, and target inputs.
-- `src/MassingWorkspace.tsx` — explicit preview submission, request states, and result summary.
+- `src/features/massing/configuration.ts` — typed draft parsing using existing Zod API contracts.
+- `src/features/massing/ConfigurationForm.tsx` — accessible site, constraint, preference, and target inputs.
+- `src/features/massing/MassingWorkspace.tsx` — explicit preview submission, request states, and result summary.
 - `src/styles.css` — workspace layout and basic responsive styling.
 - `src/vite-env.d.ts` — types the optional `VITE_API_BASE` environment variable.
+
+Feature modules and their tests live together under `src/features/massing/`; API
+transport tests live beside the client in `src/api/`. Shared fixtures and test setup
+stay in `src/test/`. Application entry points, styles, and QueryClient setup remain
+at the root. Imports use direct relative paths.
 
 Detailed metrics/diagnostics, SVG and 3D views, saving, branching, tree navigation,
 and comparison are planned separately; see [the design note](../docs/DESIGN.md).
@@ -56,8 +61,8 @@ development-tooling security fixes. Jest DOM stays on 6.9 to retain Node 20 supp
 ## Configuration inputs
 
 `ConfigurationForm` uses React Hook Form with the Zod resolver. Its typed string
-draft is parsed by `src/configuration.ts`, reusing the API contracts for numeric
-bounds. The initial example is a 40 × 25 m rectangle, a 3 m setback, 3.5 m
+draft is parsed by `src/features/massing/configuration.ts`, reusing the API contracts
+for numeric bounds. The initial example is a 40 × 25 m rectangle, a 3 m setback, 3.5 m
 floor-to-floor height, and a six-floor cap. All other inputs start blank.
 
 The JSON editor accepts a Polygon object with closed two-dimensional coordinate

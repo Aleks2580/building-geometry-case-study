@@ -810,13 +810,18 @@ checks and adding typed API/environment boundaries, typecheck, lint, tests, and 
 geometry and inconsistent statuses across forms/renderers more reliably than
 JavaScript/JSDoc, but does not replace runtime or geometric validation.
 
-The preview client in `frontend/src/api.ts` uses Zod schemas in
+The preview client in `frontend/src/api/api.ts` uses Zod schemas in
 `frontend/src/api/contracts.ts` to infer TypeScript types from one frontend definition.
 Parsing retains nullable results and all four feasibility statuses, applies optional
 configuration defaults, and tolerates additive response fields. Geometry validity and
 massing calculations remain on the backend. Integer counts outside JavaScript's safe
 integer range are rejected rather than silently rounded. Option client methods are
 deferred until their consuming workflows.
+
+Massing configuration and workspace modules are grouped with their tests under
+`frontend/src/features/massing/`; API transport and contracts share `frontend/src/api/`.
+Application setup stays at the source root. The [frontend README](../frontend/README.md)
+describes the file layout; modules use direct relative imports.
 
 [TanStack Query](https://tanstack.com/query/latest/docs/framework/react/overview)
 now provides the application QueryClient and provider; the health display reads query

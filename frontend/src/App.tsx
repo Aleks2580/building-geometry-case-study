@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { getHealth } from "./api";
-import type { HealthResponse } from "./api";
-import MassingWorkspace from "./MassingWorkspace";
+import { getHealth } from "./api/api";
+import type { HealthResponse } from "./api/api";
+import MassingWorkspace from "./features/massing/MassingWorkspace";
 import "./styles.css";
 
 export default function App() {
