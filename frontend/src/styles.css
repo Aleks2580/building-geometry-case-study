@@ -38,7 +38,7 @@ legend { font-weight: 650; padding: 0 0.65rem 0 0; }
 button { border: 0; border-radius: 6px; padding: 0.75rem 1.2rem; background: #1d6654; color: white; font-weight: 650; cursor: pointer; }
 button:hover { background: #144b3e; }
 .draft-notice { color: #745016; background: #fff5dc; border: 1px solid #e8d49f; border-radius: 6px; padding: 0.7rem; font-size: 0.85rem; }
-.preview-panel { position: sticky; top: 1.5rem; }
+.preview-panel { min-width: 0; }
 .empty-state { color: #596b71; border: 1px dashed #b7c7c0; border-radius: 8px; padding: 1.25rem; }
 .preview-status { border-radius: 6px; background: #edf6f2; padding: 1rem; margin-bottom: 1.25rem; }
 .preview-status h3 { margin-bottom: 0.35rem; }
@@ -49,6 +49,26 @@ button:hover { background: #144b3e; }
 .metrics > div { border-top: 1px solid #dfe7e3; padding-top: 0.8rem; }
 .metrics dt { color: #596b71; font-size: 0.8rem; }
 .metrics dd { margin: 0.2rem 0 0; font-weight: 650; font-size: 1.3rem; overflow-wrap: anywhere; }
+.metrics + .metric-details, .preview-status .metric-details { margin-top: 1rem; }
+.result-section { margin-top: 1.5rem; min-width: 0; }
+.result-section h3 { margin-bottom: 0.7rem; }
+.result-section h4 { font-size: 0.9rem; margin: 1.25rem 0 0.6rem; }
+.result-section p { font-size: 0.85rem; color: #50636a; }
+.metric-details { margin: 0; }
+.metric-details > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; border-top: 1px solid #e2e9e6; padding: 0.55rem 0; }
+.metric-details dt { color: #596b71; font-size: 0.8rem; }
+.metric-details dd { margin: 0; font-size: 0.9rem; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.diagnostics { padding: 0; margin: 0; list-style: none; }
+.diagnostic { border-left: 3px solid #468273; border-radius: 4px; background: #f1f7f4; padding: 0.85rem; overflow-wrap: anywhere; }
+.diagnostic + .diagnostic { margin-top: 0.75rem; }
+.diagnostic[data-severity="warning"] { border-color: #99701c; background: #fff6e1; }
+.diagnostic[data-severity="error"] { border-color: #ac3d3d; background: #fff0ee; }
+.diagnostic p { margin-bottom: 0.65rem; }
+.diagnostic-meta { font-size: 0.8rem; }
+.diagnostic-details { margin: 0.5rem 0; font-size: 0.8rem; }
+.diagnostic-details dt { color: #50636a; }
+.diagnostic-details dd { margin: 0.15rem 0 0.5rem; }
+.diagnostic summary { cursor: pointer; font-size: 0.85rem; font-weight: 600; }
 .preview-error { color: #8d2028; background: #fff2f1; padding: 1rem; border: 1px solid #e5b6b6; border-radius: 6px; overflow-wrap: anywhere; }
 .preview-error p:last-child, .preview-error ul:last-child { margin-bottom: 0; }
 .preview-error ul { padding-left: 1.25rem; font-size: 0.85rem; }
@@ -58,7 +78,6 @@ button:hover { background: #144b3e; }
   main { padding: 1.5rem; }
   .page-header { flex-direction: column; gap: 0.7rem; }
   .workspace { grid-template-columns: 1fr; }
-  .preview-panel { position: static; }
 }
 @media (max-width: 520px) {
   main { padding: 1rem; }
