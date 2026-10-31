@@ -29,15 +29,17 @@ The backend base URL defaults to `http://localhost:8000`; override with
 - `src/features/massing/FeasibilitySummary.tsx` — feasibility, reason, and hard-constraint satisfaction.
 - `src/features/massing/Diagnostics.tsx` — backend diagnostics and accessible detail disclosures.
 - `src/features/massing/metricFormatting.ts` — display-only numeric formatting.
+- `src/features/visualization/svgGeometry.ts` — pure display bounds, viewport fitting, and SVG paths.
+- `src/features/visualization/SitePlan.tsx` — independent read-only SVG geometry layers and legend.
 - `src/styles.css` — document defaults, base typography, design tokens, and keyboard focus styling.
 - `src/vite-env.d.ts` — types the optional `VITE_API_BASE` environment variable.
 
-Feature modules and their tests live together under `src/features/massing/`; API
+Feature modules and their tests live together under `src/features/`; API
 transport tests live beside the client in `src/api/`. Shared fixtures and test setup
 stay in `src/test/`. Application entry points, global styles, and QueryClient setup remain
 at the root. Imports use direct relative paths.
 
-SVG and 3D views, saving, branching, tree navigation,
+SVG workspace integration, 3D views, saving, branching, tree navigation,
 and comparison are planned separately; see [the design note](../docs/DESIGN.md).
 
 ## Styling
@@ -76,6 +78,10 @@ preview transport, all feasibility states, request failures, draft/result separa
 out-of-order responses, cancellation, cache remounts, and existing health behavior.
 Tests use jsdom and stub the fetch boundary; no running backend is required.
 Test sources are type checked.
+
+Focused SVG utility and component tests cover the supplied rectangle, L-shaped, and
+notched sites, holes, split setback regions, missing layers, orientation, fitting,
+accessibility, and deterministic rendering without input mutation.
 
 Vite 6 and Vitest 4 share `vite.config.js`. Their minimum versions include
 development-tooling security fixes. Jest DOM stays on 6.9 to retain Node 20 support.
@@ -132,6 +138,49 @@ infeasibility. Diagnostics show severity, code, message, and optional path verba
 Native **Details** disclosures expose additional backend fields, preserving primitive
 values and numeric precision. An empty list displays **No diagnostics reported**.
 Superseding requests and request failures remove all previous result sections.
+
+## SVG plan renderer
+
+`SitePlan` is available independently of `MassingWorkspace`; the current application
+does not mount it yet. It needs no Query provider, API request, or application state:
+
+```tsx
+<SitePlan
+  siteGeometry={result.site_geometry}
+  buildableGeometry={result.buildable_geometry}
+  selectedBuildableGeometry={result.selected_buildable_geometry}
+  footprintGeometry={result.footprint_geometry}
+/>
+```
+
+Only `siteGeometry` is required. Geometry props reuse the existing response types;
+the complete buildable region accepts Polygon or MultiPolygon, while the site,
+selected component, and actual footprint accept Polygon, including interior holes.
+Pass the backend's actual `footprint_geometry`. Default-generation geometry is a
+separate capacity result and must never stand in for a missing selected building.
+
+The site establishes one bounding box for every layer. The pure `geometryBounds`,
+`createViewportTransform`, and `geometryPath` utilities fit that frame with uniform
+scale, centered spare space, padding, and upward-positive world y coordinates.
+Each ring becomes a closed subpath; even-odd fills preserve holes independently of
+winding. Source vertex order and numeric precision are retained without rounding,
+simplification, topology repair, component selection, area calculations, or
+construction of new domain geometry.
+
+The default logical viewport is 640 × 400 with 24 units of padding on every side.
+Optional `width`, `height`, and `padding` props control the logical fit; sizes must
+be finite and positive, and finite non-negative padding must leave a positive interior.
+The SVG scales responsively to its container using `xMidYMid meet`. Padding scales
+with the viewport; strokes retain their screen width. Fills, solid/dashed strokes,
+and a visible legend distinguish the four layers. An instance-specific SVG title
+and description identify displayed context and missing building geometry.
+
+Omitted, null, or empty optional layers draw no paths. Available site/setback context
+remains visible when the footprint is missing, with an explicit unavailable message.
+An empty or unprojectable site frame displays an unavailable message and no paths;
+it never fits an optional layer instead. These display guards do not validate
+topology or determine feasibility. Pan/zoom, editing, 3D, and workspace integration
+remain outside this component.
 
 ## Massing preview API
 
