@@ -49,6 +49,20 @@ boundary; no running backend is required. Test sources are type checked.
 Vite 6 and Vitest 4 share `vite.config.js`. Their minimum versions include
 development-tooling security fixes. Jest DOM stays on 6.9 to retain Node 20 support.
 
+## Configuration inputs
+
+`ConfigurationForm` uses React Hook Form with the Zod resolver. Its typed string
+draft is parsed by `src/configuration.ts`, reusing the API contracts for numeric
+bounds. The initial example is a 40 × 25 m rectangle, a 3 m setback, 3.5 m
+floor-to-floor height, and a six-floor cap. All other inputs start blank.
+
+The JSON editor accepts a Polygon object with closed two-dimensional coordinate
+rings, including holes. Client checks cover JSON/coordinate structure, numeric
+inputs, and the required height-or-floor cap. Topology, capacity, preference
+compatibility, and feasibility remain backend decisions. Blank optional numbers
+become `null`; zero setbacks and zero GFA targets are preserved. Inline errors are
+associated with their labeled inputs, and invalid submission focuses the first error.
+
 ## Massing preview API
 
 `previewMassing` posts a `MassingPreviewRequest` to `/api/v1/massing/preview`

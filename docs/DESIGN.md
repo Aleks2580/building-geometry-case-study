@@ -819,8 +819,12 @@ in the [frontend README](../frontend/README.md).
 
 [React Hook Form](https://react-hook-form.com/get-started) owns editable drafts,
 dirty state, errors, and submission; [Zod](https://zod.dev/) provides typed parsing
-and cross-field checks. Handwritten controlled forms duplicate these concerns;
-client validation still must match server rules. Interaction state starts locally or
+and cross-field checks. The typed configuration form reuses API numeric contracts,
+parses Polygon JSON with holes and closed rings, and starts with the rectangular
+example. Empty optional numbers become null, while zero setbacks and GFA targets
+remain valid. Client checks cover transport structure and the required height-or-floor
+cap; topology and preference compatibility use the backend's numerical rules.
+Handwritten controlled forms duplicate these concerns. Interaction state starts locally or
 in lifted state/context. Zustand is justified only when independent tree/comparison/
 viewer controls require shared subscriptions; forms/stores never mirror query results.
 
