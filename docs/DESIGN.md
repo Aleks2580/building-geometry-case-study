@@ -599,6 +599,23 @@ children of existing options, so parent links cannot form cycles. Complete subtr
 are intended for small decision histories; pagination and large/deep-tree handling
 remain deferred.
 
+The comparison application workflow reads exactly two distinct saved UUIDs through
+the existing repository, in the requested order. Roots, siblings, and nested branches
+use the same workflow; no common ancestor or matching site is required. It returns
+both complete snapshots and explicit side-by-side site/configuration inputs, metrics,
+feasibility fields, target assessments, and diagnostics. It neither invokes geometry
+generation nor inserts or modifies database records, and comparisons are not persisted.
+
+Each compared value retains `left`, `right`, and a `changed` flag based on exact stored
+equality. Numeric inputs and metrics also expose `difference = right - left`; if either
+value is null, the difference is null, including when both are missing. Integer floor
+counts retain integer precision. No rounding or geometric tolerance suppresses stored
+differences. Site geometry uses structural JSON equality, without a geometric polygon
+diff. Diagnostics compare complete ordered lists, including severity, message, path,
+and details; target assessments compare complete stored objects. Versions and all
+other result context remain available in the returned snapshots. This is a fixed
+domain contract rather than a recursive diff of arbitrary snapshot fields.
+
 ## API contract
 
 All routes use `/api/v1`; breaking changes require a new version, additive response
