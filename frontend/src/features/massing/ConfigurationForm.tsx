@@ -5,6 +5,7 @@ import type { FieldPath } from "react-hook-form";
 import {
   configurationSchema,
   initialConfigurationDraft,
+  siteInputSchema,
 } from "./configuration";
 import type { Configuration, ConfigurationDraft } from "./configuration";
 import shared from "./massing.module.css";
@@ -23,16 +24,36 @@ export default function ConfigurationForm({
   isGenerating = false,
   onDraftChange,
 }: ConfigurationFormProps) {
-  const { register, handleSubmit, getValues, control, getFieldState, formState } =
+  const { register, handleSubmit, getValues, setValue, clearErrors, control, getFieldState, formState } =
     useForm<ConfigurationDraft, unknown, Configuration>({
       resolver: zodResolver(configurationSchema),
       defaultValues: initialConfigurationDraft,
       mode: "onBlur",
     });
   const draft = useWatch({ control });
+  const siteKind = useWatch({ control, name: "site.kind" });
+  const customSiteError = getFieldState("site.json", formState).error;
   const draftChanged = submittedDraft !== undefined &&
     JSON.stringify(draft) !== JSON.stringify(submittedDraft);
   useEffect(() => onDraftChange?.(draftChanged), [draftChanged, onDraftChange]);
+
+  function selectSite(kind: ConfigurationDraft["site"]["kind"]) {
+    const current = getValues("site");
+    if (kind === current.kind) return;
+    let site: ConfigurationDraft["site"];
+    if (kind === "custom") {
+      const parsed = siteInputSchema.safeParse(current);
+      // Invalid dimensions have no Polygon to seed. Never restore a historical
+      // geometry behind the user's current input; the empty editor must be completed.
+      site = { kind, json: parsed.success ? JSON.stringify(parsed.data, null, 2) : "" };
+    } else if (kind === "rectangle") {
+      site = { ...initialConfigurationDraft.site };
+    } else {
+      site = { kind };
+    }
+    clearErrors("site");
+    setValue("site", site, { shouldDirty: true });
+  }
 
   function numericField(
     name: FieldPath<ConfigurationDraft>,
@@ -75,31 +96,69 @@ export default function ConfigurationForm({
       <div className={shared.panelHeading}>
         <p className={shared.eyebrow}>Configuration</p>
         <h2>Shape your massing</h2>
-        <p>Start with the example site, then adjust the rules and preferences.</p>
+        <p>Choose a site shape, then adjust the rules and preferences.</p>
       </div>
 
       <fieldset>
         <legend>Site geometry</legend>
         <div className={styles.field}>
+          <label htmlFor="site-shape">Site shape</label>
+          <select
+            id="site-shape"
+            aria-describedby="site-shape-hint"
+            {...register("site.kind")}
+            value={siteKind}
+            onChange={(event) => selectSite(event.target.value as ConfigurationDraft["site"]["kind"])}
+          >
+            <option value="rectangle">Rectangle</option>
+            <option value="l-shaped">L-shaped example</option>
+            <option value="notched">Notched example</option>
+            <option value="custom">Custom Polygon (advanced)</option>
+          </select>
+          <p className={styles.fieldHint} id="site-shape-hint">
+            Changing shape replaces the site draft. Other inputs stay as entered.
+            Returning to Rectangle starts at 40 × 25 m.
+          </p>
+        </div>
+        {siteKind === "rectangle" && (
+          <div className={`${styles.fieldGrid} ${styles.siteInputs}`}>
+            {numericField("site.width", "Width (m)", "Greater than zero. Local x direction.", true)}
+            {numericField("site.length", "Length (m)", "Greater than zero. Local y direction.", true)}
+          </div>
+        )}
+        {siteKind === "l-shaped" && (
+          <p className={styles.fieldHint}>
+            A concave L-shaped site demonstrates setbacks around an inward corner.
+            Choose Custom Polygon to edit its coordinates.
+          </p>
+        )}
+        {siteKind === "notched" && (
+          <p className={styles.fieldHint}>
+            A deep notch demonstrates how setbacks can split or collapse the buildable area.
+            Choose Custom Polygon to edit its coordinates.
+          </p>
+        )}
+        {siteKind === "custom" && <div className={`${styles.field} ${styles.siteInputs}`}>
           <label htmlFor="site">Site Polygon JSON</label>
           <textarea
             id="site"
             rows={12}
             spellCheck={false}
             aria-required="true"
-            aria-invalid={Boolean(formState.errors.site)}
-            aria-describedby={`site-hint${formState.errors.site ? " site-error" : ""}`}
-            {...register("site")}
+            aria-invalid={Boolean(customSiteError)}
+            aria-describedby={`site-hint${customSiteError ? " site-error" : ""}`}
+            {...register("site.json")}
           />
           <p className={styles.fieldHint} id="site-hint">
             Local coordinates in metres. Use a GeoJSON Polygon with closed [x, y] rings:
             the first ring is the boundary; subsequent rings are holes.
             Geometry validity is checked by the backend.
+            Start from a valid selected shape, or enter Polygon JSON here.
           </p>
-          {formState.errors.site && (
-            <p className={styles.fieldError} id="site-error" role="alert">{formState.errors.site.message}</p>
+          {customSiteError && (
+            <p className={styles.fieldError} id="site-error" role="alert">{customSiteError.message}</p>
           )}
-        </div>
+        </div>}
       </fieldset>
 
       <fieldset>

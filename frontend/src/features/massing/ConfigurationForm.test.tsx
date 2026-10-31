@@ -12,6 +12,10 @@ function change(name: string, value: string) {
   fireEvent.change(screen.getByRole("textbox", { name }), { target: { value } });
 }
 
+function selectShape(kind: "rectangle" | "l-shaped" | "notched" | "custom") {
+  fireEvent.change(screen.getByRole("combobox", { name: "Site shape" }), { target: { value: kind } });
+}
+
 function renderForm(submittedDraft?: ConfigurationDraft) {
   const onSubmit = vi.fn<(configuration: Configuration, draft: ConfigurationDraft) => void>();
   const onDraftChange = vi.fn<(changed: boolean) => void>();
@@ -26,8 +30,13 @@ describe("ConfigurationForm", () => {
     const { onSubmit } = renderForm();
 
     expect(screen.getByRole("form", { name: "Massing configuration" })).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "Site Polygon JSON" }))
-      .toHaveValue(initialConfigurationDraft.site);
+    expect(screen.getByRole("combobox", { name: "Site shape" })).toHaveValue("rectangle");
+    expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "Rectangle", "L-shaped example", "Notched example", "Custom Polygon (advanced)",
+    ]);
+    expect(screen.getByRole("textbox", { name: "Width (m)" })).toHaveValue("40");
+    expect(screen.getByRole("textbox", { name: "Length (m)" })).toHaveValue("25");
+    expect(screen.queryByRole("textbox", { name: "Site Polygon JSON" })).not.toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Setback (m)" })).toHaveValue("3");
     expect(screen.getByRole("textbox", { name: "Floor-to-floor height (m)" })).toHaveValue("3.5");
     expect(screen.getByRole("textbox", { name: "Maximum floor count (optional)" })).toHaveValue("6");
@@ -67,6 +76,161 @@ describe("ConfigurationForm", () => {
       preferences: { preferred_floor_count: null, preferred_footprint_area_m2: null },
       targets: { gfa_target_m2: null },
     }, initialConfigurationDraft);
+  });
+
+  it("submits decimal rectangle dimensions as the current closed Polygon", async () => {
+    const { onSubmit } = renderForm();
+    change("Width (m)", "42.75");
+    change("Length (m)", ".125");
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    submit();
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(onSubmit.mock.calls[0][0].site).toEqual({
+      type: "Polygon",
+      coordinates: [[[0, 0], [42.75, 0], [42.75, 0.125], [0, 0.125], [0, 0]]],
+    });
+    expect(onSubmit.mock.calls[0][1].site).toEqual({ kind: "rectangle", width: "42.75", length: ".125" });
+  });
+
+  it.each(["Width (m)", "Length (m)"])("labels %s as a required decimal input", (name) => {
+    renderForm();
+    const input = screen.getByRole("textbox", { name });
+
+    expect(input).toHaveAttribute("inputmode", "decimal");
+    expect(input).toHaveAttribute("aria-required", "true");
+    expect(input).toHaveAccessibleDescription(/Greater than zero/);
+  });
+
+  it.each([
+    ["Width (m)", ""], ["Width (m)", "0"], ["Width (m)", "-2"],
+    ["Width (m)", "word"], ["Width (m)", "Infinity"], ["Width (m)", "1e999"],
+    ["Length (m)", "  "], ["Length (m)", "0"], ["Length (m)", "-2"],
+    ["Length (m)", "word"], ["Length (m)", "NaN"], ["Length (m)", "1e999"],
+  ])("blocks submission with an accessible error for %s=%j", async (name, value) => {
+    const { onSubmit } = renderForm();
+    const input = screen.getByRole("textbox", { name });
+    change(name, value);
+    fireEvent.blur(input);
+
+    const error = await screen.findByRole("alert");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveAccessibleDescription(new RegExp(error.textContent ?? ""));
+    submit();
+
+    await waitFor(() => expect(input).toHaveFocus());
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("never resubmits a previous valid Polygon after a rectangle dimension becomes invalid", async () => {
+    const { onSubmit } = renderForm();
+    change("Width (m)", "42");
+    submit();
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    change("Width (m)", "");
+
+    submit();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Enter a number.");
+    expect(onSubmit).toHaveBeenCalledOnce();
+    expect(onSubmit.mock.calls[0][0].site.coordinates[0][1]).toEqual([42, 0]);
+    expect(onSubmit.mock.calls[0][1].site).toEqual({ kind: "rectangle", width: "42", length: "25" });
+  });
+
+  it.each([
+    ["l-shaped", [[0, 0], [40, 0], [40, 15], [20, 15], [20, 30], [0, 30], [0, 0]]],
+    ["notched", [[0, 0], [50, 0], [50, 20], [30, 20], [30, 6], [20, 6], [20, 20], [0, 20], [0, 0]]],
+  ] as const)("submits the exact closed %s example only after an explicit action", async (kind, ring) => {
+    const { onSubmit } = renderForm();
+    selectShape(kind);
+
+    expect(screen.getByRole("combobox", { name: "Site shape" })).toHaveValue(kind);
+    expect(screen.queryByRole("textbox", { name: "Width (m)" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Site Polygon JSON" })).not.toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+    submit();
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(onSubmit.mock.calls[0][0].site).toEqual({ type: "Polygon", coordinates: [ring] });
+    expect(onSubmit.mock.calls[0][1].site).toEqual({ kind });
+  });
+
+  it("seeds Custom from the active rectangle and deliberately replaces it when selecting another shape", async () => {
+    const { onSubmit } = renderForm();
+    change("Width (m)", "12.5");
+    change("Length (m)", "8.25");
+    selectShape("custom");
+    const rectangle = {
+      type: "Polygon",
+      coordinates: [[[0, 0], [12.5, 0], [12.5, 8.25], [0, 8.25], [0, 0]]],
+    };
+    expect(JSON.parse(String((screen.getByRole("textbox", { name: "Site Polygon JSON" }) as HTMLTextAreaElement).value)))
+      .toEqual(rectangle);
+    change("Site Polygon JSON", "{");
+    submit();
+    await screen.findByRole("alert");
+
+    selectShape("notched");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    selectShape("custom");
+    const custom = screen.getByRole("textbox", { name: "Site Polygon JSON" }) as HTMLTextAreaElement;
+    expect(JSON.parse(custom.value)).toEqual({
+      type: "Polygon",
+      coordinates: [[[0, 0], [50, 0], [50, 20], [30, 20], [30, 6], [20, 6], [20, 20], [0, 20], [0, 0]]],
+    });
+    selectShape("rectangle");
+
+    expect(screen.getByRole("textbox", { name: "Width (m)" })).toHaveValue("40");
+    expect(screen.getByRole("textbox", { name: "Length (m)" })).toHaveValue("25");
+    expect(onSubmit).not.toHaveBeenCalled();
+    submit();
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(onSubmit.mock.calls[0][1].site).toEqual(initialConfigurationDraft.site);
+  });
+
+  it("starts Custom empty after invalid rectangle dimensions instead of restoring an older Polygon", async () => {
+    const { onSubmit } = renderForm();
+    change("Width (m)", "35");
+    change("Length (m)", "invalid");
+
+    selectShape("custom");
+
+    expect(screen.getByRole("textbox", { name: "Site Polygon JSON" })).toHaveValue("");
+    submit();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Enter valid Polygon JSON.");
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("keeps unrelated fields and errors when site types change, then submits only API configuration", async () => {
+    const { onSubmit } = renderForm();
+    change("Setback (m)", "");
+    change("Preferred floor count (optional)", "2");
+    change("Preferred footprint (m²) (optional)", "100");
+    change("GFA target (m²) (optional)", "500");
+    change("Width (m)", "");
+    submit();
+    await waitFor(() => expect(screen.getAllByRole("alert")).toHaveLength(2));
+
+    selectShape("l-shaped");
+
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(screen.getByRole("textbox", { name: "Setback (m)" })).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByRole("textbox", { name: "Preferred floor count (optional)" })).toHaveValue("2");
+    expect(screen.getByRole("textbox", { name: "Preferred footprint (m²) (optional)" })).toHaveValue("100");
+    expect(screen.getByRole("textbox", { name: "GFA target (m²) (optional)" })).toHaveValue("500");
+    selectShape("custom");
+    selectShape("notched");
+    change("Setback (m)", "1.5");
+    submit();
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    const configuration = onSubmit.mock.calls[0][0];
+    expect(Object.keys(configuration)).toEqual(["site", "hard_constraints", "preferences", "targets"]);
+    expect(Object.keys(configuration.site)).toEqual(["type", "coordinates"]);
+    expect(configuration.hard_constraints).toMatchObject({ setback_m: 1.5, max_floors: 6 });
+    expect(configuration.preferences).toEqual({ preferred_floor_count: 2, preferred_footprint_area_m2: 100 });
+    expect(configuration.targets).toEqual({ gfa_target_m2: 500 });
   });
 
   it("keeps the submitted draft stable while editing continues", async () => {
@@ -177,6 +341,7 @@ describe("ConfigurationForm", () => {
     [JSON.stringify({ type: "Polygon", coordinates: [[[0, 0], [10, 0], [10, 10], [0, 10]]] }), "Close ring 1"],
   ])("shows an accessible site error for malformed geometry %s", async (site, message) => {
     const { onSubmit } = renderForm();
+    selectShape("custom");
     change("Site Polygon JSON", site);
 
     submit();
@@ -190,6 +355,7 @@ describe("ConfigurationForm", () => {
 
   it("submits an edited Polygon with a hole without dropping interior coordinates", async () => {
     const { onSubmit } = renderForm();
+    selectShape("custom");
     const site = {
       type: "Polygon",
       coordinates: [
@@ -203,7 +369,7 @@ describe("ConfigurationForm", () => {
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
     expect(onSubmit.mock.calls[0][0].site).toEqual(site);
-    expect(onSubmit.mock.calls[0][1].site).toBe(JSON.stringify(site));
+    expect(onSubmit.mock.calls[0][1].site).toEqual({ kind: "custom", json: JSON.stringify(site) });
   });
 
   it("reports changes since the submitted draft and clears them when edits are reverted", () => {

@@ -12,8 +12,9 @@
 > implemented, together with read-only saved-option comparison. The frontend provides
 > a typed editable configuration workspace and explicit backend preview with detailed
 > metrics, preference/target assessments, feasibility, diagnostics, and an integrated
-> SVG site plan. Saved-option workflows, alternatives, and 3D visualization remain
-> planned in the frontend.
+> SVG site plan. Site input supports rectangle dimensions, the supplied concave and
+> notched examples, and advanced Polygon JSON with holes. Saved-option workflows,
+> alternatives, and 3D visualization remain planned in the frontend.
 
 ## Problem interpretation
 
@@ -859,11 +860,18 @@ in the [frontend README](../frontend/README.md).
 
 [React Hook Form](https://react-hook-form.com/get-started) owns editable drafts,
 dirty state, errors, and submission; [Zod](https://zod.dev/) provides typed parsing
-and cross-field checks. The typed configuration form reuses API numeric contracts,
-parses Polygon JSON with holes and closed rings, and starts with the rectangular
-example. Empty optional numbers become null, while zero setbacks and GFA targets
-remain valid. Client checks cover transport structure and the required height-or-floor
-cap; topology and preference compatibility use the backend's numerical rules.
+and cross-field checks. A single active site draft contains either rectangle
+dimensions, a supplied example selection, or advanced Polygon JSON with holes.
+Zod constructs the existing `site` request Polygon and excludes UI-only fields;
+invalid dimensions cannot leave a previous valid Polygon available for submission.
+Preset changes intentionally replace the site while retaining other configuration
+fields, and Custom starts from the current valid Polygon. These input helpers do
+not compute setbacks, massing, or feasibility. The
+[configuration input reference](../frontend/README.md#configuration-inputs) describes
+switching and validation behavior. Empty optional numbers become null, while zero
+setbacks and GFA targets remain valid. Client checks cover transport structure and
+the required height-or-floor cap; topology and preference compatibility use the
+backend's numerical rules.
 Handwritten controlled forms duplicate these concerns. Interaction state starts locally or
 in lifted state/context. Zustand is justified only when independent tree/comparison/
 viewer controls require shared subscriptions; forms/stores never mirror query results.

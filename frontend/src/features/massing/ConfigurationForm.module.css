@@ -36,6 +36,7 @@
 }
 
 .field input,
+.field select,
 .field textarea {
   width: 100%;
   border: 1px solid #a9bbb5;
@@ -43,6 +44,14 @@
   padding: 0.65rem 0.75rem;
   color: var(--color-text);
   background: #fcfdfc;
+}
+
+.siteInputs {
+  margin-top: 1.1rem;
+}
+
+.field select {
+  font: inherit;
 }
 
 .field textarea {

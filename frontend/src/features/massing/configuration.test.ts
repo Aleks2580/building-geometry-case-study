@@ -181,7 +181,7 @@ describe("configurationSchema", () => {
         [[5, 5], [5, 10], [10, 10], [10, 5], [5, 5]],
       ],
     };
-    value.site = JSON.stringify(site);
+    value.site = { kind: "custom", json: JSON.stringify(site) };
 
     expect(configurationSchema.parse(value).site).toEqual(site);
   });
@@ -201,9 +201,9 @@ describe("configurationSchema", () => {
     JSON.stringify({ type: "Polygon", coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]], extra: true }),
   ])("rejects malformed Polygon input %s", (site) => {
     const value = draft();
-    value.site = site;
+    value.site = { kind: "custom", json: site };
 
-    expect(issuePaths(value)).toContain("site");
+    expect(issuePaths(value)).toContain("site.json");
   });
 
   it.each([0, 1])("requires exterior and interior ring %i to be closed", (ringIndex) => {
@@ -213,18 +213,53 @@ describe("configurationSchema", () => {
       [[5, 5], [5, 10], [10, 10], [10, 5], [5, 5]],
     ];
     coordinates[ringIndex].pop();
-    value.site = JSON.stringify({ type: "Polygon", coordinates });
+    value.site = { kind: "custom", json: JSON.stringify({ type: "Polygon", coordinates }) };
 
-    expect(issuePaths(value)).toContain("site");
+    expect(issuePaths(value)).toContain("site.json");
   });
 
   it("leaves self-intersection and polygon topology validation to the backend", () => {
     const value = draft();
-    value.site = JSON.stringify({
+    value.site = { kind: "custom", json: JSON.stringify({
       type: "Polygon",
       coordinates: [[[0, 0], [10, 10], [0, 10], [10, 0], [0, 0]]],
-    });
+    }) };
 
     expect(configurationSchema.safeParse(value).success).toBe(true);
+  });
+
+  it("creates decimal rectangle coordinates and emits only the API configuration", () => {
+    const value = draft();
+    value.site = { kind: "rectangle", width: " 40.5 ", length: ".25" };
+
+    const result = configurationSchema.parse(value);
+
+    expect(result.site).toEqual({
+      type: "Polygon",
+      coordinates: [[[0, 0], [40.5, 0], [40.5, 0.25], [0, 0.25], [0, 0]]],
+    });
+    expect(Object.keys(result)).toEqual(["site", "hard_constraints", "preferences", "targets"]);
+    expect(Object.keys(result.site)).toEqual(["type", "coordinates"]);
+  });
+
+  it.each(["width", "length"] as const)("validates the active rectangle %s", (field) => {
+    for (const input of ["", " ", "0", "-1", "word", "NaN", "Infinity", "1e999", "0x10", "1,5", "1e-999"]) {
+      const value = draft();
+      value.site = { kind: "rectangle", width: "40", length: "25", [field]: input };
+
+      expect(issuePaths(value), input).toContain(`site.${field}`);
+    }
+  });
+
+  it.each(["l-shaped", "notched"] as const)("parses the %s selection to a closed Polygon", (kind) => {
+    const value = draft();
+    value.site = { kind };
+
+    const result = configurationSchema.parse(value);
+    const ring = result.site.coordinates[0];
+
+    expect(result.site.type).toBe("Polygon");
+    expect(ring[ring.length - 1]).toEqual(ring[0]);
+    expect(result.site).not.toHaveProperty("kind");
   });
 });

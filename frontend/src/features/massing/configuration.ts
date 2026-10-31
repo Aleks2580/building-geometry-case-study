@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { massingPreviewRequestSchema } from "../../api/contracts";
+import { createRectangleSite, exampleSite } from "./siteGeometry";
 
 const decimalNumber = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 
@@ -55,6 +56,25 @@ const siteDraft = z.string().transform((value, context) => {
   return parsed.data;
 });
 
+// Only the active input is stored. Deriving the Polygon at validation prevents
+// invalid dimensions from leaving an older generated site available for submission.
+export const siteInputSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("rectangle"),
+    width: requiredNumberDraft.pipe(z.number().positive("Enter a dimension greater than zero.")),
+    length: requiredNumberDraft.pipe(z.number().positive("Enter a dimension greater than zero.")),
+  }),
+  z.object({ kind: z.literal("l-shaped") }),
+  z.object({ kind: z.literal("notched") }),
+  z.object({ kind: z.literal("custom"), json: siteDraft }),
+]).transform((input) => {
+  switch (input.kind) {
+    case "rectangle": return createRectangleSite(input.width, input.length);
+    case "custom": return input.json;
+    default: return exampleSite(input.kind);
+  }
+});
+
 const hardFields = massingPreviewRequestSchema.shape.hard_constraints.shape;
 const preferenceFields = massingPreviewRequestSchema.shape.preferences.unwrap().shape;
 const targetFields = massingPreviewRequestSchema.shape.targets.unwrap().shape;
@@ -62,7 +82,7 @@ const targetFields = massingPreviewRequestSchema.shape.targets.unwrap().shape;
 // Validate transport structure here; topology and capacity use the backend's
 // geometry engine and numerical policy, so drafts must not repair or approximate them.
 export const configurationSchema = z.object({
-  site: siteDraft,
+  site: siteInputSchema,
   hard_constraints: z.object({
     setback_m: requiredNumberDraft.pipe(hardFields.setback_m),
     floor_to_floor_m: requiredNumberDraft.pipe(hardFields.floor_to_floor_m),
@@ -87,10 +107,7 @@ export type ConfigurationDraft = z.input<typeof configurationSchema>;
 export type Configuration = z.output<typeof configurationSchema>;
 
 export const initialConfigurationDraft: ConfigurationDraft = {
-  site: JSON.stringify({
-    type: "Polygon",
-    coordinates: [[[0, 0], [40, 0], [40, 25], [0, 25], [0, 0]]],
-  }, null, 2),
+  site: { kind: "rectangle", width: "40", length: "25" },
   hard_constraints: {
     setback_m: "3",
     floor_to_floor_m: "3.5",
