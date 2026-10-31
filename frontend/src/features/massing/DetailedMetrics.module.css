@@ -1,0 +1,27 @@
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 0;
+}
+
+.metrics > div {
+  border-top: 1px solid #dfe7e3;
+  padding-top: 0.8rem;
+}
+
+.metrics dt {
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+}
+
+.metrics dd {
+  margin: 0.2rem 0 0;
+  font-weight: 650;
+  font-size: 1.3rem;
+  overflow-wrap: anywhere;
+}
+
+.metrics + dl {
+  margin-top: 1rem;
+}

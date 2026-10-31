@@ -1,6 +1,8 @@
 import { useId } from "react";
 import type { MassingPreviewResponse } from "../../api/contracts";
 import { formatCount, formatMetric, formatRatio } from "./metricFormatting";
+import shared from "./massing.module.css";
+import styles from "./DetailedMetrics.module.css";
 
 export default function DetailedMetrics({ result }: { result: MassingPreviewResponse }) {
   const id = useId();
@@ -44,21 +46,21 @@ export default function DetailedMetrics({ result }: { result: MassingPreviewResp
 
   return (
     <>
-      <section className="result-section" aria-labelledby={`${id}-actual`}>
+      <section className={shared.resultSection} aria-labelledby={`${id}-actual`}>
         <h3 id={`${id}-actual`}>Actual massing</h3>
-        <dl className="metrics">
+        <dl className={styles.metrics}>
           {actual.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
         </dl>
-        <dl className="metric-details">
+        <dl className={shared.metricDetails}>
           <div><dt>Site coverage ratio</dt><dd>{formatRatio(metrics.site_coverage_ratio)}</dd></div>
           <div><dt>Floor-to-floor height</dt><dd>{formatMetric(metrics.floor_to_floor_m, "m")}</dd></div>
         </dl>
       </section>
       {groups.map(({ name, description, rows }, index) => (
-        <section className="result-section" aria-labelledby={`${id}-${index}`} key={name}>
+        <section className={shared.resultSection} aria-labelledby={`${id}-${index}`} key={name}>
           <h3 id={`${id}-${index}`}>{name}</h3>
-          {description && <p className="result-hint">{description}</p>}
-          <dl className="metric-details">
+          {description && <p>{description}</p>}
+          <dl className={shared.metricDetails}>
             {rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
           </dl>
         </section>

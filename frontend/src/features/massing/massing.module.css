@@ -1,0 +1,75 @@
+.panel {
+  border: 1px solid #d4dfdb;
+  border-radius: 14px;
+  background: var(--color-surface);
+  padding: 1.75rem;
+  box-shadow: 0 4px 18px #17342b05;
+}
+
+.panelHeading {
+  margin-bottom: 1.75rem;
+}
+
+.panelHeading > p:last-child {
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
+}
+
+.eyebrow {
+  color: var(--color-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+  font-weight: 700;
+  margin-bottom: 0.65rem;
+}
+
+.resultSection {
+  margin-top: 1.5rem;
+  min-width: 0;
+}
+
+.resultSection h3 {
+  margin-bottom: 0.7rem;
+}
+
+.resultSection h4 {
+  font-size: 0.9rem;
+  margin: 1.25rem 0 0.6rem;
+}
+
+.resultSection p {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.metricDetails {
+  margin: 0;
+}
+
+.metricDetails > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.75rem;
+  border-top: 1px solid var(--color-border);
+  padding: 0.55rem 0;
+}
+
+.metricDetails dt {
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+}
+
+.metricDetails dd {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 520px) {
+  .panel {
+    padding: 1.1rem;
+  }
+}

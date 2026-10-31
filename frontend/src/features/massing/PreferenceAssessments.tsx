@@ -1,6 +1,7 @@
 import { useId } from "react";
 import type { FootprintAreaPreferenceResult, GfaTargetAssessment, MassingPreviewResponse } from "../../api/contracts";
 import { formatCount, formatMetric } from "./metricFormatting";
+import shared from "./massing.module.css";
 
 const footprintStatus: Record<FootprintAreaPreferenceResult["status"], string> = {
   met: "Met",
@@ -26,19 +27,19 @@ export default function PreferenceAssessments({ result }: { result: MassingPrevi
   const target = result.feasibility.target_assessment;
 
   return (
-    <section className="result-section" aria-labelledby={`${id}-assessments`}>
+    <section className={shared.resultSection} aria-labelledby={`${id}-assessments`}>
       <h3 id={`${id}-assessments`}>Preferences and target</h3>
-      <dl className="metric-details">
+      <dl className={shared.metricDetails}>
         <div><dt>Preferred floor count</dt><dd>{floorCount === null ? "Not requested" : formatCount(floorCount)}</dd></div>
       </dl>
       <section aria-labelledby={`${id}-footprint`}>
         <h4 id={`${id}-footprint`}>Footprint preference</h4>
-        {requestedFootprint === null ? <p className="result-hint">Not requested</p> : (
+        {requestedFootprint === null ? <p>Not requested</p> : (
           <>
-            <p className="result-hint">{footprint === null
+            <p>{footprint === null
               ? "No footprint assessment was returned for the requested area."
               : "The effective target applies the hard area cap. The signed difference compares actual area with the requested area."}</p>
-            <dl className="metric-details">
+            <dl className={shared.metricDetails}>
               <div><dt>Footprint assessment</dt><dd>{footprint === null ? "Not available" : footprintStatus[footprint.status]}</dd></div>
               <div><dt>Requested footprint area</dt><dd>{formatMetric(requestedFootprint, "m²")}</dd></div>
               <div><dt>Effective footprint target</dt><dd>{formatMetric(footprint?.effective_target_m2 ?? null, "m²")}</dd></div>
@@ -51,7 +52,7 @@ export default function PreferenceAssessments({ result }: { result: MassingPrevi
       </section>
       <section aria-labelledby={`${id}-target`}>
         <h4 id={`${id}-target`}>GFA target</h4>
-        <dl className="metric-details">
+        <dl className={shared.metricDetails}>
           <div><dt>GFA target assessment</dt><dd>{targetStatus[target.status]}</dd></div>
           <div><dt>Requested GFA target</dt><dd>{target.requested_m2 === null ? "Not requested" : formatMetric(target.requested_m2, "m²")}</dd></div>
           <div><dt>Actual GFA for target</dt><dd>{formatMetric(target.actual_m2, "m²")}</dd></div>

@@ -3,6 +3,7 @@ import { getHealth } from "./api/api";
 import type { HealthResponse } from "./api/api";
 import MassingWorkspace from "./features/massing/MassingWorkspace";
 import "./styles.css";
+import styles from "./App.module.css";
 
 export default function App() {
   const { data, error, isPending, isError } = useQuery<HealthResponse, unknown>({
@@ -16,14 +17,14 @@ export default function App() {
     : isError ? `unreachable (${message})` : data.status;
 
   return (
-    <main>
-      <header className="page-header">
+    <main className={styles.page}>
+      <header className={styles.pageHeader}>
         <div>
-          <p className="eyebrow">Building Geometry Case Study</p>
+          <p className={styles.eyebrow}>Building Geometry Case Study</p>
           <h1>Explore a building massing</h1>
           <p>Configure a site and its rules, then generate a backend-calculated preview.</p>
         </div>
-        <p className="health">Backend health: <strong>{health}</strong></p>
+        <p className={styles.health}>Backend health: <strong>{health}</strong></p>
       </header>
       <MassingWorkspace />
     </main>
