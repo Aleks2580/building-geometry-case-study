@@ -1,4 +1,6 @@
 .section {
+  /* Hidden labels must not extend the document beyond the workspace scroller. */
+  position: relative;
   min-width: 0;
 }
 

@@ -103,7 +103,10 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
 });
 
-afterEach(() => client.clear());
+afterEach(() => {
+  client.clear();
+  vi.restoreAllMocks();
+});
 
 describe("MassingWorkspace saved snapshots", () => {
   it.each(["root", "child"] as const)("inspects stored dimensions for a restored %s without recomputation or snapshot changes", async (kind) => {
@@ -140,6 +143,7 @@ describe("MassingWorkspace saved snapshots", () => {
   });
 
   it("opens a complete root snapshot without computation and preserves stored geometry, inputs and result", async () => {
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
     const result = backendPreviewResponse("holed");
     const saved = optionResponse(result, { name: "Persisted courtyard" });
     const original = structuredClone(saved);
@@ -175,7 +179,8 @@ describe("MassingWorkspace saved snapshots", () => {
     expect(plan.querySelector('[data-layer="footprint"]')).toBeInTheDocument();
     expect(client.getQueryData(optionKeys.detail(saved.id))).toEqual(saved);
     await waitFor(() => expect(heading).toHaveFocus());
-    expect(scrollIntoView).toHaveBeenCalled();
+    expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
+    expect(scrollIntoView).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
       `http://localhost:8000/api/v1/options/${saved.id}`, expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );

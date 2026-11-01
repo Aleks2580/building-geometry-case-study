@@ -527,8 +527,8 @@ assessments, and diagnostics. The same result components present saved values an
 with a clear saved-snapshot label. Null configuration fields display **Not set**;
 null result metrics display **Not available**, and zero values remain zero. Opening
 sends no POST request, recalculates no massing, and writes nothing. Successful
-navigation moves focus to the workspace heading and brings it into view when that
-section is visible.
+navigation focuses the saved heading when that section is visible, without
+scrolling past the top of the new workspace.
 
 Saved metadata is available under **Snapshot details**, with the saved configuration
 alongside the same result dashboard. The site JSON remains available in a disclosure.
@@ -773,12 +773,10 @@ outside this component. Responsive canvas sizing uses React Three Fiber's contai
 measurement, demand rendering avoids an idle animation loop, and pixel ratio is
 capped at 1.5.
 
-An actual building has one ground-to-roof height marker that stays beside it while
-orbiting, with a fixed-size screen label. The adjacent **Building dimensions**
-readout provides accessible backend height, floor count, and floor spacing, including
-when WebGL falls back to SVG. The decorative marker does not intercept pointer
-input. Missing buildings have no height marker or building-dimension readout.
-Reset to fit restores the full marker after a close zoom.
+The adjacent **Building dimensions** readout provides accessible backend height,
+floor count, and floor spacing, including when WebGL falls back to SVG. Missing
+buildings have no building-dimension readout. The scene displays the massing without
+an in-canvas height annotation.
 
 Display guards check finite closed rings, distinct positions, triangulation,
 consistent repeated-floor geometry and height fields, and representability in

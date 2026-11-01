@@ -42,10 +42,9 @@ describe("Massing3D presentation", () => {
     expect(dimensions).toHaveTextContent("6 floors · 3.5 m per floor");
     expect(screen.getByRole("list", { name: "3D massing layers" })).toHaveTextContent("Actual building and footprint");
     expect(mocks.scene.mock.lastCall?.[0].scene.building.floorCount).toBe(6);
-    expect(mocks.scene.mock.lastCall?.[0].heightLabel).toBe("21 m");
   });
 
-  it("updates the readout and height marker from the current backend result without mutating either snapshot", () => {
+  it("updates the height readout from the current backend result without mutating either snapshot", () => {
     const first = previewResponse();
     const second = previewResponse();
     second.hard_constraints.floor_to_floor_m = 4.25;
@@ -61,7 +60,6 @@ describe("Massing3D presentation", () => {
     expect(dimensions).toHaveTextContent("3 floors · 4.25 m per floor");
     expect(dimensions).not.toHaveTextContent("21 m");
     const current = mocks.scene.mock.lastCall?.[0];
-    expect(current.heightLabel).toBe("12.75 m");
     expect(current.scene.building.totalHeight / current.scene.frame.scale).toBeCloseTo(second.metrics.height_m!);
     expect([first, second]).toEqual(originals);
   });
@@ -88,7 +86,6 @@ describe("Massing3D presentation", () => {
     expect(result.generated_footprint_geometry).not.toBeNull();
     render(<Massing3D result={result} />);
     expect(mocks.scene.mock.lastCall?.[0].scene.building).toBeNull();
-    expect(mocks.scene.mock.lastCall?.[0].heightLabel).toBeUndefined();
     expect(screen.queryByRole("group", { name: "Building dimensions" })).not.toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("No actual building footprint is available");
     expect(screen.getByRole("list")).not.toHaveTextContent("Actual building and footprint");
@@ -98,7 +95,6 @@ describe("Massing3D presentation", () => {
     const { rerender } = render(<Massing3D result={previewResponse()} />);
     rerender(<Massing3D result={backendPreviewResponse("preferred_failed")} />);
     expect(mocks.scene.mock.lastCall?.[0].scene.building).toBeNull();
-    expect(mocks.scene.mock.lastCall?.[0].heightLabel).toBeUndefined();
     expect(screen.queryByRole("group", { name: "Building dimensions" })).not.toBeInTheDocument();
     expect(screen.queryByText(/6 floors/)).not.toBeInTheDocument();
   });

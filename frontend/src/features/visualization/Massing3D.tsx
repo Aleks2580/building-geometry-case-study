@@ -63,7 +63,7 @@ export default function Massing3D({ result }: { result: MassingPreviewResponse }
         <Canvas gl={createRenderer} frameloop="demand" dpr={[1, 1.5]} camera={{ fov: 45 }}
           role="img" aria-label="Interactive 3D massing canvas" aria-describedby={`${id}-instructions${scene.building ? ` ${id}-dimensions` : ""}`}>
           <StrictMode>
-            <Massing3DScene scene={scene} heightLabel={heightLabel} reset={reset} onContextLost={onContextLost} />
+            <Massing3DScene scene={scene} reset={reset} onContextLost={onContextLost} />
           </StrictMode>
         </Canvas>
       </div>

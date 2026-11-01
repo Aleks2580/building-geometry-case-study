@@ -42,7 +42,7 @@ export default function ConfigurationForm({
   inheritedSite,
   focusOnMount = false,
 }: ConfigurationFormProps) {
-  const { register, handleSubmit, getValues, setValue, setFocus, clearErrors, control, getFieldState, formState } =
+  const { register, handleSubmit, getValues, setValue, clearErrors, control, getFieldState, formState } =
     useForm<ConfigurationDraft, unknown, Configuration>({
       resolver: zodResolver(configurationSchema),
       defaultValues: inheritedSite === undefined
@@ -53,6 +53,7 @@ export default function ConfigurationForm({
         },
       mode: "onBlur",
     });
+  const form = useRef<HTMLFormElement>(null);
   const preferencesDetails = useRef<HTMLDetailsElement>(null);
   const targetDetails = useRef<HTMLDetailsElement>(null);
   const [initialPreferencesOpen] = useState(Boolean(initialDraft?.preferences.preferred_floor_count || initialDraft?.preferences.preferred_footprint_area_m2));
@@ -66,8 +67,13 @@ export default function ConfigurationForm({
   useEffect(() => onDraftChange?.(draftChanged), [draftChanged, onDraftChange]);
   useEffect(() => onDirtyChange?.(formState.isDirty), [formState.isDirty, onDirtyChange]);
   useEffect(() => {
-    if (focusOnMount) setFocus("hard_constraints.setback_m");
-  }, [focusOnMount, setFocus]);
+    const input = form.current?.elements.namedItem("hard_constraints.setback_m");
+    // Entry focus announces the draft without skipping its site/context. RHF
+    // still scrolls normally when focusing an invalid field after submission.
+    if (focusOnMount && input instanceof HTMLElement && !input.closest("[hidden]")) {
+      input.focus({ preventScroll: true });
+    }
+  }, [focusOnMount]);
 
   function selectSite(kind: ConfigurationDraft["site"]["kind"]) {
     const current = getValues("site");
@@ -116,6 +122,7 @@ export default function ConfigurationForm({
 
   return (
     <form
+      ref={form}
       id={id}
       className={`${shared.panel} ${styles.form}`}
       aria-label="Massing configuration"

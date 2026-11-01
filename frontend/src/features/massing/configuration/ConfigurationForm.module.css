@@ -1,4 +1,6 @@
 .form {
+  /* Keep absolute accessibility text inside the workspace's scroll boundary. */
+  position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;

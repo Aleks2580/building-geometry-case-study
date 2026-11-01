@@ -204,7 +204,7 @@ def test_floor_preference_above_capacity_is_rejected_before_area_construction(
         (box(0, 0, 10, 10), 5, FloorLimits(3.5, max_height_m=3.49), "EMPTY_BUILDABLE_REGION"),
     ],
 )
-def test_hard_infeasibility_precedes_preferences(
+def test_hard_infeasibility_precedes_floor_preference_capacity_validation(
     monkeypatch: pytest.MonkeyPatch,
     site: Polygon,
     setback_m: float,
@@ -216,7 +216,7 @@ def test_hard_infeasibility_precedes_preferences(
 
     monkeypatch.setattr(configurable, "generate_preferred_footprint", fail_if_called)
     result = _generate(
-        DesignPreferences(preferred_floor_count=1, preferred_footprint_area_m2=100),
+        DesignPreferences(preferred_floor_count=100, preferred_footprint_area_m2=100),
         site=site,
         setback_m=setback_m,
         floor_limits=floor_limits,

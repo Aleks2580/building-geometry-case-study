@@ -90,20 +90,6 @@
   font-weight: 650;
 }
 
-.heightLabel {
-  display: block;
-  white-space: nowrap;
-  padding: 0.25rem 0.4rem;
-  border: 1px solid #b7c7bf;
-  border-radius: 0.3rem;
-  background: #ffffffed;
-  color: #234b40;
-  font-size: 13px;
-  font-weight: 650;
-  font-variant-numeric: tabular-nums;
-  pointer-events: none;
-}
-
 .fallback > p { margin-bottom: 0.5rem; }
 .fallback > button { margin-bottom: 0.75rem; }
 
