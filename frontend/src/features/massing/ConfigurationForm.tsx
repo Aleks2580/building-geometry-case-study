@@ -18,6 +18,7 @@ interface ConfigurationFormProps {
   submittedDraft?: ConfigurationDraft;
   isGenerating?: boolean;
   onDraftChange?: (changed: boolean) => void;
+  onDirtyChange?: (dirty: boolean) => void;
   initialDraft?: ConfigurationDraft;
   inheritedSite?: PolygonGeometry;
   focusOnMount?: boolean;
@@ -28,6 +29,7 @@ export default function ConfigurationForm({
   submittedDraft,
   isGenerating = false,
   onDraftChange,
+  onDirtyChange,
   initialDraft,
   inheritedSite,
   focusOnMount = false,
@@ -50,6 +52,7 @@ export default function ConfigurationForm({
   const draftChanged = submittedDraft !== undefined &&
     JSON.stringify(draft) !== JSON.stringify(submittedDraft);
   useEffect(() => onDraftChange?.(draftChanged), [draftChanged, onDraftChange]);
+  useEffect(() => onDirtyChange?.(formState.isDirty), [formState.isDirty, onDirtyChange]);
   useEffect(() => {
     if (focusOnMount) setFocus("hard_constraints.setback_m");
   }, [focusOnMount, setFocus]);

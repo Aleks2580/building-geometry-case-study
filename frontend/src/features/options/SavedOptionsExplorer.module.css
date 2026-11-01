@@ -68,6 +68,15 @@
   gap: 1.25rem;
 }
 
+.selectedOption {
+  min-width: 0;
+}
+
+.openButton {
+  margin-top: 1rem;
+  max-width: 100%;
+}
+
 .rootList {
   list-style: none;
   padding: 0;

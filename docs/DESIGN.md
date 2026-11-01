@@ -16,10 +16,11 @@
 > notched examples, advanced Polygon JSON with holes, and an immediate draft outline.
 > Successful previews can be explicitly saved as immutable roots or children of a
 > selected saved option, with optional names and returned snapshot receipts.
-> A read-only Saved Options explorer discovers persisted roots, browses nested
-> branches, and displays selected node summaries. Full snapshot restoration into
-> the workspace, comparison, alternatives, and 3D visualization remain planned in
-> the frontend.
+> A Saved Options explorer discovers persisted roots, browses nested branches,
+> and opens complete immutable snapshots in the workspace. Saved configuration and
+> results remain distinct from editable roots and branch drafts; an opened root or
+> child can supply the parent for a new branch after reload. Comparison,
+> alternatives, and 3D visualization remain planned in the frontend.
 
 ## Problem interpretation
 
@@ -800,9 +801,9 @@ as root or child options, including diagnostic snapshots.
 The complete exploration workflow combines a configuration form, plan/massing
 views, metrics and diagnostics, and option-tree navigation with comparison. A user
 previews a configuration, saves it, changes floor or footprint preferences in a
-draft, previews the change, and saves a child option. The remaining restoration and
-comparison work will let saved alternatives supply both views, keeping unsaved
-previews separate from saved history.
+draft, previews the change, and saves a child option. Saved options can be reopened
+after reload without recomputation, keeping unsaved previews separate from saved
+history. Comparison and the 3D view remain subsequent slices.
 
 The implemented workspace provides the form, a live draft site outline, and a
 generated SVG site plan with detailed backend metrics. The compact outline updates
@@ -838,17 +839,25 @@ another snapshot. Transport failures can leave persistence uncertain; no save re
 or reconnect replay occur. The [save workflow](../frontend/README.md#save-root-option)
 documents naming, error recovery, and reload behavior.
 
-Branch editing selects an immutable snapshot from a successful save receipt and
-initializes the form from its stored configuration. The inherited site is read-only.
+Branch editing selects an immutable snapshot from a successful save receipt or an
+opened saved option and initializes the form from its stored configuration. The
+inherited site is read-only.
 Parent selection belongs to a separate session from preview attempts, so repeated
 previews retain the same parent while stale responses cannot affect a newly selected
 parent. Choosing a parent clears the preview and requires explicit generation before
 saving a child. Saving retains that parent for siblings; branching from the returned
 child requires an explicit selection. The
 [branch workflow](../frontend/README.md#branch-from-a-saved-option) is the operational
-reference. The independent Saved Options explorer reads persisted root and tree
-summaries without changing that workspace or its selected branch parent. Full
-snapshot restoration, comparison, and the 3D view remain subsequent slices.
+reference. Browsing persisted root and tree summaries does not change the workspace
+or its selected branch parent. An explicit open action retrieves the complete
+snapshot and transitions to a read-only saved view only after successful validation
+and any required replacement consent. It reuses the result presentation and SVG
+components with the stored values; opening never calls preview or persistence.
+Active drafts remain available during loading and after failed reads. Replacement
+protection covers edits before preview, invalid drafts, preview activity, naming,
+and pending saves. A session change or newer request prevents an older read from
+replacing current work. The [saved-option workflow](../frontend/README.md#open-a-saved-option)
+defines confirmation, recovery, and keyboard/focus behavior.
 
 ### Types and state
 
@@ -869,7 +878,9 @@ runtime. Root saves require HTTP 201 and null `parent_id`; branch saves whitelis
 replacement building configuration/name fields and require the selected parent UUID
 in the HTTP 201 snapshot. Summary-list and recursive-tree contracts reuse metadata,
 metrics, and feasibility schemas, preserving nullable values, UUIDs, and timestamps.
-Full snapshot retrieval into the editing workspace remains deferred.
+The detail client reuses `OptionResponse`, requires HTTP 200, and verifies the
+requested UUID before exposing a complete snapshot. It preserves existing API
+errors and consumes cancellation without recomputing or normalizing saved results.
 
 Massing configuration and workspace modules are grouped with their tests under
 `frontend/src/features/massing/`; API transport and contracts share `frontend/src/api/`.
@@ -894,9 +905,15 @@ the active preview. Save interaction is keyed by the preview submission within i
 parent-selection session; returned snapshots stay in mutation data, and optional
 name/validation state stays local. Selecting a saved parent seeds an independent
 RHF draft from its saved configuration without editing or replacing stored results.
-Explorer list pages and root-keyed trees also remain in Query; node/root selection
-and expansion are local UI state. Successful saves invalidate option queries without
-replacing preview data or coupling explorer selection to editing sessions.
+Explorer list pages, root-keyed trees, and option-specific complete snapshots remain
+in Query; node/root selection and expansion are local UI state. A narrow ID-based
+boundary connects the sibling explorer and workspace. Explicit new-root, saved-option,
+and branch-draft sessions hold interaction identity rather than duplicate complete
+server responses. The saved view reads Query data, while `configurationDraftFromOption`
+seeds a separate editable branch draft. RHF dirty state and preview/save activity
+protect session replacement, including fields with invalid unsent values. Successful
+saves invalidate option queries without replacing preview data or coupling explorer
+selection to editing sessions.
 Client usage, display precision, errors, cancellation, and cache defaults are documented
 in the [frontend README](../frontend/README.md).
 
@@ -990,16 +1007,19 @@ The selected root's tree response supplies authoritative relationships and order
 Root-specific Query keys and cancellation isolate switching requests; selection and
 expansion do not compute geometry, write snapshots, or change the editing workspace.
 Selecting a node shows its saved summary with explicit nullable metrics and status.
+Opening that node retrieves its complete immutable snapshot for read-only workspace
+inspection. The exact opened UUID and site supply a subsequent branch; changing the
+explorer selection alone never changes an active workspace or branch parent.
 Successful saves invalidate the relevant reads, and manual refresh supports changes
 outside the current workspace. The [Saved Options workflow](../frontend/README.md#saved-options)
 defines pagination, interaction, refresh, error recovery, and reload behavior.
 
 PostgreSQL history survives independently of browser state. Reload requests saved
-summaries again; the previous browser selection is not restored. Full snapshot
-navigation and workspace restoration are planned for PR 5.5B using the get endpoint.
-That work will display saved configuration/results without recomputation and keep
-new draft previews separate from immutable snapshots. PR 5.6 will add independent
-comparison selection and side-by-side saved inputs, metrics, and diagnostics.
+summaries again; the previous browser selection is not restored. Users can reopen
+any discovered root or nested child through the get endpoint and branch from it.
+Saved configuration/results are displayed without recomputation and remain distinct
+from new draft previews. PR 5.6 will add independent comparison selection and
+side-by-side saved inputs, metrics, and diagnostics.
 
 ## Open implementation decisions
 
@@ -1047,11 +1067,14 @@ siblings and nested branches, every numeric field, exact ordering, null metrics,
 statuses, complete diagnostics, structured errors, and reload. Read-only PostgreSQL
 transactions, repository-call assertions, and blocked generation/insertion guard the
 saved-snapshot boundary. Frontend checks cover strict types and lint/build, forms,
-stale responses, summary/recursive-tree parsing, mixed root/child pagination, native
-branch expansion and selection, null-state rendering, request failures, and refresh
-after saves. Browser checks cover keyboard interaction and narrow layouts. Full
-snapshot restoration/comparison and matching SVG/3D geometry, floors, holes, and
-resource lifecycle require coverage in their respective later slices.
+stale responses, summary/recursive-tree and complete-snapshot parsing, mixed root/child
+pagination, native branch expansion and selection, null-state rendering, request
+failures, refresh after saves, and saved-workspace navigation. Restoration cases
+cover identity validation, cancellation, request/session races, protected drafts,
+read-only results, inherited holes, and branch parent identity after reload.
+Browser checks cover keyboard interaction, focus after navigation, and narrow layouts.
+Comparison and matching SVG/3D geometry, floors, holes, and resource lifecycle require
+coverage in their respective later slices.
 
 The Docker Compose milestone exercises site → preview → manual changes → save →
 branch → reload → compare, including both views and invalid, split, infeasible, and

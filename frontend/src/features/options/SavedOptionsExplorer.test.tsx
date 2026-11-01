@@ -46,8 +46,8 @@ afterEach(() => {
   client.clear();
 });
 
-function mount() {
-  return render(<QueryClientProvider client={client}><SavedOptionsExplorer /></QueryClientProvider>);
+function mount(onOpenOption?: (id: string) => void) {
+  return render(<QueryClientProvider client={client}><SavedOptionsExplorer onOpenOption={onOpenOption} /></QueryClientProvider>);
 }
 
 function roots() {
@@ -94,6 +94,52 @@ describe("SavedOptionsExplorer", () => {
     expect(selectedSummary()).toHaveTextContent(first.id);
     expect(roots().getByRole("button", { name: /Study 1/ })).toHaveAttribute("aria-pressed", "true");
     expect(fetchMock.mock.calls.every(([, init]) => init?.method === undefined)).toBe(true);
+  });
+
+  it("opens a selected root only through an explicit, focusable native action", async () => {
+    const onOpenOption = vi.fn();
+    fetchMock.mockResolvedValueOnce(Response.json([first])).mockResolvedValueOnce(Response.json(tree()));
+    mount(onOpenOption);
+    expect(screen.queryByRole("button", { name: "Open in Workspace" })).not.toBeInTheDocument();
+    await selectRoot();
+    const open = await screen.findByRole("button", { name: "Open in Workspace" });
+    expect(onOpenOption).not.toHaveBeenCalled();
+    expect(open).toHaveAttribute("type", "button");
+    open.focus();
+    expect(open).toHaveFocus();
+
+    fireEvent.click(open);
+
+    expect(onOpenOption).toHaveBeenCalledExactlyOnceWith(first.id);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.every(([, init]) => init?.method === undefined)).toBe(true);
+    expect(selectedSummary()).toHaveTextContent(first.id);
+  });
+
+  it("opens the exact nested selection and resets the action when browsing another root", async () => {
+    const onOpenOption = vi.fn();
+    const child = summary(3, first.id);
+    const grandchild = summary(4, child.id);
+    const nextTree = deferred<Response>();
+    fetchMock.mockResolvedValueOnce(Response.json([first, second]))
+      .mockResolvedValueOnce(Response.json(tree(first, [tree(child, [tree(grandchild)])])))
+      .mockReturnValueOnce(nextTree.promise);
+    mount(onOpenOption);
+    await selectRoot();
+    const history = within(await screen.findByRole("list", { name: "Saved decision tree" }));
+    fireEvent.click(history.getByRole("button", { name: `Expand branches of Study 3 (${child.id})` }));
+    fireEvent.click(history.getByRole("button", { name: new RegExp(`^Study 4 ${grandchild.id}`) }));
+    expect(selectedSummary()).toHaveTextContent(grandchild.id);
+    expect(onOpenOption).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open in Workspace" }));
+    expect(onOpenOption).toHaveBeenLastCalledWith(grandchild.id);
+    await selectRoot("Study 2");
+    expect(screen.queryByRole("button", { name: "Open in Workspace" })).not.toBeInTheDocument();
+    await act(async () => nextTree.resolve(Response.json(tree(second))));
+    fireEvent.click(await screen.findByRole("button", { name: "Open in Workspace" }));
+    expect(onOpenOption.mock.calls).toEqual([[grandchild.id], [second.id]]);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("keeps Load More across multiple child-only pages and advances by raw records", async () => {

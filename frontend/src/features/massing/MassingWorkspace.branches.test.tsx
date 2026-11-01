@@ -40,6 +40,11 @@ function context() {
   return screen.getByRole("region", { name: "Option creation context" });
 }
 
+function confirmReplacement() {
+  const confirmation = within(screen.getByRole("region", { name: "Replace workspace" }));
+  fireEvent.click(confirmation.getByRole("button", { name: "Discard Draft and Continue" }));
+}
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason: unknown) => void;
@@ -58,11 +63,12 @@ async function saveRoot(parent: OptionResponse = optionResponse()) {
 async function enterBranch(parent: OptionResponse = optionResponse()) {
   await saveRoot(parent);
   fireEvent.click(screen.getByRole("button", { name: "Create Branch" }));
+  confirmReplacement();
   expect(context()).toHaveTextContent(parent.id);
 }
 
 describe("MassingWorkspace branching", () => {
-  it("initializes from the authoritative saved snapshot despite unrelated invalid edits", async () => {
+  it("restores the authoritative branch configuration after explicitly discarding invalid edits", async () => {
     const savedResult = backendPreviewResponse("holed");
     savedResult.hard_constraints.setback_m = 2;
     savedResult.preferences.preferred_floor_count = 2;
@@ -78,6 +84,10 @@ describe("MassingWorkspace branching", () => {
     change(/GFA target \(m²\)/, "9999");
 
     fireEvent.click(screen.getByRole("button", { name: "Create Branch" }));
+    expect(context()).toHaveTextContent("New root option");
+    expect(screen.getByLabelText(/Width \(m\)/)).toHaveValue("invalid");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    confirmReplacement();
 
     expect(context()).toHaveTextContent("Saved holed parent");
     expect(context()).toHaveTextContent(parent.id);
@@ -165,6 +175,7 @@ describe("MassingWorkspace branching", () => {
     change(/Setback \(m\)/, "88");
 
     fireEvent.click(screen.getByRole("button", { name: "Create Branch" }));
+    confirmReplacement();
 
     expect(context()).toHaveTextContent(child.id);
     expect(context()).toHaveTextContent("Saved child");
@@ -286,6 +297,7 @@ describe("MassingWorkspace branching", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
 
     fireEvent.click(screen.getByRole("button", { name: "Start New Root" }));
+    confirmReplacement();
 
     expect(context()).toHaveTextContent("New root option");
     expect(context()).not.toHaveTextContent(optionResponse().id);

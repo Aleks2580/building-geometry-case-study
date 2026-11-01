@@ -2,8 +2,8 @@
 
 Vite + React with strict TypeScript, a typed configuration form, a backend massing
 preview workspace with explicit immutable root saves and child branches, and a
-read-only Saved Options explorer. TanStack Query owns server results; React Hook
-Form owns configuration drafts.
+Saved Options explorer that opens complete persisted snapshots. TanStack Query
+owns server results; React Hook Form owns configuration drafts.
 
 ## Getting started
 
@@ -19,7 +19,7 @@ The backend base URL defaults to `http://localhost:8000`; override with
 
 ## Frontend structure
 
-- `src/api/api.ts` — health, preview, root/branch save, option-list, and tree clients.
+- `src/api/api.ts` — health, preview, root/branch save, option-detail, list, and tree clients.
 - `src/api/contracts.ts` — Zod contracts inferred as strict TypeScript types.
 - `src/queryClient.ts` — reusable QueryClient factory and application instance.
 - `src/App.tsx` — backend health, the configuration workspace, and Saved Options.
@@ -27,10 +27,12 @@ The backend base URL defaults to `http://localhost:8000`; override with
 - `src/features/massing/siteGeometry.ts` — deterministic rectangle and supplied-example input coordinates.
 - `src/features/massing/ConfigurationForm.tsx` — accessible site, constraint, preference, and target inputs.
 - `src/features/massing/DraftSitePreview.tsx` — immediate outline of the active site draft, with its own CSS Module.
-- `src/features/massing/MassingWorkspace.tsx` — explicit preview submission and request states.
+- `src/features/massing/MassingWorkspace.tsx` — new-root, saved-option, and branch-draft sessions.
+- `src/features/massing/SavedOptionSnapshot.tsx` — read-only saved metadata, configuration, and result.
+- `src/features/massing/MassingResult.tsx` — shared SVG, feasibility, metrics, assessments, and diagnostics.
 - `src/features/options/SaveOption.tsx` — optional naming, explicit root/branch saves, and saved-snapshot receipts.
-- `src/features/options/SavedOptionsExplorer.tsx` — paginated root discovery, nested branches, and read-only node summaries.
-- `src/features/options/optionQueries.ts` — shared option-list and tree query keys.
+- `src/features/options/SavedOptionsExplorer.tsx` — paginated root discovery, nested branches, and explicit workspace navigation.
+- `src/features/options/optionQueries.ts` — shared option-detail, list, and tree query keys.
 - `src/features/massing/DetailedMetrics.tsx` — site/setback, hard bounds, generated capacity, and actual metrics.
 - `src/features/massing/PreferenceAssessments.tsx` — backend footprint preference and GFA target assessments.
 - `src/features/massing/FeasibilitySummary.tsx` — feasibility, reason, and hard-constraint satisfaction.
@@ -46,8 +48,8 @@ transport tests live beside the client in `src/api/`. Shared fixtures and test s
 stay in `src/test/`. Application entry points, global styles, and QueryClient setup remain
 at the root. Imports use direct relative paths.
 
-Full saved-option workspace restoration, comparison, and 3D views are planned
-separately; see [the design note](../docs/DESIGN.md).
+Comparison and 3D views are planned separately; see
+[the design note](../docs/DESIGN.md).
 
 ## Styling
 
@@ -85,7 +87,9 @@ Vitest and React Testing Library cover draft parsing, accessible form validation
 preview/save/branch transport, integrated SVG layers, all feasibility states, request
 failures, draft/result separation, parent immutability, duplicate-save protection,
 save/preview races, cancellation, cache remounts, saved summaries and recursive trees,
-root pagination, explorer selection/expansion, refresh, and existing health behavior.
+complete snapshot reads/identity validation, saved-workspace navigation, protected
+replacement, restored branching, root pagination, explorer selection/expansion,
+refresh, and existing health behavior.
 Tests use jsdom and stub the fetch boundary; no running backend is required.
 Test sources are type checked.
 
@@ -231,10 +235,12 @@ rollback. Request idempotency is a possible future backend improvement.
 
 ## Branch from a saved option
 
-Choose **Create Branch** on a successful root or child receipt to select that saved
-snapshot as the parent. This starts a new editing session using the parent's saved
-hard constraints, preferences, and target, even if the current draft contains other
-edits. The previous preview clears, and no request is sent until **Generate Preview**.
+Choose **Create Branch** on a successful root or child receipt, or on an opened
+[saved snapshot](#open-a-saved-option), to select that exact option as the parent.
+This starts a new editing session using the parent's saved hard constraints,
+preferences, and target. Replacing active work requires the explicit confirmation
+described below. The previous preview clears, and no preview request is sent until
+**Generate Preview**.
 The selected parent's name and UUID remain visible above the form across subsequent
 preview attempts, including failures. Its saved site is inherited and read-only;
 the site shape and geometry controls are unavailable in branch mode. The compact
@@ -262,16 +268,16 @@ response cannot appear in another parent session or preview attempt.
 **Save Another Branch** creates another sibling under the same selected parent.
 To branch from the newly saved child instead, choose **Create Branch** on its receipt.
 Choose **Start New Root** to clear the branch session and return to the initial root
-configuration. Neither action persists a snapshot. Reload clears the session and
-receipts while PostgreSQL retains every saved option. Saved Options can browse
-those histories after reload; loading a selected snapshot into the workspace remains
-planned for PR 5.5B.
+configuration, confirming replacement when active work would be discarded. Neither
+action persists a snapshot. Reload clears the session and receipts while PostgreSQL
+retains every saved option. Use Saved Options to reopen any persisted root or nested
+child after reload and create further branches from it.
 
 Branch errors use the existing structured messages and field paths. A missing parent
 returns `404 PARENT_OPTION_NOT_FOUND`; the selected parent's identity remains visible
-for diagnosis. Use **Start New Root** to continue with a new root. This workflow has
-no saved-ID lookup for selecting a different existing parent. Network failures,
-server errors, and malformed success responses can leave the outcome unknown:
+for diagnosis. Use **Start New Root** to continue with a new root, or open a different
+option through Saved Options. Network failures, server errors, and malformed success
+responses can leave the outcome unknown:
 the child may have been saved, and another explicit save may
 create a duplicate sibling. Branch mutations have no automatic retry or reconnect
 replay, and leaving a session does not establish server rollback.
@@ -317,20 +323,65 @@ branches are local interaction state. Reload discovers persisted history again
 rather than restoring the previous browser selection.
 
 Browsing, expanding, and selecting nodes send no geometry-computation or write
-requests and leave the current draft, preview, and branch parent unchanged. Full
-snapshot loading, workspace restoration, and branching from an explorer selection
-belong to PR 5.5B; comparison follows in PR 5.6. Complete subtree responses and a
-native nested list suit small decision histories; large-history search, server-side
-root filtering, and subtree pagination remain future improvements.
+requests and leave the current draft, preview, and branch parent unchanged. Use the
+selected node's explicit **Open in Workspace** action to retrieve its complete
+snapshot. Complete subtree responses and a native nested list suit small decision
+histories; large-history search, server-side root filtering, and subtree pagination
+remain future improvements. Comparison follows in PR 5.6.
+
+### Open a saved option
+
+Select a root or any nested child, then choose **Open in Workspace**. The workspace
+retrieves `GET /api/v1/options/{option_id}`; tree summaries are never used as complete
+snapshots. Loading and retrieval errors keep the current workspace intact. A missing
+option, malformed response, or response for another UUID shows an explicit error
+with recovery controls. A newer navigation or editing session supersedes an older
+request, so late responses cannot replace the current content.
+
+The opened **Saved Option** is read-only and identifies its name, UUID, parent,
+versions, and creation time. It shows the stored site, hard constraints, preferences,
+and target alongside the saved feasibility, SVG plan, metrics, assessments, and
+diagnostics. The same result components present saved values and generated previews,
+with a clear saved-snapshot label. Null configuration fields display **Not set**;
+null result metrics display **Not available**, and zero values remain zero. Opening
+sends no POST request, recalculates no massing, and writes nothing. Successful
+navigation moves focus to the workspace heading and brings it into view.
+
+**Create Branch** initializes an editable **Branch Draft** from that saved option.
+Its exact UUID becomes the parent and its site, including holes, is inherited
+read-only. The stored result remains historical; a branch requires an explicit new
+preview before saving a separate child. **Start New Root** opens the initial editable
+root configuration. These sessions are distinct from the read-only Saved Option.
+
+### Replacing active work
+
+Opening another option, selecting a receipt as a new branch parent, or starting a
+new root must not silently replace an active draft. After the target snapshot is
+loaded and validated, an inline confirmation offers **Keep Editing** and **Discard
+Draft and Open**. Root/branch transitions use **Discard Draft and Continue**. Keeping
+the draft preserves its fields and preview. Invalid edits and edits made before the
+first preview are protected, as are a generated preview, a name draft, and a pending save.
+Any preview attempt continues to count as active work after saving, because the
+save recomputes a separate snapshot rather than persisting that preview response.
+
+While a saved option loads, the current editor stays available. Replacement uses
+only the latest validated request for that editing session. Edits made while loading
+are included in the replacement check; changing sessions or choosing Keep Editing
+prevents the superseded navigation from replacing current work. Leaving a
+session does not cancel or roll back an accepted save. Its completion still refreshes
+saved-option discovery, while its receipt cannot appear in a different session.
+Reload clears browser interaction state; persisted snapshots remain in PostgreSQL.
 
 ## SVG plan renderer
 
-`MassingWorkspace` mounts `SitePlan` directly from the successful TanStack Query
-response, alongside that response's metrics and diagnostics. All four geometry
-fields pass through unchanged. Empty, pending, and request-error states mount no
-viewer; infeasible and generation-failed results show available site/setback context
-with an explicit missing-footprint message. Draft edits retain this submitted backend
-plan while the separate outline in the form reflects the current site inputs.
+`MassingResult` mounts `SitePlan` from the selected successful TanStack Query response,
+alongside that response's metrics and diagnostics. Preview and saved views share this
+presentation; all four geometry fields pass through unchanged. Empty, pending, and
+preview-error states mount no viewer; infeasible and generation-failed results show
+available site/setback context with an explicit missing-footprint message. Draft
+edits retain this submitted backend plan while the separate outline in the form
+reflects the current site inputs. Opening another saved option leaves the current
+workspace visible until retrieval and any replacement confirmation succeed.
 
 `SitePlan` also works independently. It needs no Query provider, API request, or
 application state:
@@ -421,8 +472,14 @@ The option-list and tree GET clients use the same API base, cancellation, and
 feasibility schemas; the recursive tree schema adds required `children` arrays.
 Types are inferred from those schemas. Parsing preserves nullable names/parents and
 metrics, UUIDs, timezone-aware timestamps, and all four statuses. These endpoints
-return summaries only, without configuration or geometry. Full snapshot retrieval
-for the workspace remains deferred.
+return summaries only, without configuration or geometry.
+
+`getOption(optionId, signal)` validates the complete response with the existing
+`OptionResponse` Zod schema, requires HTTP 200, and checks that its UUID matches the
+requested option. It preserves stored configuration/result fields and uses the same
+`ApiError` categories, structured HTTP details, and AbortSignal cancellation. A
+missing option returns `404 OPTION_NOT_FOUND`. Reading a snapshot never invokes
+preview or save endpoints.
 
 ## Server state
 
@@ -447,6 +504,17 @@ the name draft and validation/submission interaction state remain local. Parent
 selection has a separate session identity from preview attempts, so another preview
 cannot silently discard or replace the selected immutable snapshot. Starting a new
 parent session isolates its form and pending responses from the previous session.
+Complete persisted snapshots use `['options', 'detail', optionId]`, with UUID keys
+normalized to lowercase. Workspace navigation retains identifiers and session
+identity rather than response copies. Read-only saved rendering reads that Query
+data, and creating a branch derives a separate RHF draft through
+`configurationDraftFromOption`. Form dirty state and
+preview/save activity govern replacement protection rather than a duplicated
+configuration store. Immutable detail snapshots remain fresh indefinitely, with
+mount/reconnect refetch disabled and the standard inactive-cache retention. Explicit
+retrieval uses network mode `always` and consumes the supplied AbortSignal. Successful
+saves place the returned snapshot in its detail entry before refreshing discovery,
+so branching from a receipt reuses the authoritative saved response.
 
 Saved Options uses the `['options', 'list']` query namespace for paginated summaries
 and `['options', 'tree', rootId]` for each selected history. Page responses and trees
@@ -490,8 +558,9 @@ With the frontend and backend running:
    submitted values, then explicitly save again and check for a different UUID.
    Repeat with an infeasible diagnostic preview.
 7. Save a root, change an unsaved draft, then choose Create Branch from the receipt.
-   Check that the saved parent's configuration replaces the unsaved values, its UUID
-   remains selected, the inherited site is read-only, and a new preview is required.
+   Keep Editing first and check that fields and preview remain intact; repeat and
+   explicitly discard. Check that the saved parent's configuration is restored, its
+   UUID remains selected, the inherited site is read-only, and a new preview is required.
    Modify constraints, preferences, and target, preview explicitly, and Save Branch.
    Retrieve root and child by ID: expect distinct UUIDs, the root UUID as the child's
    `parent_id`, identical sites, and the unchanged complete root snapshot. Save another
@@ -508,11 +577,21 @@ With the frontend and backend running:
    child-only page must not incorrectly end discovery. Switching roots must not
    show the previous root's tree or change the editor. Use Tab and Enter/Space for
    root selection, branch controls, node selection, and refresh.
-9. Check desktop layout and narrow viewports at 390 px and 320 px, including the
+9. After reload, select and open a persisted root, then a deeply nested child. Check
+   that Open in Workspace sends only a detail GET, focuses the workspace, and shows
+   the exact stored configuration, site geometry, metrics, status, and diagnostics.
+   Check holes, nullable results, and all four feasibility statuses. Create Branch
+   from the child, generate explicitly, and save a grandchild. Retrieve all snapshots:
+   expect its selected parent UUID, the inherited site, distinct child identity, and
+   unchanged historical values. Try failed/missing reads and rapidly switch options;
+   no failure or older response may replace the current session. Repeat replacement
+   cancellation with pre-preview/invalid edits, a name draft, and a pending save.
+10. Check desktop layout and narrow viewports at 390 px and 320 px, including the
    selector, dimension fields, draft outline and unavailable state, backend plan,
    inherited site, parent identifiers, receipts, expanded diagnostic details, inline
-   errors, Saved Options lists/tree/summary, keyboard focus, and form submission.
-   Reach Create Branch and Save Branch with Tab and activate them with the keyboard.
+   errors, Saved Options lists/tree/summary, saved configuration, replacement prompt,
+   keyboard focus, and form submission. Reach Open in Workspace, Keep Editing,
+   discard, Create Branch, and Save Branch with Tab and activate them with the keyboard.
    Request races, cancellation, network/malformed-response failures, and
    generation-failure rendering have focused automated coverage, as do duplicate
    save events, uncertain save failures, and late responses after new previews.

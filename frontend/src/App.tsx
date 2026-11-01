@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getHealth } from "./api/api";
 import type { HealthResponse } from "./api/api";
@@ -7,6 +8,7 @@ import "./styles.css";
 import styles from "./App.module.css";
 
 export default function App() {
+  const [openRequest, setOpenRequest] = useState<{ optionId: string; requestId: string } | null>(null);
   const { data, error, isPending, isError } = useQuery<HealthResponse, unknown>({
     queryKey: ["health"],
     queryFn: getHealth,
@@ -28,8 +30,8 @@ export default function App() {
         </div>
         <p className={styles.health}>Backend health: <strong>{health}</strong></p>
       </header>
-      <MassingWorkspace />
-      <SavedOptionsExplorer />
+      <MassingWorkspace openRequest={openRequest} />
+      <SavedOptionsExplorer onOpenOption={(optionId) => setOpenRequest({ optionId, requestId: crypto.randomUUID() })} />
     </main>
   );
 }

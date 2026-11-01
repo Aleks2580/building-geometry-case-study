@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ZodError } from "zod";
-import { getOptionTree, listOptions } from "./api";
+import { getOption, getOptionTree, listOptions } from "./api";
 import { optionSummarySchema, optionTreeSchema } from "./contracts";
 import type { FeasibilityStatus, OptionSummary, OptionTree } from "./contracts";
 import { optionResponse } from "../test/optionFixtures";
+import { backendPreviewResponse } from "../test/backendPreviewFixtures";
 
 const fetchMock = vi.fn<typeof fetch>();
 const rootId = optionResponse().id;
@@ -202,9 +203,127 @@ describe("getOptionTree", () => {
   });
 });
 
+describe("getOption", () => {
+  it("retrieves the complete immutable snapshot, including exact holed site and stored configuration", async () => {
+    const saved = optionResponse(backendPreviewResponse("holed"));
+    const original = structuredClone(saved);
+    const controller = new AbortController();
+    fetchMock.mockResolvedValue(Response.json(saved));
+
+    await expect(getOption(saved.id, controller.signal)).resolves.toEqual(saved);
+
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      `http://localhost:8000/api/v1/options/${saved.id}`, { signal: controller.signal },
+    );
+    expect(saved).toEqual(original);
+  });
+
+  it("retrieves a saved child without replacing its parent relationship", async () => {
+    const saved = optionResponse(undefined, { id: summary(1).id, parent_id: rootId });
+    fetchMock.mockResolvedValue(Response.json(saved));
+
+    await expect(getOption(saved.id)).resolves.toEqual(saved);
+  });
+
+  it("validates UUIDs before fetching and compares the returned identity case-insensitively", async () => {
+    await expect(getOption("not-a-uuid")).rejects.toBeInstanceOf(ZodError);
+    expect(fetchMock).not.toHaveBeenCalled();
+    const saved = optionResponse(undefined, { id: rootId.toUpperCase() });
+    fetchMock.mockResolvedValue(Response.json(saved));
+
+    await expect(getOption(rootId.toUpperCase())).resolves.toEqual(saved);
+    expect(fetchMock.mock.calls[0][0]).toBe(`http://localhost:8000/api/v1/options/${rootId}`);
+  });
+
+  it("rejects a valid snapshot with a different requested UUID", async () => {
+    fetchMock.mockResolvedValue(Response.json(optionResponse(undefined, { id: summary(1).id })));
+
+    await expect(getOption(rootId)).rejects.toMatchObject({ kind: "malformed_response", status: 200 });
+  });
+
+  it("retains missing-option details for the requested snapshot", async () => {
+    const error = {
+      code: "OPTION_NOT_FOUND", message: "Option not found.",
+      details: [{ path: "option_id", message: "No saved option has this identifier." }],
+    };
+    fetchMock.mockResolvedValue(Response.json({ error }, { status: 404 }));
+
+    await expect(getOption(rootId)).rejects.toMatchObject({ kind: "http", status: 404, error });
+  });
+
+  it("keeps concurrent out-of-order reads bound to their own snapshot identities", async () => {
+    const first = optionResponse();
+    const second = optionResponse(undefined, { id: summary(1).id });
+    let resolveFirst!: (response: Response) => void;
+    fetchMock.mockReturnValueOnce(new Promise<Response>((resolve) => { resolveFirst = resolve; }))
+      .mockResolvedValueOnce(Response.json(second));
+
+    const olderRead = getOption(first.id);
+    await expect(getOption(second.id)).resolves.toEqual(second);
+    resolveFirst(Response.json(first));
+
+    await expect(olderRead).resolves.toEqual(first);
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      `http://localhost:8000/api/v1/options/${first.id}`,
+      `http://localhost:8000/api/v1/options/${second.id}`,
+    ]);
+  });
+
+  it.each(["feasible", "feasible_target_unmet", "infeasible", "generation_failed"] as const)(
+    "preserves %s results and nullable values without computing replacements", async (status) => {
+      const result = backendPreviewResponse("holed");
+      result.feasibility.status = status;
+      result.hard_constraints.max_height_m = null;
+      result.preferences.preferred_floor_count = null;
+      result.preferences.preferred_footprint_area_m2 = null;
+      result.targets.gfa_target_m2 = null;
+      if (status === "infeasible" || status === "generation_failed") {
+        result.footprint_geometry = null;
+        result.floor_plate_geometry = null;
+        result.generated_footprint_geometry = null;
+        result.metrics = {
+          ...result.metrics,
+          generated_footprint_area_m2: null,
+          generated_gfa_capacity_m2: null,
+          footprint_area_m2: null,
+          floor_count: null,
+          height_m: null,
+          gfa_m2: null,
+          site_coverage_ratio: null,
+        };
+      }
+      const saved = optionResponse(result, { name: null });
+      fetchMock.mockResolvedValue(Response.json(saved));
+
+      await expect(getOption(rootId)).resolves.toEqual(saved);
+      expect(fetchMock.mock.calls.every(([, init]) => init?.method === undefined)).toBe(true);
+    },
+  );
+
+  it.each([
+    null,
+    [],
+    summary(),
+    { ...optionResponse(), result: null },
+    { ...optionResponse(), result: { ...optionResponse().result, metrics: {} } },
+    { ...optionResponse(), site_geometry: null },
+    { ...optionResponse(), hard_constraints: {} },
+    { ...optionResponse(), parent_id: "invalid" },
+    { ...optionResponse(), feasibility_status: "infeasible" },
+    { ...optionResponse(), result: { ...optionResponse().result, footprint_geometry: {} } },
+  ])("rejects malformed full snapshots %#", async (data) => {
+    fetchMock.mockResolvedValue(Response.json(data));
+
+    await expect(getOption(rootId)).rejects.toMatchObject({
+      kind: "malformed_response", status: 200, message: "Invalid saved option response.",
+    });
+  });
+});
+
 describe.each([
   ["list", () => listOptions(), []],
   ["tree", () => getOptionTree(rootId), tree()],
+  ["detail", () => getOption(rootId), optionResponse()],
 ] as const)("options %s read failures", (_name, read, validData) => {
   it("retains structured HTTP errors including missing-root details", async () => {
     const error = {
@@ -253,6 +372,7 @@ describe.each([
 describe.each([
   ["list", (signal: AbortSignal) => listOptions({}, signal), []],
   ["tree", (signal: AbortSignal) => getOptionTree(rootId, signal), tree()],
+  ["detail", (signal: AbortSignal) => getOption(rootId, signal), optionResponse()],
 ] as const)("options %s cancellation", (_name, read, validData) => {
   it("does not fetch an already aborted request", async () => {
     const controller = new AbortController();
