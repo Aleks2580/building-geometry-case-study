@@ -153,6 +153,31 @@ export const massingPreviewResponseSchema = massingPreviewRequestSchema.extend({
   feasibility: massingFeasibilitySchema,
 });
 
+// Python limits names by Unicode codepoint count; JavaScript string.length counts UTF-16 units.
+export const optionNameSchema = z.string().trim()
+  .refine((value) => Array.from(value).length >= 1, "Enter a name or leave the field empty.")
+  .refine((value) => Array.from(value).length <= 200, "Use 200 characters or fewer.")
+  .refine((value) => !value.includes("\0"), "The name cannot contain a NUL character.");
+
+export const rootOptionRequestSchema = massingPreviewRequestSchema.extend({
+  name: optionNameSchema.nullable().optional(),
+});
+
+export const optionResponseSchema = z.object({
+  id: z.uuid(),
+  parent_id: z.uuid().nullable(),
+  name: z.string().nullable(),
+  schema_version: positiveInteger,
+  algorithm_version: z.string().min(1),
+  feasibility_status: feasibilityStatusSchema,
+  created_at: z.iso.datetime({ offset: true }),
+  site_geometry: polygonGeometrySchema,
+  hard_constraints: hardConstraintsSchema,
+  preferences: designPreferencesSchema,
+  targets: designTargetsSchema,
+  result: massingPreviewResponseSchema,
+}).refine((value) => value.feasibility_status === value.result.feasibility.status);
+
 export const errorResponseSchema = z.object({
   error: z.object({
     code: z.string(),
@@ -168,6 +193,8 @@ export type DesignPreferences = z.input<typeof designPreferencesSchema>;
 export type DesignTargets = z.input<typeof designTargetsSchema>;
 export type MassingPreviewRequest = z.input<typeof massingPreviewRequestSchema>;
 export type MassingPreviewResponse = z.infer<typeof massingPreviewResponseSchema>;
+export type RootOptionRequest = z.input<typeof rootOptionRequestSchema>;
+export type OptionResponse = z.infer<typeof optionResponseSchema>;
 export type MassingMetrics = z.infer<typeof massingMetricsSchema>;
 export type SetbackSummary = z.infer<typeof setbackSummarySchema>;
 export type FootprintAreaPreferenceResult = z.infer<typeof footprintAreaPreferenceResultSchema>;

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ApiError, previewMassing } from "../../api/api";
 import type { MassingPreviewResponse } from "../../api/contracts";
+import SaveRootOption from "../options/SaveRootOption";
 import SitePlan from "../visualization/SitePlan";
 import ConfigurationForm from "./ConfigurationForm";
 import DetailedMetrics from "./DetailedMetrics";
@@ -102,7 +103,16 @@ export default function MassingWorkspace() {
         ) : preview.isError ? (
           <PreviewError error={preview.error} />
         ) : (
-          <PreviewSummary result={preview.data} />
+          <>
+            <SaveRootOption
+              // A receipt belongs to one preview attempt. A new submission detaches
+              // any pending save without implying that the server rolled it back.
+              key={submission.id}
+              configuration={submission.configuration}
+              draftChanged={draftChanged}
+            />
+            <PreviewSummary result={preview.data} />
+          </>
         )}
       </section>
     </div>

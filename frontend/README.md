@@ -1,7 +1,8 @@
 # Frontend — building geometry case study
 
 Vite + React with strict TypeScript, a typed configuration form, and a backend massing
-preview workspace. TanStack Query owns server results; React Hook Form owns drafts.
+preview workspace with explicit immutable root saves. TanStack Query owns server
+results; React Hook Form owns configuration drafts.
 
 ## Getting started
 
@@ -17,7 +18,7 @@ The backend base URL defaults to `http://localhost:8000`; override with
 
 ## Frontend structure
 
-- `src/api/api.ts` — health check and cancellable `previewMassing(request, signal?)`.
+- `src/api/api.ts` — health check, cancellable `previewMassing(request, signal?)`, and `saveRootOption(request)`.
 - `src/api/contracts.ts` — Zod contracts inferred as strict TypeScript types.
 - `src/queryClient.ts` — reusable QueryClient factory and application instance.
 - `src/App.tsx` — backend health and the responsive configuration workspace.
@@ -26,6 +27,7 @@ The backend base URL defaults to `http://localhost:8000`; override with
 - `src/features/massing/ConfigurationForm.tsx` — accessible site, constraint, preference, and target inputs.
 - `src/features/massing/DraftSitePreview.tsx` — immediate outline of the active site draft, with its own CSS Module.
 - `src/features/massing/MassingWorkspace.tsx` — explicit preview submission and request states.
+- `src/features/options/SaveRootOption.tsx` — optional naming, explicit root saves, and saved-snapshot receipts.
 - `src/features/massing/DetailedMetrics.tsx` — site/setback, hard bounds, generated capacity, and actual metrics.
 - `src/features/massing/PreferenceAssessments.tsx` — backend footprint preference and GFA target assessments.
 - `src/features/massing/FeasibilitySummary.tsx` — feasibility, reason, and hard-constraint satisfaction.
@@ -41,7 +43,7 @@ transport tests live beside the client in `src/api/`. Shared fixtures and test s
 stay in `src/test/`. Application entry points, global styles, and QueryClient setup remain
 at the root. Imports use direct relative paths.
 
-3D views, saving, branching, tree navigation, and comparison are planned separately;
+3D views, branching, tree navigation, and comparison are planned separately;
 see [the design note](../docs/DESIGN.md).
 
 ## Styling
@@ -77,9 +79,9 @@ ESLint uses a flat configuration with TypeScript, React Hooks, and React Refresh
 rules. Generated files and dependencies are excluded.
 
 Vitest and React Testing Library cover draft parsing, accessible form validation,
-preview transport, integrated SVG layers, all feasibility states, request failures,
-draft/result separation, out-of-order responses, cancellation, cache remounts, and
-existing health behavior.
+preview/save transport, integrated SVG layers, all feasibility states, request failures,
+draft/result separation, duplicate-save protection, save/preview races, cancellation,
+cache remounts, and existing health behavior.
 Tests use jsdom and stub the fetch boundary; no running backend is required.
 Test sources are type checked.
 
@@ -184,6 +186,44 @@ Native **Details** disclosures expose additional backend fields, preserving prim
 values and numeric precision. An empty list displays **No diagnostics reported**.
 Superseding requests and request failures remove all previous result sections.
 
+## Save root option
+
+After a successful backend preview, **Save Option** submits that preview's original
+configuration to `POST /api/v1/options`. All four feasibility statuses can be saved,
+including diagnostic snapshots with no building footprint. Saving is explicit;
+editing, generating, and reloading never save automatically. A changed draft,
+including an invalid or formatting-only edit, disables saving until Generate Preview
+submits it successfully. Restoring the exact submitted draft re-enables saving.
+
+The option name is optional. Empty UI input leaves the option unnamed; supplied
+names are trimmed, must contain 1–200 Unicode characters, and cannot contain NUL.
+Whitespace-only names are invalid. Validation errors appear beside the input. The
+request contains only the submitted site, hard constraints, preferences, targets,
+and optional name.
+It contains no parent identifier, draft controls, computed geometry, or metrics.
+
+The backend recomputes before persisting and returns HTTP 201 with a complete
+immutable snapshot. The receipt reads the returned name, UUID, and status, so it
+describes what was actually saved. The existing plan and metrics continue to show
+the preview response; saving never replaces or mutates it. Each explicit subsequent
+save creates a distinct root, even with unchanged inputs and name.
+
+Pending saves disable the name field and save action, with a synchronous submission
+guard preventing repeated events before React updates. Configuration editing and
+preview generation remain available. Save state belongs to one preview attempt:
+generating another preview removes its receipt and detaches its pending mutation.
+That save may still complete on the server, but its late response cannot appear
+beside the newer preview. Reloading also clears the workspace and receipt; it does
+not delete PostgreSQL snapshots. Loading saved options into the UI is deferred to
+the navigation workflow.
+
+Structured HTTP errors retain backend field paths. A network failure, malformed
+success response, or server error cannot establish that nothing was saved: the
+server may have inserted a snapshot before the response was lost. The UI reports
+that uncertainty and explains that another explicit save could create a duplicate.
+Saves have no automatic retry, reconnection replay, or cancellation presented as
+rollback. Request idempotency is a possible future backend improvement.
+
 ## SVG plan renderer
 
 `MassingWorkspace` mounts `SitePlan` directly from the successful TanStack Query
@@ -267,8 +307,13 @@ The existing `getHealth()` behavior and errors remain unchanged.
 Geometry validity and massing rules remain server-authoritative; response validation
 checks transport shapes and numeric bounds, without recalculating domain results.
 JavaScript numbers use binary64 precision; integer counts outside the safe integer
-range are rejected rather than silently rounded. Option API methods will be added
-with their consuming features.
+range are rejected rather than silently rounded.
+
+`saveRootOption` reuses the massing request/result schemas and validates the complete
+saved metadata, configuration, and nested result at runtime. It strips unknown
+request fields, requires HTTP 201 and a null root `parent_id`, and preserves the same
+`ApiError` categories and structured details. Its response remains separate from
+the preview. Branching and retrieval clients will be added with their consuming UI.
 
 ## Server state
 
@@ -286,7 +331,10 @@ API client's AbortSignal; results remain in Query without a local copy. Preview
 queries are infinitely fresh for that attempt, with mount/reconnect refetch disabled
 and network mode `always` so offline attempts surface an error. Unobserved results
 use the library's five-minute retention. Submission snapshots and the draft-change
-indicator are local interaction state; future option results also belong in Query.
+indicator are local interaction state. Saving uses `useMutation` with retries
+disabled and network mode `always`, so offline attempts fail visibly instead of
+being replayed on reconnect. Mutation data holds the returned snapshot directly;
+only the name draft and local validation/submission interaction state are local.
 
 ## Browser smoke test
 
@@ -315,11 +363,20 @@ With the frontend and backend running:
    with a hole, checking its opening in both views after submission.
    Enter Custom from an invalid rectangle and verify no previous Polygon or outline
    is reused. A structurally valid outline still needs backend topology validation.
-6. Check desktop layout and narrow viewports at 390 px and 320 px, including the
+6. Generate the default preview, enter an optional name, and save. Check the receipt's
+   returned name/UUID and retrieve `GET /api/v1/options/UUID`: expect null `parent_id`,
+   complete configuration, metadata, and result. Edit or invalidate a draft and
+   check saving is disabled while the submitted plan stays visible. Restore the
+   submitted values, then explicitly save again and check for a different UUID.
+   Repeat with an infeasible diagnostic preview. Reload the browser: the receipt
+   clears, but GET must still return each unchanged snapshot. No saved-option
+   navigation or automatic restoration is implemented in this slice.
+7. Check desktop layout and narrow viewports at 390 px and 320 px, including the
    selector, dimension fields, draft outline and unavailable state, backend plan,
    expanded diagnostic details, inline errors, keyboard focus, and form submission.
    Request races, cancellation, network/malformed-response failures, and
-   generation-failure rendering have focused automated coverage.
+   generation-failure rendering have focused automated coverage, as do duplicate
+   save events, uncertain save failures, and late responses after new previews.
 
 ## Docker development
 
