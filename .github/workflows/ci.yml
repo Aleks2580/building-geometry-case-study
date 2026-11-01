@@ -103,7 +103,7 @@ jobs:
                       with urllib.request.urlopen(url, timeout=2) as response:
                           assert response.status == 200
                       break
-                  except (urllib.error.URLError, TimeoutError):
+                  except (urllib.error.URLError, TimeoutError, ConnectionError):
                       if attempt == 59:
                           raise
                       time.sleep(1)
