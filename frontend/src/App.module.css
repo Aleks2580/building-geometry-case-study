@@ -33,6 +33,14 @@
   padding-top: 0.4rem;
 }
 
+.savedOptionsLink {
+  display: inline-block;
+  margin-top: 0.8rem;
+  color: var(--color-accent);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
 @media (max-width: 900px) {
   .page {
     padding: 1.5rem;

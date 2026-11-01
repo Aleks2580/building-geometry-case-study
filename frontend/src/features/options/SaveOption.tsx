@@ -1,8 +1,9 @@
 import { useId, useRef, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ApiError, saveBranchOption, saveRootOption } from "../../api/api";
 import { optionNameSchema } from "../../api/contracts";
 import type { MassingPreviewRequest, OptionResponse, RootOptionRequest } from "../../api/contracts";
+import { refreshOptionQueries } from "./optionQueries";
 import styles from "./SaveOption.module.css";
 
 interface SaveOptionProps {
@@ -36,10 +37,12 @@ function SaveError({ error, branching }: { error: Error; branching: boolean }) {
 }
 
 export default function SaveOption({ configuration, draftChanged, parent, onCreateBranch }: SaveOptionProps) {
+  const queryClient = useQueryClient();
   const id = useId();
   const [name, setName] = useState("");
   const [nameError, setNameError] = useState<string | null>(null);
   const submissionPending = useRef(false);
+
   const save = useMutation({
     mutationFn: (request: RootOptionRequest) => parent
       ? saveBranchOption(parent.id, {
@@ -51,6 +54,11 @@ export default function SaveOption({ configuration, draftChanged, parent, onCrea
       : saveRootOption(request),
     retry: false,
     networkMode: "always",
+    onSuccess: (saved) => {
+      // Hook-level callbacks survive receipt unmounts. A child can affect any cached
+      // ancestor tree; refetching must not delay the receipt or cancel the mutation.
+      void refreshOptionQueries(queryClient, saved.parent_id !== null);
+    },
     onSettled: () => { submissionPending.current = false; },
   });
 
