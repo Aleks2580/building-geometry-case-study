@@ -94,6 +94,14 @@ def generate_default_massing(
             reason="ZERO_PERMITTED_FLOORS",
         )
 
+    coverage_limit = footprint_limits.site_coverage_ratio
+    # Positive inputs can round their product to zero. Keep known infeasibility
+    # above, but never interpret an unrepresentable cap as failed construction.
+    if coverage_limit is not None and setback_result.site_area_m2 * coverage_limit == 0:
+        raise NumericalRangeError(
+            "Site area multiplied by site_coverage_ratio must be representable as a positive float."
+        )
+
     footprint_result = generate_footprint(setback_result, footprint_limits)
     if footprint_result.outcome == "generation_failed":
         return _without_building(

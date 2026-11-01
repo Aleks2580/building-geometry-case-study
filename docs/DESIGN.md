@@ -205,12 +205,13 @@ Coordinates use GEOS binary64 precision; large offsets or extremely small featur
 remain subject to floating-point limitations. Positivity and ring closure do not use
 the later comparison tolerance, so there is no arbitrary minimum site area.
 
-`pyproject.toml` pins Shapely **2.2.0**; `uv.lock` also locks its required NumPy
-dependency to **2.5.4**. The local Python 3.12.14 macOS arm64 wheel installation reports
-GEOS **3.14.1**. NumPy is transitive; the domain uses Shapely operations without custom
-NumPy algorithms. GEOS is bundled with Shapely wheels rather than resolved as a
-separate Python package; source builds can link a different GEOS version. Reproduction
-should record both `shapely.__version__` and `shapely.geos_version_string`; identical
+`pyproject.toml` pins Shapely **2.2.0** and declares NumPy **>=2.0** for its scoped
+floating-point error handling; `uv.lock` retains NumPy **2.5.4**. The local Python
+3.12.14 macOS arm64 wheel installation reports GEOS **3.14.1**. Geometry construction
+uses Shapely operations rather than custom NumPy algorithms. GEOS is bundled with
+Shapely wheels rather than resolved as a separate Python package; source builds can
+link a different GEOS version. Reproduction should record both
+`shapely.__version__` and `shapely.geos_version_string`; identical
 results across different engine versions are not guaranteed.
 
 Tests close copies of the supplied open vertex-list fixtures before parsing, checking
@@ -239,7 +240,8 @@ function returning a frozen `SetbackResult`. The site is validated before buffer
 the distance must be a finite, non-negative numeric value, excluding booleans and
 numeric strings. Invalid distances raise `InvalidSetback`. Zero setback bypasses
 `buffer(0)` to preserve the foundation's canonical representation, including distinct
-collinear vertices. Positive distances use the mitred inward buffer above.
+collinear vertices. Positive distances and footprint-search buffers share the mitred
+inward-buffer operation and numerical guard described under numerical policy below.
 
 The result keeps the complete Shapely Polygon/MultiPolygon and a separate selected
 Polygon. It reports original site area, total buildable area, selected area, component
@@ -301,9 +303,12 @@ the hard bound. The largest admissible candidate actually evaluated is returned.
 `secondary_discarded_area_m2` describe the construction associated with the returned
 footprint; they are not cumulative search-iteration totals. A direct successful
 construction reports one component and zero discarded area. `undershoot_m2` is the
-hard-bound area minus the returned measured area. Outcomes are `success`,
-`empty_buildable_region`, and `generation_failed`; unsuccessful outcomes contain
-`None` geometry and area. Unexpected GEOS errors, invalid generated topology, and
+hard-bound area minus the returned measured area. These construction metrics are
+currently domain-only; HTTP exposes setback component metrics and separate hard and
+generated capacities, but no default-construction split or undershoot warning.
+Outcomes are `success`, `empty_buildable_region`, and `generation_failed`;
+unsuccessful outcomes contain `None` geometry and area. Unexpected GEOS errors,
+invalid generated topology, and
 invariant violations propagate as errors rather than becoming ordinary failures.
 
 #### Implemented floor-limit calculation
@@ -348,8 +353,8 @@ The engine uses the selected component when its area fits `U`; otherwise it sear
 inward-buffer distances with the extent-derived bracket and fixed iteration budget
 described above. Each distance applies to the original selected component. After
 validation and largest-component selection using the same tie-break, the search
-retains the largest valid candidate actually generated at/below `U`, reporting
-secondary splits, discarded area, and undershoot.
+retains the largest valid candidate actually generated at/below `U`. Its domain
+result records secondary splits, discarded area, and undershoot as described above.
 
 This default is `generated_footprint_geometry`, with `generated_footprint_area_m2` and
 `generated_gfa_capacity_m2 = generated_footprint_area_m2 * N`. Capacity demonstrates
@@ -368,11 +373,24 @@ larger admissible footprint than this inward-buffer heuristic constructs; it doe
 make the generated area a mathematical maximum. Failure of this heuristic does not
 prove geometric impossibility.
 
+The supplied notched fixture with zero setback, coverage `0.45`, and six permitted
+floors gives a 387 m² footprint bound and 2322 m² GFA bound, but constructs about
+196 m² and 1176 m² respectively. At an inward distance of 3 m, its bridge collapses:
+one component just above 392 m² becomes two 196 m² components, skipping the footprint bound.
+The independently contained `box(0, 0, 19.35, 20)` reaches 387 m². This is the same
+documented heuristic limitation. A target between generated capacity and the hard
+bound receives `TARGET_BEYOND_GENERATED_CAPACITY`; an explicit preferred area can
+receive `FOOTPRINT_AREA_APPROXIMATED`. With neither, this default undershoot currently
+has no HTTP warning.
+
 Inward buffering reuses a mature operation, reduces search to one dimension, and
 supports direct containment checks. Centroid scaling can escape concave regions;
 axis clipping adds an arbitrary direction and can split; inscribed rectangles
 restrict shapes; general optimization adds objectives and complexity. The MVP accepts
-and reports undershoot without adding an optimizer.
+undershoot without adding an optimizer. A possible bounded improvement is four
+axis-aligned clipping searches using GEOS intersection after material undershoot,
+retaining the best valid connected candidate under the same strict limits. This is
+not implemented and would remain axis-dependent without a global optimality guarantee.
 
 #### Implemented default massing orchestration
 
@@ -406,10 +424,10 @@ separate: the latter is evidence of one construction returned by the heuristic, 
 an optimality certificate. A valid default is `feasible`; target assessment is part of
 the preference-aware entry point described below.
 
-The public `NumericalRangeError` is raised when a required height or area-times-count
-metric cannot be represented as a finite float. Metric multiplication keeps the
-arbitrary-precision integer floor count intact until the final conversion, including
-the case where a very large count multiplied by a small positive value remains
+The public `NumericalRangeError` covers unrepresentable required metrics under the
+numerical policy below. Metric multiplication keeps the arbitrary-precision integer
+floor count intact until the final conversion, including the case where a very
+large count multiplied by a small positive value remains
 finite. This error behavior is an implementation decision for the current domain
 slice, not an explicit employer requirement.
 
@@ -534,8 +552,18 @@ Default massing preserves the arbitrary-precision integer count when deriving he
 GFA capacity, GFA, and the hard GFA bound. Each required derived metric must remain a
 finite reportable float; otherwise `NumericalRangeError` is raised instead of
 returning infinity or NaN, clamping the count, or classifying the case as geometric
-infeasibility. This range-error behavior is an implementation decision for the
-current slice, not an explicit employer requirement.
+infeasibility. When positive site area and coverage multiply to zero through
+underflow, massing also raises `NumericalRangeError`; existing
+empty-buildable-region and zero-floor outcomes take precedence. No minimum site area
+or rounded-up coverage allowance is introduced.
+
+The shared inward-buffer call uses `numpy.errstate(over="raise", invalid="raise")`.
+Only `FloatingPointError` from that call becomes `InvalidSiteGeometry` at
+`site.coordinates`, identifying inputs whose buffering exceeds the engine's numerical
+range. This also guards footprint-search buffers. There is no arbitrary coordinate
+cutoff or geometry repair. GEOS exceptions, invalid returned topology, and invariant
+failures retain their internal-error behavior; they are not classified as input
+validation or ordinary `generation_failed` outcomes.
 
 The same target predicate governs floor selection and final status; when a minimum count
 exceeds one, the preceding count must fail it. Tolerance cannot bridge material capacity
@@ -776,9 +804,10 @@ contexts. Paths use dotted fields and bracketed array indexes.
 Numbers must be finite JSON numeric values, excluding booleans and strings. Floor
 counts require integers; coordinates preserve original integers until domain ring
 validation, then use the existing binary64 canonicalization without rounding.
-Floor-limit and GFA tolerances remain the domain policies above. A required derived
-metric outside finite binary64 range returns `422 NUMERICAL_RANGE_ERROR`, never
-infeasibility or non-finite JSON. Unexpected geometry failures remain server errors.
+Floor-limit and GFA tolerances remain the domain policies above. Numerical range
+failures described above return `422 NUMERICAL_RANGE_ERROR`. Buffer arithmetic
+overflow or invalid arithmetic returns `422 INVALID_SITE_GEOMETRY` at
+`site.coordinates`. Unexpected geometry failures remain server errors.
 Preview computation runs through FastAPI's worker thread pool and performs no
 database operation. Root saves and branches compute through the same application
 preview before repository insertion; database operations use the existing async
@@ -1064,6 +1093,12 @@ supports richer node-based interfaces, but its graph interaction model and depen
 are unnecessary for this prototype. A simple list requires deliberate keyboard/focus
 behavior and becomes less useful for very large trees; richer navigation can follow
 observed need.
+
+The nested tree API also targets small histories. On the current Pydantic stack,
+serialization succeeds for a 254-node chain but fails at 255 nodes; deeper chains
+also encounter recursive response construction limits. There is no explicit depth
+guard. Supporting deep histories would require a response/serialization strategy
+as well as traversal changes, and remains deferred.
 
 The implemented explorer discovers roots through the paginated summary list, which
 also contains children. Each Load More action reads one bounded page and advances

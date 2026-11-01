@@ -334,3 +334,16 @@ def test_unrepresentable_derived_metric_raises_explicit_error() -> None:
             footprint_limits=FootprintLimits(),
             floor_limits=FloorLimits(3.5, max_floors=10**400),
         )
+
+
+def test_zero_floor_infeasibility_precedes_coverage_cap_underflow() -> None:
+    result = generate_default_massing(
+        box(0, 0, 1e-160, 1e-160),
+        setback_m=0,
+        footprint_limits=FootprintLimits(site_coverage_ratio=1e-5),
+        floor_limits=FloorLimits(3.5, max_height_m=3),
+    )
+
+    assert result.status == "infeasible"
+    assert result.reason == "ZERO_PERMITTED_FLOORS"
+    assert result.footprint_geometry is None

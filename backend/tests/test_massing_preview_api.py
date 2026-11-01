@@ -273,6 +273,89 @@ async def test_unreportable_metric_returns_range_error(client, payload):
     assert response.json()["error"]["code"] == "NUMERICAL_RANGE_ERROR"
 
 
+@pytest.mark.parametrize("preferred_area", [None, 1])
+async def test_coverage_cap_underflow_returns_range_error(client, payload, preferred_area):
+    payload["site"] = serialize_site_geometry(box(0, 0, 1e-160, 1e-160))
+    payload["hard_constraints"] = {
+        "setback_m": 0,
+        "floor_to_floor_m": 3.5,
+        "max_floors": 2,
+        "site_coverage_ratio": 1e-5,
+    }
+    payload["preferences"] = {"preferred_footprint_area_m2": preferred_area}
+
+    response = await client.post(PREVIEW_URL, json=payload)
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "NUMERICAL_RANGE_ERROR"
+    assert "positive float" in error["message"]
+    assert error["details"][0]["path"] == "hard_constraints"
+
+
+@pytest.mark.parametrize("coverage,status", [(None, "feasible"), (0.0003, "generation_failed")])
+async def test_representable_tiny_site_outcomes_are_preserved(client, payload, coverage, status):
+    payload["site"] = serialize_site_geometry(box(0, 0, 1e-160, 1e-160))
+    payload["hard_constraints"] = {
+        "setback_m": 0,
+        "floor_to_floor_m": 3.5,
+        "max_floors": 2,
+        "site_coverage_ratio": coverage,
+    }
+
+    response = await client.post(PREVIEW_URL, json=payload)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["feasibility"]["status"] == status
+    assert body["metrics"]["footprint_area_upper_bound_m2"] > 0
+    if coverage is not None:
+        assert body["metrics"]["footprint_area_upper_bound_m2"] == nextafter(0.0, 1.0)
+        assert body["feasibility"]["hard_constraints_satisfied"] is None
+
+
+@pytest.mark.parametrize(
+    "ring,setback,coverage",
+    [
+        ([[0, 0], [1e150, 0], [0, 1e150], [0, 0]], 1e147, None),
+        ([[0, 0], [1e150, 0], [1e150, 1e150], [0, 1e150], [0, 0]], 0, 0.5),
+    ],
+    ids=["setback-overflow", "footprint-search-overflow"],
+)
+async def test_buffer_arithmetic_failure_returns_geometry_validation_error(client, payload, ring, setback, coverage):
+    payload["site"]["coordinates"] = [ring]
+    payload["hard_constraints"] = {
+        "setback_m": setback,
+        "floor_to_floor_m": 3.5,
+        "max_floors": 6,
+        "site_coverage_ratio": coverage,
+    }
+
+    response = await client.post(PREVIEW_URL, json=payload)
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "INVALID_SITE_GEOMETRY"
+    assert "floating-point range" in error["message"]
+    assert error["details"][0]["path"] == "site.coordinates"
+
+
+@pytest.mark.parametrize("side,setback", [(1e102, 1e99), (1e150, 0)])
+async def test_large_representable_geometry_remains_feasible(client, payload, side, setback):
+    payload["site"]["coordinates"] = [[[0, 0], [side, 0], [0, side], [0, 0]]]
+    payload["hard_constraints"] = {"setback_m": setback, "floor_to_floor_m": 3.5, "max_floors": 6}
+
+    response = await client.post(PREVIEW_URL, json=payload)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["feasibility"]["status"] == "feasible"
+    footprint = shape(body["footprint_geometry"])
+    assert footprint.is_valid and footprint.area > 0
+    assert shape(body["site_geometry"]).covers(footprint)
+    assert body["metrics"]["footprint_area_m2"] == footprint.area
+
+
 async def test_unexpected_geometry_failure_remains_a_server_error(client, payload, monkeypatch):
     def fail(*args, **kwargs):
         raise GEOSException("Unexpected engine failure")

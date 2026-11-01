@@ -5,9 +5,10 @@ from dataclasses import dataclass
 from math import fsum, isfinite
 from typing import Literal, TypedDict
 
+import numpy as np
 from shapely.geometry import MultiPolygon, Polygon
 
-from app.geometry.site import PolygonGeoJSON, normalize_polygon, serialize_site_geometry
+from app.geometry.site import InvalidSiteGeometry, PolygonGeoJSON, normalize_polygon, serialize_site_geometry
 from app.geometry.tolerances import area_tolerance_m2
 
 
@@ -49,7 +50,7 @@ def calculate_setback(site: Polygon, setback_m: float) -> SetbackResult:
     distance = _setback_distance(setback_m)
     # buffer(0) may simplify distinct vertices even on valid input. Zero setback
     # therefore uses the same representation policy as the site foundation.
-    buffered = site if distance == 0 else site.buffer(-distance, join_style="mitre", mitre_limit=5)
+    buffered = site if distance == 0 else inward_buffer(site, distance)
     components = _ordered_components(_polygon_components(buffered))
     selected = components[0] if components else None
     buildable = MultiPolygon(components) if len(components) > 1 else selected if selected is not None else Polygon()
@@ -84,6 +85,19 @@ def calculate_setback(site: Polygon, setback_m: float) -> SetbackResult:
         discarded_area_m2=fsum(float(component.area) for component in components[1:]),
         diagnostics=diagnostics,
     )
+
+
+def inward_buffer(polygon: Polygon, distance: float) -> Polygon | MultiPolygon:
+    """Apply the shared mitred inset, rejecting explicit arithmetic range failures."""
+    try:
+        # GEOS can overflow with finite coordinates and area, returning escaped or
+        # empty geometry. Do not misreport those outputs as ordinary infeasibility.
+        with np.errstate(over="raise", invalid="raise"):
+            return polygon.buffer(-distance, join_style="mitre", mitre_limit=5)
+    except FloatingPointError as error:
+        raise InvalidSiteGeometry(
+            "Site geometry and buffer distance exceed the supported floating-point range."
+        ) from error
 
 
 def select_largest_component(components: Iterable[Polygon]) -> Polygon | None:

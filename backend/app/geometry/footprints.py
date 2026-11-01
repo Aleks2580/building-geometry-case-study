@@ -7,7 +7,7 @@ from typing import Literal
 
 from shapely.geometry import MultiPolygon, Polygon
 
-from app.geometry.setbacks import SetbackResult, select_largest_component
+from app.geometry.setbacks import SetbackResult, inward_buffer, select_largest_component
 from app.geometry.site import normalize_polygon, serialize_site_geometry
 from app.geometry.tolerances import area_tolerance_m2
 
@@ -168,7 +168,7 @@ def _search_bracket(selected: Polygon, tolerance: float) -> float:
 
 
 def _buffer_candidate(selected: Polygon, distance: float, tolerance: float) -> _Candidate | None:
-    buffered = selected.buffer(-distance, join_style="mitre", mitre_limit=5)
+    buffered = inward_buffer(selected, distance)
     if not isinstance(buffered, (Polygon, MultiPolygon)) or not buffered.is_valid:
         raise RuntimeError("Inward buffer returned invalid non-polygonal geometry.")
     buffered_area = float(buffered.area)
