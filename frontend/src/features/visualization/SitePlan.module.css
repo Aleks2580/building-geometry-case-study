@@ -1,4 +1,5 @@
 .plan {
+  position: relative;
   margin: 0;
   min-width: 0;
 }
@@ -7,49 +8,51 @@
   display: block;
   width: 100%;
   height: auto;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: transparent;
   border-radius: 0.5rem;
 }
 
 .layer {
   fill: var(--layer-fill);
   stroke: var(--layer-stroke);
-  stroke-width: 2;
+  stroke-width: var(--layer-stroke-width, 2px);
   stroke-dasharray: var(--layer-dash, none);
   stroke-linejoin: round;
 }
 
 .site {
-  --layer-fill: #f8faf9;
-  --layer-stroke: #50636a;
+  --layer-fill: rgb(255 255 255 / 22%);
+  --layer-stroke: #345c65;
+  --layer-stroke-width: 4px;
+  --layer-dash: 8 4;
 }
 
 .buildable {
-  --layer-fill: rgb(113 99 157 / 18%);
-  --layer-stroke: #71639d;
+  --layer-fill: rgb(88 175 211 / 10%);
+  --layer-stroke: #5eacca;
   --layer-dash: 7 4;
 }
 
 .selectedBuildable {
-  --layer-fill: rgb(41 125 145 / 15%);
-  --layer-stroke: #297d91;
+  --layer-fill: rgb(57 160 155 / 9%);
+  --layer-stroke: #278f8e;
   --layer-dash: 3 3;
 }
 
 .footprint {
-  --layer-fill: rgb(50 99 89 / 65%);
-  --layer-stroke: #204e44;
+  --layer-fill: rgb(36 158 127 / 46%);
+  --layer-stroke: #16856a;
 }
 
 .legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem 0.75rem;
   padding: 0;
   margin: 0.75rem 0 0;
   list-style: none;
-  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  font-size: 0.65rem;
 }
 
 .legend li {
@@ -65,6 +68,7 @@
   border: 2px solid var(--layer-stroke);
 }
 
+.swatch.site,
 .swatch.buildable,
 .swatch.selectedBuildable {
   border-style: dashed;
@@ -80,6 +84,13 @@
   margin-bottom: 0.65rem;
   font-size: 0.85rem;
   min-width: 0;
+}
+
+.withViewTabs .dimensionToggle {
+  /* Standalone and fallback plans have no adjacent toolbar and keep controls in flow. */
+  position: absolute;
+  top: -4.4rem;
+  right: 0;
 }
 
 .dimensionToggle {
@@ -184,8 +195,16 @@
 }
 
 .planViewport {
+  display: grid;
+  align-items: center;
   min-width: 0;
+  min-height: clamp(20rem, 28vw, 27rem);
   width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+  background-color: #f8fcfb;
+  background-image: linear-gradient(#dceae966 1px, transparent 1px), linear-gradient(90deg, #dceae966 1px, transparent 1px);
+  background-size: 22px 22px;
 }
 
 .planViewport[data-expanded="true"] {
@@ -228,4 +247,21 @@
 .overviewLabel[data-selected="true"] {
   --dimension-color: #9a4d0b;
   font-weight: 700;
+}
+
+@media (max-width: 520px) {
+  .planViewport {
+    min-height: 16rem;
+  }
+
+  .legend {
+    gap: 0.5rem 0.75rem;
+    font-size: 0.7rem;
+  }
+}
+
+@media (max-width: 700px) {
+  .withViewTabs .dimensionToggle {
+    position: static;
+  }
 }

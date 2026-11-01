@@ -6,7 +6,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   massingPreviewResponseSchema, optionComparisonResponseSchema,
-  type FeasibilityStatus, type MassingPreviewResponse, type OptionResponse,
+  type FeasibilityStatus, type MassingPreviewResponse, type OptionComparisonResponse, type OptionResponse,
 } from "../../api/contracts";
 import { backendPreviewResponse } from "../../test/backendPreviewFixtures";
 import { optionResponse } from "../../test/optionFixtures";
@@ -124,13 +124,21 @@ beforeEach(() => {
   mocks.unmount.mockClear();
 });
 
+function renderComparison(response: OptionComparisonResponse) {
+  const view = render(<ComparisonResult comparison={response} />);
+  for (const label of ["Saved snapshot details", "Inputs and capacity", "Feasibility and diagnostics"]) {
+    fireEvent.click(screen.getByText(label, { selector: "summary" }));
+  }
+  return view;
+}
+
 describe("ComparisonResult visualization", () => {
-  it("measures only the active Left or Right snapshot without changing comparison values or requesting data", () => {
+  it("measures only the active Option 1 or Option 2 snapshot without changing comparison values or requesting data", () => {
     const response = crossRootComparison();
     const original = structuredClone(response);
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);
-    render(<ComparisonResult comparison={response} />);
+    renderComparison(response);
     const initialPaths = planPaths();
     const initialValues = comparisonValues();
     const readout = () => screen.getByRole("img", { name: "Site plan" }).closest("figure")?.querySelector("figcaption [aria-live='polite']");
@@ -140,7 +148,7 @@ describe("ComparisonResult visualization", () => {
     fireEvent.click(screen.getByRole("button", { name: "Show all" }));
     expect(screen.getByRole("img", { name: "Site plan" }).querySelectorAll("[data-overview-dimension]")).toHaveLength(12);
     expect(screen.getByRole("img", { name: "Site plan" }).querySelector("[data-overview-dimension='footprint-0-0'] text")).toHaveTextContent("14 m");
-    fireEvent.click(screen.getByRole("radio", { name: "Right plan" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Option 2 plan" }));
     expect(screen.getByRole("checkbox", { name: "Show dimensions" })).toBeChecked();
     expect(readout()).toHaveTextContent("Building footprint · edge 1: 20 m");
     expect(screen.getByRole("button", { name: "Show all" })).toHaveAttribute("aria-pressed", "true");
@@ -149,7 +157,7 @@ describe("ComparisonResult visualization", () => {
     expect(screen.getByRole("combobox", { name: "Measure edge" })).toHaveValue("footprint-0-0");
     fireEvent.change(screen.getByRole("combobox", { name: "Measure edge" }), { target: { value: "footprint-1-0" } });
     expect(readout()).toHaveTextContent("Footprint hole 1 · edge 1: 5 m");
-    fireEvent.click(screen.getByRole("radio", { name: "Left plan" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Option 1 plan" }));
     expect(readout()).toHaveTextContent("Site boundary · edge 1: 50 m");
     expect(screen.getByRole("img", { name: "Site plan" }).querySelectorAll("[data-overview-dimension]")).toHaveLength(12);
     expect(screen.getByRole("img", { name: "Site plan" }).querySelector("[data-overview-dimension='footprint-1-0']")).toBeNull();
@@ -161,31 +169,31 @@ describe("ComparisonResult visualization", () => {
     expect(mocks.mount).not.toHaveBeenCalled();
   });
 
-  it("defaults to the Left 2D plan and keeps 3D selected while switching exact cross-root snapshots", async () => {
+  it("defaults to the Option 1 2D plan and keeps 3D selected while switching exact cross-root snapshots", async () => {
     const response = crossRootComparison();
     const original = structuredClone(response);
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);
-    render(<ComparisonResult comparison={response} />);
+    renderComparison(response);
     const leftPaths = planPaths();
     const values = comparisonValues();
-    expect(screen.getByRole("button", { name: "2D" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("radio", { name: "Left plan" })).toBeChecked();
+    expect(screen.getByRole("button", { name: "2D Plan" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("radio", { name: "Option 1 plan" })).toBeChecked();
     expect(mocks.mount).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "3D" }));
+    fireEvent.click(screen.getByRole("button", { name: "3D Massing" }));
     await screen.findByTestId("comparison-canvas");
     expectScene(response.options[0].result);
-    fireEvent.click(screen.getByRole("radio", { name: "Right plan" }));
-    expect(screen.getByRole("button", { name: "3D" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("radio", { name: "Option 2 plan" }));
+    expect(screen.getByRole("button", { name: "3D Massing" })).toHaveAttribute("aria-pressed", "true");
     expectScene(response.options[1].result);
     expect(screen.getByRole("status")).toHaveTextContent(`Courtyard root (${response.options[1].id})`);
     expect(mocks.unmount).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole("button", { name: "2D" }));
+    fireEvent.click(screen.getByRole("button", { name: "2D Plan" }));
     const courtyard = screen.getByRole("img", { name: "Site plan" });
     expect(courtyard.querySelector('[data-layer="site"]')?.getAttribute("d")?.match(/M/g)).toHaveLength(2);
     expect(screen.queryByTestId("comparison-canvas")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("radio", { name: "Left plan" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Option 1 plan" }));
     expect(planPaths()).toEqual(leftPaths);
     expect(comparisonValues()).toEqual(values);
     expect(response).toEqual(original);
@@ -204,15 +212,15 @@ describe("ComparisonResult visualization", () => {
       expect(right.site_geometry).toEqual(left.site_geometry);
       const response = comparisonOf(left, right);
       const original = structuredClone(response);
-      render(<ComparisonResult comparison={response} />);
+      renderComparison(response);
       const values = comparisonValues();
       const floors = within(screen.getByRole("group", { name: "Floor count" }));
       expect(floors.getByText("-5")).toBeInTheDocument();
-      fireEvent.click(screen.getByRole("button", { name: "3D" }));
+      fireEvent.click(screen.getByRole("button", { name: "3D Massing" }));
       await screen.findByTestId("comparison-canvas");
       expectScene(left.result);
       expect(mocks.scene.mock.lastCall?.[0].scene.building.floorCount).toBe(6);
-      fireEvent.click(screen.getByRole("radio", { name: "Right plan" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Option 2 plan" }));
       expectScene(right.result);
       expect(mocks.scene.mock.lastCall?.[0].scene.building.floorCount).toBe(1);
       const dimensions = screen.getByRole("group", { name: "Building dimensions" });
@@ -228,11 +236,11 @@ describe("ComparisonResult visualization", () => {
       const result = resultForStatus(status);
       const response = comparisonOf(optionResponse(capturedResult("single-floor")), optionResponse(result, { id: ids[1] }));
       const original = structuredClone(response);
-      render(<ComparisonResult comparison={response} />);
+      renderComparison(response);
       const values = comparisonValues();
-      fireEvent.click(screen.getByRole("button", { name: "3D" }));
+      fireEvent.click(screen.getByRole("button", { name: "3D Massing" }));
       await screen.findByTestId("comparison-canvas");
-      fireEvent.click(screen.getByRole("radio", { name: "Right plan" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Option 2 plan" }));
       expectScene(result);
       expect(within(screen.getByRole("group", { name: "Feasibility status" }))
         .getAllByText(status.replace(/_/g, " ")).length).toBeGreaterThan(0);
@@ -255,13 +263,13 @@ describe("ComparisonResult visualization", () => {
     window.addEventListener("error", suppressExpected);
     try {
       const response = crossRootComparison();
-      render(<ComparisonResult comparison={response} />);
+      renderComparison(response);
       const leftPaths = planPaths();
       mocks.failCanvas = true;
-      fireEvent.click(screen.getByRole("button", { name: "3D" }));
+      fireEvent.click(screen.getByRole("button", { name: "3D Massing" }));
       await screen.findByText(/Interactive 3D is unavailable/);
       expect(planPaths()).toEqual(leftPaths);
-      fireEvent.click(screen.getByRole("radio", { name: "Right plan" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Option 2 plan" }));
       expect(screen.getByText(/Interactive 3D is unavailable/)).toBeInTheDocument();
       expect(planPaths()).not.toEqual(leftPaths);
       expect(screen.getByRole("img", { name: "Site plan" }).querySelector('[data-layer="site"]')?.getAttribute("d")?.match(/M/g)).toHaveLength(2);
@@ -277,37 +285,37 @@ describe("ComparisonResult visualization", () => {
 
   it("isolates context loss to one snapshot and mounts the next side in 3D", async () => {
     const response = crossRootComparison();
-    render(<ComparisonResult comparison={response} />);
+    renderComparison(response);
     const values = comparisonValues();
-    fireEvent.click(screen.getByRole("button", { name: "3D" }));
+    fireEvent.click(screen.getByRole("button", { name: "3D Massing" }));
     await screen.findByTestId("comparison-canvas");
     fireEvent.click(screen.getByRole("button", { name: "Lose comparison context" }));
     expect(screen.queryByTestId("comparison-canvas")).not.toBeInTheDocument();
     expect(screen.getByText(/Interactive 3D is unavailable/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("radio", { name: "Right plan" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Option 2 plan" }));
     await screen.findByTestId("comparison-canvas");
     expect(screen.queryByText(/Interactive 3D is unavailable/)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "3D" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "3D Massing" })).toHaveAttribute("aria-pressed", "true");
     expectScene(response.options[1].result);
     expect(comparisonValues()).toEqual(values);
   });
 
   it("unmounts each previous scene during repeated side and mode changes", async () => {
     const response = crossRootComparison();
-    render(<ComparisonResult comparison={response} />);
-    fireEvent.click(screen.getByRole("button", { name: "3D" }));
+    renderComparison(response);
+    fireEvent.click(screen.getByRole("button", { name: "3D Massing" }));
     await screen.findByTestId("comparison-canvas");
     for (let index = 0; index < 3; index++) {
-      fireEvent.click(screen.getByRole("radio", { name: "Right plan" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Option 2 plan" }));
       expectScene(response.options[1].result);
-      fireEvent.click(screen.getByRole("radio", { name: "Left plan" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Option 1 plan" }));
       expectScene(response.options[0].result);
-      fireEvent.click(screen.getByRole("button", { name: "2D" }));
+      fireEvent.click(screen.getByRole("button", { name: "2D Plan" }));
       expect(screen.queryByTestId("comparison-canvas")).not.toBeInTheDocument();
-      fireEvent.click(screen.getByRole("button", { name: "3D" }));
+      fireEvent.click(screen.getByRole("button", { name: "3D Massing" }));
       await screen.findByTestId("comparison-canvas");
     }
-    fireEvent.click(screen.getByRole("button", { name: "2D" }));
+    fireEvent.click(screen.getByRole("button", { name: "2D Plan" }));
     expect(mocks.mount).toHaveBeenCalledTimes(10);
     expect(mocks.unmount).toHaveBeenCalledTimes(10);
     expect(screen.queryByTestId("comparison-canvas")).not.toBeInTheDocument();

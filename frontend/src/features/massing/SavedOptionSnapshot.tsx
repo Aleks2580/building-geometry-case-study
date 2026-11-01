@@ -1,17 +1,19 @@
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 import type { OptionResponse } from "../../api/contracts";
 import MassingResult from "./MassingResult";
-import shared from "./massing.module.css";
+import WorkspaceActionBar from "./WorkspaceActionBar";
 import styles from "./MassingWorkspace.module.css";
 
-export default function SavedOptionSnapshot({ option, onCreateBranch, onStartRoot }: {
+export default function SavedOptionSnapshot({ option, onCreateBranch, onStartRoot, navigation }: {
   option: OptionResponse;
   onCreateBranch: () => void;
   onStartRoot: () => void;
+  navigation?: ReactNode;
 }) {
   const titleId = useId();
   const title = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
+    if (title.current?.closest("[hidden]")) return;
     title.current?.focus();
     title.current?.scrollIntoView?.({ block: "start" });
   }, []);
@@ -27,40 +29,44 @@ export default function SavedOptionSnapshot({ option, onCreateBranch, onStartRoo
     ["GFA target (m²)", option.targets.gfa_target_m2],
   ];
 
-  return <section aria-labelledby={titleId}>
-    <div className={styles.context}>
-      <h2 id={titleId} ref={title} tabIndex={-1}>Saved option snapshot</h2>
-      <p>Read-only immutable snapshot. Configuration, geometry, and results are stored values; opening does not generate a preview.</p>
-      <dl className={styles.snapshotMetadata}>
-        <div><dt>Snapshot name</dt><dd>{option.name ?? "Unnamed option"}</dd></div>
-        <div><dt>UUID</dt><dd>{option.id}</dd></div>
-        <div><dt>Parent</dt><dd>{option.parent_id ?? "None (root option)"}</dd></div>
-        <div><dt>Saved status</dt><dd>{option.feasibility_status}</dd></div>
-        <div><dt>Saved at</dt><dd><time dateTime={option.created_at}>{option.created_at}</time></dd></div>
-        <div><dt>Schema version</dt><dd>{option.schema_version}</dd></div>
-        <div><dt>Algorithm version</dt><dd>{option.algorithm_version}</dd></div>
-      </dl>
-      <div className={styles.actions}>
-        <button type="button" onClick={onCreateBranch}>Create Branch</button>
-        <button type="button" onClick={onStartRoot}>Start New Root</button>
+  return <div className={styles.session}>
+    <div className={styles.workspaceScroll}>
+      {navigation}
+      <div className={styles.workspace}>
+        <section className={styles.savedConfiguration} aria-label="Saved configuration">
+          <div className={styles.savedHeading}>
+            <p className={styles.savedLabel}>Saved design</p>
+            <h2 id={titleId} ref={title} tabIndex={-1}>Saved option snapshot</h2>
+            <strong>{option.name ?? "Unnamed option"}</strong>
+            <p>Read-only design. Create a branch to explore changes.</p>
+          </div>
+          <details className={styles.snapshotDetails}>
+            <summary>Snapshot details</summary>
+            <dl className={styles.snapshotMetadata}>
+              <div><dt>UUID</dt><dd>{option.id}</dd></div>
+              <div><dt>Parent</dt><dd>{option.parent_id ?? "None (root option)"}</dd></div>
+              <div><dt>Saved status</dt><dd>{option.feasibility_status}</dd></div>
+              <div><dt>Saved at</dt><dd><time dateTime={option.created_at}>{option.created_at}</time></dd></div>
+              <div><dt>Schema version</dt><dd>{option.schema_version}</dd></div>
+              <div><dt>Algorithm version</dt><dd>{option.algorithm_version}</dd></div>
+            </dl>
+          </details>
+          <div className={styles.savedFields}>
+            <h3>Saved configuration</h3>
+            <dl className={styles.configurationValues}>
+              {fields.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value ?? "Not set"}</dd></div>)}
+            </dl>
+            <details className={styles.snapshotDetails}>
+              <summary>Stored site geometry</summary>
+              <pre className={styles.siteJson}>{JSON.stringify(option.site_geometry, null, 2)}</pre>
+            </details>
+          </div>
+        </section>
+        <section className={styles.previewPanel} aria-label="Saved snapshot result">
+          <MassingResult result={option.result} title="Saved snapshot result" />
+        </section>
       </div>
     </div>
-    <div className={styles.workspace}>
-      <section className={`${shared.panel} ${styles.editor}`} aria-label="Saved configuration">
-        <h3>Saved configuration</h3>
-        <dl className={styles.configurationValues}>
-          {fields.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value ?? "Not set"}</dd></div>)}
-        </dl>
-        <details>
-          <summary>Stored site geometry</summary>
-          <pre className={styles.siteJson}>{JSON.stringify(option.site_geometry, null, 2)}</pre>
-        </details>
-      </section>
-      <section className={`${shared.panel} ${styles.previewPanel}`} aria-label="Saved snapshot result">
-        <p className={shared.eyebrow}>Stored backend result</p>
-        <h3>Saved snapshot result</h3>
-        <MassingResult result={option.result} />
-      </section>
-    </div>
-  </section>;
+    <WorkspaceActionBar mode="saved" onNewDesign={onStartRoot} onCreateBranch={onCreateBranch} />
+  </div>;
 }

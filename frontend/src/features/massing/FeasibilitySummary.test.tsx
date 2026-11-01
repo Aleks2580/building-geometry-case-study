@@ -68,7 +68,7 @@ describe("FeasibilitySummary", () => {
         failed ? "generation_failed" : "infeasible", failed ? null : false, reason,
       )} />);
 
-      expect(screen.getByText("Backend reason", { selector: "dt" })).toBeInTheDocument();
+      expect(screen.getByText("Reason", { selector: "dt" })).toBeInTheDocument();
       expect(screen.getByText(reason, { selector: "code" })).toBeInTheDocument();
     },
   );
@@ -76,6 +76,6 @@ describe("FeasibilitySummary", () => {
   it("omits the reason row when none was provided", () => {
     render(<FeasibilitySummary feasibility={previewResponse().feasibility} />);
 
-    expect(screen.queryByText("Backend reason")).not.toBeInTheDocument();
+    expect(screen.queryByText("Reason")).not.toBeInTheDocument();
   });
 });

@@ -12,6 +12,7 @@ export interface SitePlanProps {
   width?: number;
   height?: number;
   padding?: number;
+  alignControlsWithViewTabs?: boolean;
 }
 
 export default function SitePlan({
@@ -22,6 +23,7 @@ export default function SitePlan({
   width = 640,
   height = 400,
   padding = 24,
+  alignControlsWithViewTabs = false,
 }: SitePlanProps) {
   const id = useId();
   const svg = useRef<SVGSVGElement>(null);
@@ -45,6 +47,14 @@ export default function SitePlan({
     path: transform && layer.geometry ? geometryPath(layer.geometry, transform) : "",
   }));
   const visibleLayers = layers.filter((layer) => layer.path !== "");
+  const [, buildableLayer, selectedLayer] = layers;
+  const distinctSelection = buildableLayer.path !== "" && selectedLayer.path !== "" &&
+    buildableLayer.path !== selectedLayer.path;
+  // Exact rendered paths share a legend item without assuming geometric equivalence.
+  // A split region keeps its selection label even when the footprint fills it.
+  const legendLayers = visibleLayers.filter((layer, index) => layer.key === "site" ||
+    (layer.key === "selected-buildable" && distinctSelection) ||
+    !visibleLayers.slice(index + 1).some((later) => later.path === layer.path));
   const hasSite = visibleLayers.some((layer) => layer.key === "site");
   const hasFootprint = visibleLayers.some((layer) => layer.key === "footprint");
   const edges = showDimensions && hasSite ? measureGeometryEdges(siteGeometry, hasFootprint ? footprintGeometry : null) : [];
@@ -64,8 +74,9 @@ export default function SitePlan({
     else edgeGroups.set(key, [edge]);
   }
   const description = [
-    "Plan view of backend geometry in metres. Larger y coordinates point upward.",
+    "Plan view of the massing geometry in metres. Larger y coordinates point upward.",
     hasSite ? `Displayed layers: ${visibleLayers.map((layer) => layer.label).join(", ")}.` : "Site geometry cannot be displayed.",
+    legendLayers.length < visibleLayers.length ? "The legend groups matching area outlines." : "",
     hasFootprint ? "" : "No building footprint is available.",
     showDimensions && selectedEdge ? `${showAll ? `Showing all ${overview?.annotations.length ?? 0} dimensions. ` : ""}Selected measurement: ${dimensionEdgeLabel(selectedEdge)}, ${formatDimensionLength(selectedEdge.lengthM)}.` : "",
   ].filter(Boolean).join(" ");
@@ -94,7 +105,7 @@ export default function SitePlan({
   }
 
   return (
-    <figure className={styles.plan}>
+    <figure className={`${styles.plan}${alignControlsWithViewTabs ? ` ${styles.withViewTabs}` : ""}`}>
       <div className={styles.dimensionControls}>
         <label className={styles.dimensionToggle}>
           <input type="checkbox" checked={showDimensions} disabled={!hasSite}
@@ -213,9 +224,9 @@ export default function SitePlan({
           {showAll && overview?.unavailableIds.length ? <p className={styles.dimensionHelp}>Some labels cannot fit in this view. Enlarge the plan or select an individual edge to read its measurement.</p> : null}
           {!showAll && selectedEdge && !annotation && <p className={styles.dimensionHelp}>This edge cannot be annotated at the current display size. Its measurement is shown above.</p>}
         </div>}
-        {visibleLayers.length > 0 && (
+        {legendLayers.length > 0 && (
           <ul className={styles.legend} aria-label="Site plan layers">
-            {visibleLayers.map((layer) => (
+            {legendLayers.map((layer) => (
               <li key={layer.key}>
                 <span className={`${styles.swatch} ${layer.className}`} aria-hidden="true" />
                 {layer.label}

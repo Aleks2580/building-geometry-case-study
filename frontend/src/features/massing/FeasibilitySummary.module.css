@@ -1,28 +1,82 @@
 .previewStatus {
-  border-radius: 6px;
-  background: #edf6f2;
-  padding: 1rem;
+  border: 1px solid #c8e7da;
+  border-radius: 9px;
+  background: #f0f9f4;
+  color: #24634e;
+  padding: 0.9rem 1rem;
   margin-bottom: 1.25rem;
 }
 
 .previewStatus h3 {
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.3rem;
+  font-size: 0.95rem;
+}
+
+.previewStatus h3::before {
+  content: "";
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.45rem;
+  border-radius: 50%;
+  background: currentColor;
 }
 
 .previewStatus p {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
 }
 
 .previewStatus[data-status="feasible_target_unmet"] {
-  background: #fff4d8;
+  border-color: #e8d49f;
+  background: #fff8e7;
+  color: #7c581e;
 }
 
 .previewStatus[data-status="infeasible"],
 .previewStatus[data-status="generation_failed"] {
-  background: #f9ebea;
+  border-color: #e9c7c5;
+  background: #fff3f1;
+  color: #8a3638;
 }
 
 .previewStatus dl {
-  margin-top: 1rem;
+  margin-top: 0.65rem;
+}
+
+.compact {
+  flex: 0 1 14rem;
+  margin: 0;
+  padding: 0.65rem 0.8rem;
+}
+
+.compact h3 {
+  font-size: 0.75rem;
+}
+
+.compact p {
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
+.compact dl {
+  margin-top: 0.4rem;
+}
+
+.compact dl > div {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.25rem;
+  padding: 0.2rem 0;
+}
+
+.compact dt,
+.compact dd {
+  font-size: 0.65rem;
+}
+
+@media (max-width: 700px) {
+  .compact {
+    flex-basis: auto;
+    width: 100%;
+  }
 }

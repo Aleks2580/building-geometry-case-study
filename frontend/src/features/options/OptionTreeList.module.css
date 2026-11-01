@@ -27,19 +27,28 @@
   flex: 1;
   gap: 0.3rem;
   min-width: 0;
+  padding: 0.75rem;
   text-align: start;
   overflow-wrap: anywhere;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
 }
 
 .select[aria-pressed="true"] {
-  border-color: #326359;
-  background: #e2f0e9;
-  box-shadow: inset 3px 0 0 #326359;
+  border-color: var(--color-accent);
+  background: #edf7f3;
+  box-shadow: inset 3px 0 0 var(--color-accent);
 }
 
 .identifier,
 .status {
   color: var(--color-text-secondary);
-  font-size: 0.75rem;
+  font-size: 0.68rem;
+  font-weight: 400;
+}
+
+.status {
+  width: fit-content;
+  border-radius: 1rem;
+  padding: 0.1rem 0.45rem;
+  background: var(--color-surface-subtle);
 }

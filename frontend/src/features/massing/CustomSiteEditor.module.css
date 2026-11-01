@@ -226,6 +226,12 @@
 }
 
 @media (max-width: 520px) {
+  .editor input,
+  .editor textarea,
+  .editor select {
+    font-size: 1rem;
+  }
+
   .viewInputs {
     grid-template-columns: 1fr;
   }

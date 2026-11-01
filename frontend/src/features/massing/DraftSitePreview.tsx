@@ -17,8 +17,8 @@ export default function DraftSitePreview({ geometry, inherited = false }: {
       <figcaption>
         <p className={styles.heading}>{inherited ? "Inherited site" : "Live draft site"}</p>
         <p className={styles.hint}>{inherited
-          ? "Saved parent site. Generate Preview to calculate massing with your branch inputs."
-          : "Site outline only. Generate Preview to check geometry and calculate massing."}</p>
+          ? "Saved boundary · Read-only"
+          : "Generate Preview to check feasibility."}</p>
       </figcaption>
       {path ? (
         <svg
@@ -35,7 +35,7 @@ export default function DraftSitePreview({ geometry, inherited = false }: {
           <desc id={`${id}-description`}>
             {inherited
               ? "Saved parent site in metres, fitted to this view. The boundary and any holes are shown. The site is read-only and inherited by every child."
-              : "Unvalidated site outline in metres, fitted to this view. The boundary and any holes are shown. Geometry validity and massing are checked by the backend when you choose Generate Preview."}
+              : "Unvalidated site outline in metres, fitted to this view. The boundary and any holes are shown. Choose Generate Preview to check geometry and calculate massing."}
           </desc>
           <path d={path} fillRule="evenodd" vectorEffect="non-scaling-stroke" />
         </svg>

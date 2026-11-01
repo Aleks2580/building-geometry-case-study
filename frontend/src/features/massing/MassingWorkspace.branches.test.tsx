@@ -29,7 +29,10 @@ function generate() {
 }
 
 function change(label: RegExp, value: string) {
-  fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  const input = screen.getByLabelText(label);
+  const disclosure = input.closest("details");
+  if (disclosure && !disclosure.open) fireEvent.click(disclosure.querySelector("summary")!);
+  fireEvent.change(input, { target: { value } });
 }
 
 function body(index: number): Record<string, unknown> {
@@ -97,7 +100,7 @@ describe("MassingWorkspace branching", () => {
     expect(screen.getByLabelText(/GFA target \(m²\)/)).toHaveValue("500");
     await waitFor(() => expect(screen.getByLabelText(/Setback \(m\)/)).toHaveFocus());
     expect(screen.getByRole("group", { name: "Inherited site (read-only)" })).toBeInTheDocument();
-    expect(screen.queryByRole("combobox", { name: "Site shape" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Rectangle / Square" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/Site Polygon JSON/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Save/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("img", { name: "Site plan" })).not.toBeInTheDocument();
@@ -296,12 +299,12 @@ describe("MassingWorkspace branching", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Save Branch" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
 
-    fireEvent.click(screen.getByRole("button", { name: "Start New Root" }));
+    fireEvent.click(screen.getByRole("button", { name: "New design" }));
     confirmReplacement();
 
     expect(context()).toHaveTextContent("New root option");
     expect(context()).not.toHaveTextContent(optionResponse().id);
-    expect(screen.getByRole("combobox", { name: "Site shape" })).toHaveValue("rectangle");
+    expect(screen.getByRole("button", { name: "Rectangle / Square" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.queryByRole("button", { name: /Save/ })).not.toBeInTheDocument();
     await act(async () => pending.resolve(Response.json(optionResponse(undefined, { id: childId, parent_id: optionResponse().id }), { status: 201 })));
     expect(screen.queryByText(childId)).not.toBeInTheDocument();

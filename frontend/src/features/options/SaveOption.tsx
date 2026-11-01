@@ -80,8 +80,8 @@ export default function SaveOption({ configuration, draftChanged, parent, onCrea
       <h3 id={`${id}-title`}>{parent ? "Save branch" : "Save root option"}</h3>
       <p className={styles.hint}>
         {parent
-          ? "Save this generated configuration as a new immutable child. Each save creates a sibling under the selected parent, including any feasibility diagnostics."
-          : "Save this generated configuration as an immutable root option, including any feasibility diagnostics. The backend recomputes the saved snapshot. Each save creates a new option."}
+          ? "Each save creates a sibling under the selected parent. Earlier designs stay unchanged."
+          : "Save this configuration to start a decision history. Each save creates a separate option."}
       </p>
       {parent && <p className={styles.parent}>Selected parent: <strong>{parent.name ?? "Unnamed option"}</strong> ({parent.id})</p>}
       <form aria-label={parent ? "Save branch option" : "Save root option"} noValidate onSubmit={(event) => {
@@ -109,7 +109,7 @@ export default function SaveOption({ configuration, draftChanged, parent, onCrea
             }}
             onBlur={validateName}
           />
-          <p className={styles.hint} id={`${id}-hint`}>Up to 200 characters. Leave empty for an unnamed option.</p>
+          <p className={styles.hint} id={`${id}-hint`}>Optional · Up to 200 characters</p>
           {nameError !== null && <p className={styles.fieldError} id={`${id}-error`} role="alert">{nameError}</p>}
         </div>
         <button className={styles.saveButton} type="submit" disabled={draftChanged || save.isPending}>
@@ -123,13 +123,13 @@ export default function SaveOption({ configuration, draftChanged, parent, onCrea
       )}
       {save.isPending && (
         <p className={styles.notice} role="status">
-          Saving this submitted preview. Generating another preview hides this receipt and does not cancel the save.
+          Saving your option. You can keep exploring while it saves.
         </p>
       )}
       {save.isSuccess && (
         <div className={styles.success} role="status">
           <h4>{parent ? "Branch saved" : "Root option saved"}</h4>
-          <p>This receipt belongs to the generated preview.</p>
+          <p>Your saved design is available in Saved Options.</p>
           <dl>
             <div><dt>Name</dt><dd>{save.data.name ?? "Unnamed option"}</dd></div>
             <div><dt>Identifier</dt><dd>{save.data.id}</dd></div>

@@ -13,6 +13,8 @@ const pageSize = 50;
 
 interface SavedOptionsExplorerProps {
   onOpenOption?: (id: string) => void;
+  activeView?: "saved-options" | "compare";
+  onViewChange?: (view: "saved-options" | "compare") => void;
 }
 
 function findNode(tree: OptionTree, id: string): OptionTree | undefined {
@@ -54,8 +56,8 @@ function TreePanel({ rootId, onOpenOption, onAssignComparison }: SavedOptionsExp
               Open in Workspace
             </button>}
             <div className={styles.comparisonActions}>
-              <button type="button" onClick={() => onAssignComparison("left", selected)}>Assign to Left</button>
-              <button type="button" onClick={() => onAssignComparison("right", selected)}>Assign to Right</button>
+              <button type="button" onClick={() => onAssignComparison("left", selected)}>Assign to Option 1</button>
+              <button type="button" onClick={() => onAssignComparison("right", selected)}>Assign to Option 2</button>
             </div>
           </div> : <p>Select a node to inspect its saved summary.</p>}
         </div>
@@ -64,7 +66,7 @@ function TreePanel({ rootId, onOpenOption, onAssignComparison }: SavedOptionsExp
   );
 }
 
-export default function SavedOptionsExplorer({ onOpenOption }: SavedOptionsExplorerProps) {
+export default function SavedOptionsExplorer({ onOpenOption, activeView = "saved-options", onViewChange }: SavedOptionsExplorerProps) {
   const titleId = useId();
   const rootsId = useId();
   const queryClient = useQueryClient();
@@ -91,7 +93,7 @@ export default function SavedOptionsExplorer({ onOpenOption }: SavedOptionsExplo
   function assignComparison(side: ComparisonSide, option: SavedSummary) {
     const other = comparison[side === "left" ? "right" : "left"];
     if (other?.id.toLowerCase() === option.id.toLowerCase()) {
-      setSelectionError("Select two distinct saved options. This option is already assigned to the other side.");
+      setSelectionError("Select two distinct saved options for Option 1 and Option 2.");
       return;
     }
     setSelectionError(null);
@@ -100,48 +102,61 @@ export default function SavedOptionsExplorer({ onOpenOption }: SavedOptionsExplo
     } }));
   }
 
-  return (
-    <section id="saved-options" className={styles.explorer} aria-labelledby={titleId}>
-      <div className={styles.header}>
-        <div>
-          <h2 id={titleId}>Saved options</h2>
-          <p>Browse persisted decision histories, then open a snapshot or assign options to compare. Browsing and comparison keep your current draft.</p>
+  return <>
+    {/* Section visibility preserves tree selection and the submitted comparison observer. */}
+    <div id="saved-options-view" hidden={activeView !== "saved-options"}>
+      <section id="saved-options" className={styles.explorer} aria-labelledby={titleId}>
+        <div className={styles.header}>
+          <div>
+            <h2 id={titleId}>Saved options</h2>
+            <p>Explore saved designs and their branches. Open an option or choose two to compare.</p>
+          </div>
+          <button type="button" onClick={refresh} disabled={options.isFetching}>Refresh saved options</button>
         </div>
-        <button type="button" onClick={refresh} disabled={options.isFetching}>Refresh saved options</button>
-      </div>
-      <div className={styles.layout}>
-        <section className={styles.roots} aria-labelledby={rootsId}>
-          <h3 id={rootsId}>Root options</h3>
-          {options.isPending && <p role="status">Loading saved options…</p>}
-          {options.isError && <p className={styles.error} role="alert">
-            {options.isFetchNextPageError ? "Could not load more saved options."
-              : options.data ? "Could not refresh saved options. Showing the last loaded options."
-                : "Could not load saved options."} {options.error.message}
-          </p>}
-          {options.data && roots.length === 0 && <p>
-            {options.hasNextPage
-              ? "No root options in the pages loaded so far. Load more to continue searching."
-              : "No saved root options found. Save a preview to start a decision history."}
-          </p>}
-          {roots.length > 0 && <ul className={styles.rootList}>
-            {roots.map((root) => <li key={root.id}>
-              <button type="button" className={styles.rootButton} aria-pressed={rootId === root.id} onClick={() => setRootId(root.id)}>
-                <strong>{root.name ?? "Unnamed option"}</strong>
-                <span className={styles.identifier}>{root.id}</span>
-                <span>{root.feasibility_status.replace(/_/g, " ")}</span>
-              </button>
-            </li>)}
-          </ul>}
-          {options.isFetching && !options.isPending && <p role="status">
-            {options.isFetchingNextPage ? "Loading more saved options…" : "Refreshing saved options…"}
-          </p>}
-          {options.hasNextPage && <button type="button" disabled={options.isFetching} onClick={() => { void options.fetchNextPage({ cancelRefetch: false }); }}>Load more options</button>}
-          {options.isError && !options.data && <button type="button" disabled={options.isFetching} onClick={() => { void options.refetch(); }}>Retry saved options</button>}
-        </section>
-        {rootId === null ? <p className={styles.prompt}>Select a root option to browse its decision tree.</p>
-          : <TreePanel key={rootId} rootId={rootId} onOpenOption={onOpenOption} onAssignComparison={assignComparison} />}
-      </div>
-      {selectionError && <p className={styles.error} role="alert">{selectionError}</p>}
+        <div className={styles.layout}>
+          <section className={styles.roots} aria-labelledby={rootsId}>
+            <h3 id={rootsId}>Root options</h3>
+            {options.isPending && <p role="status">Loading saved options…</p>}
+            {options.isError && <p className={styles.error} role="alert">
+              {options.isFetchNextPageError ? "Could not load more saved options."
+                : options.data ? "Could not refresh saved options. Showing the last loaded options."
+                  : "Could not load saved options."} {options.error.message}
+            </p>}
+            {options.data && roots.length === 0 && <p>
+              {options.hasNextPage
+                ? "No root options in the pages loaded so far. Load more to continue searching."
+                : "No saved root options found. Save a preview to start a decision history."}
+            </p>}
+            {roots.length > 0 && <ul className={styles.rootList}>
+              {roots.map((root) => <li key={root.id}>
+                <button type="button" className={styles.rootButton} aria-pressed={rootId === root.id} onClick={() => setRootId(root.id)}>
+                  <strong>{root.name ?? "Unnamed option"}</strong>
+                  <span className={styles.identifier}>{root.id}</span>
+                  <span>{root.feasibility_status.replace(/_/g, " ")}</span>
+                </button>
+              </li>)}
+            </ul>}
+            {options.isFetching && !options.isPending && <p role="status">
+              {options.isFetchingNextPage ? "Loading more saved options…" : "Refreshing saved options…"}
+            </p>}
+            {options.hasNextPage && <button type="button" disabled={options.isFetching} onClick={() => { void options.fetchNextPage({ cancelRefetch: false }); }}>Load more options</button>}
+            {options.isError && !options.data && <button type="button" disabled={options.isFetching} onClick={() => { void options.refetch(); }}>Retry saved options</button>}
+          </section>
+          {rootId === null ? <p className={styles.prompt}>Select a root option to browse its decision tree.</p>
+            : <TreePanel key={rootId} rootId={rootId} onOpenOption={onOpenOption} onAssignComparison={assignComparison} />}
+        </div>
+        {selectionError && <p className={styles.error} role="alert">{selectionError}</p>}
+        <div className={styles.selectionSummary}>
+          <div role="status" aria-label="Current comparison selections">
+            <p><span>Option 1</span><strong>{comparison.left ? comparison.left.name ?? "Unnamed option" : "No option selected"}</strong></p>
+            <p><span>Option 2</span><strong>{comparison.right ? comparison.right.name ?? "Unnamed option" : "No option selected"}</strong></p>
+          </div>
+          {onViewChange && <button type="button" className={styles.viewComparison} onClick={() => onViewChange("compare")}>View comparison</button>}
+        </div>
+      </section>
+    </div>
+    <div id="compare-view" hidden={activeView !== "compare"} className={styles.comparisonView}>
+      {onViewChange && <button type="button" className={styles.browseButton} onClick={() => onViewChange("saved-options")}>Browse saved options</button>}
       <OptionComparison
         // Changing a slot detaches its submitted query immediately. Keeping this
         // outside the root-keyed tree preserves cross-history choices while browsing.
@@ -153,6 +168,6 @@ export default function SavedOptionsExplorer({ onOpenOption }: SavedOptionsExplo
           setComparison((current) => ({ ...current, [side]: null }));
         }}
       />
-    </section>
-  );
+    </div>
+  </>;
 }

@@ -42,7 +42,7 @@ describe("Diagnostics", () => {
     ];
     renderDiagnostics(diagnostics);
 
-    const list = screen.getByRole("list", { name: "Backend diagnostics" });
+    const list = screen.getByRole("list", { name: "Diagnostics" });
     const items = within(list).getAllByRole("listitem");
     expect(items).toHaveLength(3);
     diagnostics.forEach((diagnostic, index) => {

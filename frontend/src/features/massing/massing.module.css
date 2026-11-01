@@ -1,9 +1,9 @@
 .panel {
-  border: 1px solid #d4dfdb;
-  border-radius: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
   background: var(--color-surface);
   padding: 1.75rem;
-  box-shadow: 0 4px 18px #17342b05;
+  box-shadow: var(--shadow-panel);
 }
 
 .panelHeading {

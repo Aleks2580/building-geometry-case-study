@@ -1,0 +1,293 @@
+.dashboard {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+
+.summaryPanel,
+.visualPanel,
+.disclosure {
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-panel);
+}
+
+.summaryPanel {
+  padding: 1.25rem;
+}
+
+.resultHeading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.resultHeading h2 {
+  margin-bottom: 0.25rem;
+  font-size: 1.15rem;
+}
+
+.resultHeading > div > p {
+  margin-bottom: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.kpi {
+  min-width: 0;
+  padding: 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+}
+
+.kpi dt {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--color-text-secondary);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.kpiIcon {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  border-radius: 7px;
+  background: #eaf4ef;
+  color: var(--color-accent);
+}
+
+.kpiIcon svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.kpi dd {
+  margin: 0.35rem 0 0;
+  font-size: clamp(1.2rem, 1.7vw, 1.85rem);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.045em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.kpi .kpiHint {
+  margin: 0.35rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.65rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.4;
+}
+
+.viewerLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 1rem;
+  min-width: 0;
+  padding: 0 1rem 1rem;
+}
+
+.optionDetails {
+  min-width: 0;
+  align-self: stretch;
+  margin-top: 4.2rem;
+  padding: 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+}
+
+.optionDetails h3 {
+  margin-bottom: 0.15rem;
+  font-size: 0.85rem;
+}
+
+.optionDetails > p {
+  margin-bottom: 1rem;
+  color: var(--color-text-muted);
+  font-size: 0.65rem;
+}
+
+.optionDetails h4 {
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.75rem;
+}
+
+.optionDetails dl {
+  margin: 0;
+}
+
+.optionDetails dl > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+  font-size: 0.7rem;
+}
+
+.optionDetails dt {
+  color: var(--color-text-secondary);
+}
+
+.optionDetails dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: end;
+  overflow-wrap: anywhere;
+}
+
+.resultActions {
+  min-width: 0;
+  border-top: 1px solid var(--color-border);
+  padding: 1rem;
+}
+
+.disclosures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+  align-items: start;
+}
+
+.disclosure[open] {
+  grid-column: 1 / -1;
+}
+
+.disclosure > summary {
+  padding: 1rem 1.25rem;
+  font-size: 0.85rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.disclosure > summary > span {
+  display: block;
+  margin: 0.3rem 0 0 1rem;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.disclosure[open] > summary {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.disclosureBody {
+  padding: 0 1.25rem 1.25rem;
+}
+
+@media (max-width: 1250px) {
+  .viewerLayout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .optionDetails {
+    margin-top: 0;
+  }
+
+  .optionDetails dl {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem 1rem;
+  }
+
+  .optionDetails dl > div {
+    flex-wrap: wrap;
+    margin-top: 0;
+  }
+}
+
+@media (max-width: 700px) {
+  .disclosures {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .summaryPanel {
+    padding: 1rem;
+  }
+
+  .resultHeading {
+    flex-direction: column;
+  }
+
+  .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .kpi dd {
+    font-size: 1.5rem;
+  }
+
+  .viewerLayout {
+    padding-inline: 0.75rem;
+  }
+
+  .optionDetails dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .disclosure > summary {
+    padding: 0.9rem 1rem;
+  }
+
+  .disclosure > summary > span {
+    display: block;
+    margin: 0.25rem 0 0 1rem;
+  }
+
+  .disclosureBody {
+    padding-inline: 1rem;
+  }
+}
+
+@container (max-width: 620px) {
+  .resultHeading {
+    flex-direction: column;
+  }
+
+  .resultHeading > section {
+    flex-basis: auto;
+    width: 100%;
+  }
+
+  .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .viewerLayout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .optionDetails {
+    margin-top: 0;
+  }
+
+  .optionDetails dl {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem 1rem;
+  }
+
+  .optionDetails dl > div {
+    flex-wrap: wrap;
+  }
+}

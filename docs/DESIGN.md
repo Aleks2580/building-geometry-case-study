@@ -20,7 +20,7 @@
 > A Saved Options explorer discovers persisted roots, browses nested branches,
 > and opens complete immutable snapshots in the workspace. Saved configuration and
 > results remain distinct from editable roots and branch drafts; an opened root or
-> child can supply the parent for a new branch after reload. Independent Left/Right
+> child can supply the parent for a new branch after reload. Independent Option 1 / Option 2
 > selection compares complete saved inputs and outcomes and switches between their
 > stored massing results. Generated previews, opened saved snapshots, and comparison
 > inspection offer 2D/3D switching over the same backend result. Alternatives remain
@@ -849,8 +849,23 @@ history. Saved options can also be compared independently of that editing sessio
 Generated previews, opened saved snapshots, and saved-option comparison support
 SVG 2D and interactive 3D.
 
-The implemented workspace provides the form, a live draft site outline, and a
-generated plan/massing visualization with detailed backend metrics. The compact
+The application shell separates Workspace, Saved Options, and Compare through local
+React section state. Both feature owners remain mounted while inactive content is
+hidden, retaining draft/session/request state and independent tree/comparison choices.
+Explicit snapshot opening returns to Workspace and uses its existing replacement
+protection. Server-result ownership and geometry calculations are unchanged.
+The [application navigation contract](../frontend/README.md#application-navigation)
+describes section behavior, keyboard access, and reload semantics.
+
+The implemented workspace uses a compact configuration column and a result dashboard
+with four actual-massing KPI cards, feasibility, a prominent 2D/3D viewer, and save
+or branch actions. Native disclosures retain secondary inputs and advanced metrics,
+preference assessments, and diagnostics. Invalid optional inputs are revealed before
+validation focus, and error diagnostics initially expand. The same dashboard presents
+read-only saved snapshots. Comparison uses Option 1 / Option 2 labels while retaining
+the existing ordered API identities and differences.
+The form provides a live draft site outline and a generated plan/massing visualization
+with detailed backend metrics. The compact
 outline updates inside the site inputs and is explicitly identified as unvalidated input. Generate
 Preview remains the action that checks geometry and computes massing. Edits do not
 change submitted configurations, the backend plan, or metrics, and a notice beside
@@ -862,17 +877,22 @@ demonstrated default generation capacity, and selected actual massing. Setback
 measurements retain complete and selected-component areas. Preference and target
 assessments preserve backend status, nullable values, signed differences, and zero
 targets; missing values never become derived capacities or zero-area buildings.
-The expanded result panel scrolls with the page on desktop and mobile. Feasibility
+The expanded result panel scrolls within Workspace on desktop and mobile. A reserved
+footer row keeps preview and fresh-root actions available without covering validation
+focus; saved snapshots use the same row for branch and fresh-root actions. New design
+uses the existing guarded session transition, preserving saved history and comparison
+choices. The frontend navigation contract documents its reset and confirmation behavior.
+Feasibility
 shows the backend reason and true/false/unknown hard-constraint satisfaction without
 turning target shortfalls into hard violations or construction failure into a proof
 of infeasibility. Diagnostics retain backend severity, code, message, and optional
 path/details, with an explicit empty state. Native disclosures keep detail fields
 keyboard accessible. These presentational components read the current Query response;
 new pending or failed attempts display no previous plan, metrics, or diagnostics.
-The plan appears above detailed metrics and passes the four geometry fields directly
+The plan appears below actual KPI cards and above detailed metrics, passing the four geometry fields directly
 from the same successful Query response. Infeasible and generation-failed results
 retain available site/setback context with an explicit missing-footprint message.
-The desktop layout gives results more space and stacks at 900 px. Root saving is
+The desktop layout gives results more space and stacks at 960 px. Root saving is
 available after a successful preview while its draft remains unchanged. The backend
 recomputes the submitted configuration before inserting; the returned immutable
 snapshot owns the save receipt and never replaces the preview's plan or metrics.

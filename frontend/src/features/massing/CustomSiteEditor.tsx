@@ -314,7 +314,7 @@ export default function CustomSiteEditor({ value, onChange, jsonField, error }: 
         }} />
       <p className={styles.hint} id={`${id}-json-hint`}>
         Local coordinates in metres. Use a GeoJSON Polygon with closed [x, y] rings:
-        the first ring is the boundary; subsequent rings are holes. Geometry validity is checked by the backend.
+        the first ring is the boundary; subsequent rings are holes. Generate Preview checks geometry validity.
       </p>
       {points !== null && <p className={styles.hint}>The unfinished drawing is kept in Draw polygon. Editing JSON replaces it.</p>}
     </div>}

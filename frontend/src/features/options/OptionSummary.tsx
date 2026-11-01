@@ -9,7 +9,7 @@ export default function OptionSummary({ option }: { option: SavedSummary }) {
   const values = [
     ["Name", option.name ?? "Unnamed option"],
     ["UUID", option.id],
-    ["Status", option.feasibility_status],
+    ["Status", option.feasibility_status.replace(/_/g, " ")],
     ["Parent", option.parent_id ?? "None (root option)"],
     ["Site area", formatMetric(metrics.site_area_m2, "m²")],
     ["Footprint area", formatMetric(metrics.footprint_area_m2, "m²")],

@@ -55,7 +55,10 @@ function configuration() {
 }
 
 function change(label: RegExp, value: string) {
-  fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  const input = screen.getByLabelText(label);
+  const disclosure = input.closest("details");
+  if (disclosure && !disclosure.open) fireEvent.click(disclosure.querySelector("summary")!);
+  fireEvent.change(input, { target: { value } });
 }
 
 function generate() {
@@ -202,7 +205,7 @@ describe("MassingWorkspace saved snapshots", () => {
 
     expect(screen.getByRole("region", { name: "Option creation context" })).toHaveTextContent(saved.id);
     expect(screen.getByRole("group", { name: "Inherited site (read-only)" })).toBeInTheDocument();
-    expect(screen.queryByRole("combobox", { name: "Site shape" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Rectangle / Square" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/Site Polygon JSON/)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/Maximum height \(m\)/)).toHaveValue("18");
     expect(screen.getByLabelText(/Maximum floor count/)).toHaveValue("5");
@@ -246,7 +249,11 @@ describe("MassingWorkspace saved snapshots", () => {
     if (status === "infeasible" || status === "generation_failed") {
       expect(screen.getByText("Stored diagnostic detail.")).toBeInTheDocument();
       const actual = screen.getByRole("region", { name: "Actual massing" });
-      expect(within(actual).getAllByText("Not available")).toHaveLength(5);
+      for (const label of ["Footprint", "GFA", "Floors", "Height"]) {
+        expect(within(actual).getByText(label, { selector: "dt" }).nextElementSibling).toHaveTextContent("Not available");
+      }
+      expect(within(screen.getByRole("complementary", { name: "Option details" })).getByText("Site coverage", { selector: "dt" }).nextElementSibling)
+        .toHaveTextContent("Not available");
       expect(screen.getByRole("img", { name: "Site plan" }).querySelector('[data-layer="footprint"]')).not.toBeInTheDocument();
     }
     expect(client.getQueryData(optionKeys.detail(saved.id))).toEqual(saved);

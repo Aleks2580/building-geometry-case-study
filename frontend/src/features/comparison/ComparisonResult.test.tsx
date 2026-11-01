@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import type { FeasibilityStatus } from "../../api/contracts";
+import type { FeasibilityStatus, OptionComparisonResponse } from "../../api/contracts";
 import { backendPreviewResponse } from "../../test/backendPreviewFixtures";
 import { optionComparisonResponse } from "../../test/comparisonFixtures";
 import { optionResponse } from "../../test/optionFixtures";
@@ -10,13 +10,31 @@ function row(label: string) {
   return within(screen.getByRole("group", { name: label }));
 }
 
+function renderComparison(response: OptionComparisonResponse) {
+  const view = render(<ComparisonResult comparison={response} />);
+  for (const label of ["Saved snapshot details", "Inputs and capacity", "Feasibility and diagnostics"]) {
+    fireEvent.click(screen.getByText(label, { selector: "summary" }));
+  }
+  return view;
+}
+
 describe("ComparisonResult", () => {
+  it("keeps the saved viewer and actual massing visible while advanced comparisons are collapsed", () => {
+    render(<ComparisonResult comparison={optionComparisonResponse()} />);
+
+    expect(screen.getByRole("region", { name: "Stored plan inspection" })).toBeVisible();
+    expect(screen.getByRole("region", { name: "Actual massing" })).toBeVisible();
+    expect(screen.getByRole("region", { name: "Hard constraints" })).not.toBeVisible();
+    fireEvent.click(screen.getByText("Inputs and capacity", { selector: "summary" }));
+    expect(screen.getByRole("region", { name: "Hard constraints" })).toBeVisible();
+  });
+
   it("shows both complete identities and every comparison input and metric", () => {
     const response = optionComparisonResponse();
-    render(<ComparisonResult comparison={response} />);
+    renderComparison(response);
 
-    const left = screen.getByRole("region", { name: "Left compared option" });
-    const right = screen.getByRole("region", { name: "Right compared option" });
+    const left = screen.getByRole("region", { name: "Option 1 compared option" });
+    const right = screen.getByRole("region", { name: "Option 2 compared option" });
     expect(left).toHaveTextContent(response.options[0].name!);
     expect(left).toHaveTextContent(response.options[0].id);
     expect(left).toHaveTextContent("None (root option)");
@@ -36,8 +54,8 @@ describe("ComparisonResult", () => {
     ];
     for (const label of labels) {
       const values = row(label);
-      expect(values.getByText("Left")).toBeInTheDocument();
-      expect(values.getByText("Right")).toBeInTheDocument();
+      expect(values.getByText("Option 1")).toBeInTheDocument();
+      expect(values.getByText("Option 2")).toBeInTheDocument();
       expect(values.getByText("Difference")).toBeInTheDocument();
       expect(values.getByText("Comparison")).toBeInTheDocument();
     }
@@ -55,7 +73,7 @@ describe("ComparisonResult", () => {
     response.metrics.gfa_m2 = { left: 30, right: 40, difference: 2.5, changed: false };
     response.metrics.site_coverage_ratio = { left: 0.5, right: 0.5, difference: -1e-8, changed: true };
     response.metrics.footprint_area_m2 = { left: 646, right: null, difference: null, changed: true };
-    render(<ComparisonResult comparison={response} />);
+    renderComparison(response);
 
     expect(row("GFA").getByText("30 m²")).toBeInTheDocument();
     expect(row("GFA").getByText("40 m²")).toBeInTheDocument();
@@ -84,19 +102,19 @@ describe("ComparisonResult", () => {
         { code: "BUILDABLE_REGION_SPLIT", severity: "warning", message: "First complete diagnostic", path: "site", details: { count: 2, available: false } },
         { code: "BUILDABLE_REGION_SPLIT", severity: "info", message: "Repeated code retained", details: { value: null, empty: "" } },
       ];
-      response.diagnostics.right = [{ code: "FOOTPRINT_NOT_GENERATED", severity: "error", message: "Right construction diagnostic" }];
-      render(<ComparisonResult comparison={response} />);
+      response.diagnostics.right = [{ code: "FOOTPRINT_NOT_GENERATED", severity: "error", message: "Option 2 construction diagnostic" }];
+      renderComparison(response);
 
       expect(row("Feasibility status").getAllByText(status.replace(/_/g, " ")).length).toBeGreaterThan(0);
-      expect(row("Backend reason").getByText("FOOTPRINT_NOT_GENERATED")).toBeInTheDocument();
+      expect(row("Reason").getByText("FOOTPRINT_NOT_GENERATED")).toBeInTheDocument();
       expect(row("Hard constraints satisfied").getByText("Not available")).toBeInTheDocument();
-      const target = within(screen.getByRole("region", { name: "Right target assessment" }));
+      const target = within(screen.getByRole("region", { name: "Option 2 target assessment" }));
       expect(target.getByText("unmet")).toBeInTheDocument();
       expect(target.getAllByText("5,000 m²")).toHaveLength(2);
       expect(target.getByText("Not available")).toBeInTheDocument();
       expect(target.getByText("TARGET_EXCEEDS_UPPER_BOUND")).toBeInTheDocument();
-      const leftDiagnostics = within(screen.getByRole("region", { name: "Left diagnostics" }));
-      const list = leftDiagnostics.getByRole("list", { name: "Backend diagnostics" });
+      const leftDiagnostics = within(screen.getByRole("region", { name: "Option 1 diagnostics" }));
+      const list = leftDiagnostics.getByRole("list", { name: "Diagnostics" });
       expect(within(list).getAllByRole("listitem")).toHaveLength(2);
       expect(list).toHaveTextContent("First complete diagnostic");
       expect(list).toHaveTextContent("Repeated code retained");
@@ -104,7 +122,7 @@ describe("ComparisonResult", () => {
       fireEvent.click(leftDiagnostics.getAllByText("Details", { selector: "summary" })[1]);
       expect(leftDiagnostics.getByText("null")).toBeInTheDocument();
       expect(leftDiagnostics.getByText('""')).toBeInTheDocument();
-      expect(screen.getByRole("region", { name: "Right diagnostics" })).toHaveTextContent("Right construction diagnostic");
+      expect(screen.getByRole("region", { name: "Option 2 diagnostics" })).toHaveTextContent("Option 2 construction diagnostic");
     },
   );
 
@@ -116,30 +134,30 @@ describe("ComparisonResult", () => {
     response.inputs.site_geometry.right = rightResult.site_geometry;
     response.inputs.site_geometry.changed = true;
     const original = structuredClone(response);
-    render(<ComparisonResult comparison={response} />);
+    renderComparison(response);
 
     const geometry = within(screen.getByRole("region", { name: "Site geometry" }));
     expect(geometry.getByText("Changed")).toBeInTheDocument();
     expect(geometry.getByText(/not a topological equivalence test/)).toBeInTheDocument();
-    fireEvent.click(geometry.getByText("Right stored site geometry", { selector: "summary" }));
-    expect(geometry.getByText("Right stored site geometry").parentElement?.querySelector("pre")?.textContent)
+    fireEvent.click(geometry.getByText("Option 2 stored site geometry", { selector: "summary" }));
+    expect(geometry.getByText("Option 2 stored site geometry").parentElement?.querySelector("pre")?.textContent)
       .toBe(JSON.stringify(rightResult.site_geometry, null, 2));
     const before = screen.getByRole("img", { name: "Site plan" });
     expect(before.querySelectorAll("path")).toHaveLength(4);
-    expect(screen.getByRole("radio", { name: "Left plan" })).toBeChecked();
-    const right = screen.getByRole("radio", { name: "Right plan" });
+    expect(screen.getByRole("radio", { name: "Option 1 plan" })).toBeChecked();
+    const right = screen.getByRole("radio", { name: "Option 2 plan" });
     right.focus();
     expect(right).toHaveFocus();
     fireEvent.click(right);
 
     expect(right).toBeChecked();
-    expect(screen.getByRole("status")).toHaveTextContent(`Displaying Right: Holed saved site (${response.options[1].id})`);
+    expect(screen.getByRole("status")).toHaveTextContent(`Displaying Option 2: Holed saved site (${response.options[1].id})`);
     const after = screen.getByRole("img", { name: "Site plan" });
     expect(after.querySelector('[data-layer="site"]')?.getAttribute("d")?.match(/M/g)).toHaveLength(2);
     expect(after.querySelector('[data-layer="site"]')).toHaveAttribute("fill-rule", "evenodd");
     expect(after.querySelector('[data-layer="footprint"]')).toBeNull();
     expect(after).toHaveAccessibleDescription(/No building footprint is available/);
-    fireEvent.click(screen.getByRole("radio", { name: "Left plan" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Option 1 plan" }));
     expect(screen.getByRole("img").querySelectorAll("path")).toHaveLength(4);
     expect(response).toEqual(original);
   });
@@ -148,8 +166,8 @@ describe("ComparisonResult", () => {
     const response = optionComparisonResponse();
     const result = backendPreviewResponse("notched");
     response.options[1] = optionResponse(result, { id: response.options[1].id });
-    render(<ComparisonResult comparison={response} />);
-    fireEvent.click(screen.getByRole("radio", { name: "Right plan" }));
+    renderComparison(response);
+    fireEvent.click(screen.getByRole("radio", { name: "Option 2 plan" }));
 
     const svg = screen.getByRole("img");
     expect(svg.querySelector('[data-layer="buildable"]')?.getAttribute("d")?.match(/M/g)).toHaveLength(2);

@@ -10,11 +10,11 @@
 
 .viewport {
   width: 100%;
-  height: clamp(280px, 48vw, 460px);
+  height: clamp(320px, 28vw, 460px);
   overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: 0.5rem;
-  background: #f4f5f1;
+  background: #f4f8f5;
 }
 
 .controls {
@@ -48,7 +48,8 @@
   padding: 0;
   margin: 0.75rem 0;
   list-style: none;
-  font-size: 0.85rem;
+  font-size: 0.72rem;
+  color: var(--color-text-secondary);
 }
 
 .legend li {
@@ -105,3 +106,9 @@
 
 .fallback > p { margin-bottom: 0.5rem; }
 .fallback > button { margin-bottom: 0.75rem; }
+
+@media (max-width: 520px) {
+  .viewport {
+    height: 300px;
+  }
+}

@@ -1,12 +1,21 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 import ConfigurationForm from "./ConfigurationForm";
+import WorkspaceActionBar from "./WorkspaceActionBar";
 import type { Configuration, ConfigurationDraft } from "./configuration";
 import { configurationDraftFromOption } from "./configuration";
 import { optionResponse } from "../../test/optionFixtures";
 
+function ConfigurationFormWithActions(props: ComponentProps<typeof ConfigurationForm>) {
+  return <>
+    <ConfigurationForm {...props} id="configuration-test" />
+    <WorkspaceActionBar mode="edit" formId="configuration-test" isGenerating={false} onNewDesign={vi.fn()} />
+  </>;
+}
+
 function custom() {
-  fireEvent.change(screen.getByRole("combobox", { name: "Site shape" }), { target: { value: "custom" } });
+  fireEvent.click(screen.getByRole("button", { name: "Custom polygon" }));
 }
 
 function click(name: string) {
@@ -22,7 +31,7 @@ function addPoint(x: string, y: string) {
 describe("ConfigurationForm polygon drawing", () => {
   it("submits a closed concave ring from exact keyboard coordinates through the existing draft", async () => {
     const onSubmit = vi.fn<(configuration: Configuration, draft: ConfigurationDraft) => void>();
-    render(<ConfigurationForm onSubmit={onSubmit} />);
+    render(<ConfigurationFormWithActions onSubmit={onSubmit} />);
     custom();
     expect(screen.getByRole("button", { name: "Draw polygon" })).toHaveAttribute("aria-pressed", "true");
     click("Replace polygon and draw");
@@ -41,7 +50,7 @@ describe("ConfigurationForm polygon drawing", () => {
   it("invalidates the previous Polygon immediately and blocks every unfinished replacement", async () => {
     const onSubmit = vi.fn();
     const onDirtyChange = vi.fn();
-    render(<ConfigurationForm onSubmit={onSubmit} onDirtyChange={onDirtyChange} />);
+    render(<ConfigurationFormWithActions onSubmit={onSubmit} onDirtyChange={onDirtyChange} />);
     custom();
     click("Generate Preview");
     await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
@@ -51,7 +60,7 @@ describe("ConfigurationForm polygon drawing", () => {
     expect(onDirtyChange).toHaveBeenLastCalledWith(true);
     for (const point of [["0", "0"], ["20", "0"], ["20", "20"]]) {
       addPoint(point[0], point[1]);
-      fireEvent.submit(screen.getByRole("form", { name: "Massing configuration" }));
+      click("Generate Preview");
       expect(await screen.findByRole("alert")).toHaveTextContent("Finish the polygon before generating a preview.");
       expect(onSubmit).toHaveBeenCalledOnce();
     }
@@ -64,7 +73,7 @@ describe("ConfigurationForm polygon drawing", () => {
 
   it("preserves exact JSON and interior holes across modes and only removes them on explicit replacement", async () => {
     const onSubmit = vi.fn();
-    render(<ConfigurationForm onSubmit={onSubmit} />);
+    render(<ConfigurationFormWithActions onSubmit={onSubmit} />);
     custom();
     click("Advanced JSON");
     const json = '{ "type": "Polygon", "coordinates": [[[0,0],[40.000000000001,0],[40,25],[0,25],[0,0]],[[5,5],[10,5],[10,10],[5,10],[5,5]]] }';
@@ -86,7 +95,7 @@ describe("ConfigurationForm polygon drawing", () => {
 
   it("keeps all drawing and JSON editing controls absent from inherited branch sites", () => {
     const option = optionResponse();
-    render(<ConfigurationForm initialDraft={configurationDraftFromOption(option)} inheritedSite={option.site_geometry} onSubmit={vi.fn()} />);
+    render(<ConfigurationFormWithActions initialDraft={configurationDraftFromOption(option)} inheritedSite={option.site_geometry} onSubmit={vi.fn()} />);
     expect(screen.getByRole("img", { name: "Inherited site preview" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Draw polygon" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Advanced JSON" })).not.toBeInTheDocument();
@@ -95,7 +104,7 @@ describe("ConfigurationForm polygon drawing", () => {
 
   it("preserves a structurally complete self-intersection for backend validation without repairing its points", async () => {
     const onSubmit = vi.fn<(configuration: Configuration, draft: ConfigurationDraft) => void>();
-    render(<ConfigurationForm onSubmit={onSubmit} />);
+    render(<ConfigurationFormWithActions onSubmit={onSubmit} />);
     custom();
     click("Replace polygon and draw");
     const points: [string, string][] = [["0", "0"], ["20", "20"], ["0", "20"], ["20", "0"]];
