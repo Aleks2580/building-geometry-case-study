@@ -1,6 +1,6 @@
 import { useId } from "react";
 import type { PolygonGeometry } from "../../../api/contracts";
-import { createViewportTransform, geometryBounds, geometryPath } from "../../visualization/svgGeometry";
+import { countSvgVertices, createViewportTransform, geometryBounds, geometryPath, MAX_SVG_VERTICES } from "../../visualization/svgGeometry";
 import styles from "./DraftSitePreview.module.css";
 
 export default function DraftSitePreview({ geometry, inherited = false }: {
@@ -8,7 +8,8 @@ export default function DraftSitePreview({ geometry, inherited = false }: {
   inherited?: boolean;
 }) {
   const id = useId();
-  const bounds = geometry && geometryBounds(geometry);
+  const exceedsBudget = countSvgVertices(geometry) > MAX_SVG_VERTICES;
+  const bounds = !exceedsBudget && geometry && geometryBounds(geometry);
   const transform = bounds && createViewportTransform(bounds, { width: 320, height: 180, padding: 16 });
   const path = geometry && transform ? geometryPath(geometry, transform) : "";
 
@@ -40,8 +41,10 @@ export default function DraftSitePreview({ geometry, inherited = false }: {
           <path d={path} fillRule="evenodd" vectorEffect="non-scaling-stroke" />
         </svg>
       ) : (
-        <p className={styles.unavailable}>
-          {inherited
+        <p className={styles.unavailable} role={exceedsBudget ? "status" : undefined}>
+          {exceedsBudget
+            ? "Site preview exceeds the 10,000-vertex display limit. The complete site input is unchanged."
+            : inherited
             ? "Inherited site outline unavailable at this display scale. The saved site remains unchanged."
             : "Draft site preview unavailable. Enter valid site dimensions or Polygon JSON."}
         </p>

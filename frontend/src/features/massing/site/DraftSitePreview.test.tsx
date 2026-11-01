@@ -1,10 +1,23 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { PolygonGeometry } from "../../../api/contracts";
+import { polygonWithPositionCount } from "../../../test/displayGeometryFixtures";
 import DraftSitePreview from "./DraftSitePreview";
 import { createRectangleSite } from "./siteGeometry";
 
 describe("DraftSitePreview", () => {
+  it("reports an excessive display without changing the draft or inherited site", () => {
+    const geometry = polygonWithPositionCount(10_001);
+    const original = structuredClone(geometry);
+    const { rerender } = render(<DraftSitePreview geometry={geometry} />);
+    expect(screen.getByRole("status")).toHaveTextContent("10,000-vertex display limit");
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    rerender(<DraftSitePreview geometry={geometry} inherited />);
+    expect(screen.getByText("Inherited site")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("10,000-vertex display limit");
+    expect(geometry).toEqual(original);
+  });
+
   it("identifies an inherited saved site as read-only rather than an unvalidated draft", () => {
     const { rerender } = render(<DraftSitePreview geometry={createRectangleSite(40, 20)} inherited />);
     const image = screen.getByRole("img", { name: "Inherited site preview" });

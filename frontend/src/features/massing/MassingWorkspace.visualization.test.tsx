@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MassingPreviewResponse, OptionResponse } from "../../api/contracts";
 import { createQueryClient } from "../../queryClient";
 import { backendPreviewResponse } from "../../test/backendPreviewFixtures";
+import { polygonWithPositionCount } from "../../test/displayGeometryFixtures";
 import { previewResponse } from "../../test/massingFixtures";
 import { optionResponse } from "../../test/optionFixtures";
 import { optionKeys } from "../options/optionQueries";
@@ -81,6 +82,40 @@ beforeEach(() => {
 afterEach(() => client.clear());
 
 describe("MassingWorkspace integrated visualization", () => {
+  it("keeps metrics, root saving, and branching available when the plan is over budget", async () => {
+    const result = previewResponse();
+    result.site = polygonWithPositionCount(10_001);
+    result.site_geometry = result.site;
+    const parent = optionResponse(result);
+    const child = optionResponse(result, { id: "550e8400-e29b-41d4-a716-446655440001", parent_id: parent.id });
+    const original = structuredClone(result);
+    fetchMock.mockResolvedValueOnce(Response.json(result))
+      .mockResolvedValueOnce(Response.json(parent, { status: 201 }))
+      .mockResolvedValueOnce(Response.json(result))
+      .mockResolvedValueOnce(Response.json(child, { status: 201 }));
+    mount();
+    setSite(result);
+    generate();
+    await screen.findByRole("heading", { name: "Feasible" });
+    expect(screen.getByText(/2D plan exceeds the 10,000-vertex display limit/)).toBeInTheDocument();
+    const metrics = screen.getByRole("region", { name: "Actual massing" }).textContent;
+    expect(metrics).toContain("646 m²");
+    expect(metrics).toContain("3,876 m²");
+    fireEvent.click(screen.getByRole("button", { name: "Save Option" }));
+    await screen.findByText("Root option saved");
+    fireEvent.click(screen.getByRole("button", { name: "Create Branch" }));
+    fireEvent.click(screen.getByRole("button", { name: "Discard Draft and Continue" }));
+    expect(screen.getByRole("group", { name: "Inherited site (read-only)" })).toBeInTheDocument();
+    generate();
+    fireEvent.click(await screen.findByRole("button", { name: "Save Branch" }));
+    await screen.findByText("Branch saved");
+    expect(screen.getByRole("region", { name: "Actual massing" }).textContent).toBe(metrics);
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body)).site).toEqual(result.site);
+    expect(String(fetchMock.mock.calls[3][0])).toContain(`/options/${parent.id}/branch`);
+    expect(result).toEqual(original);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
   it("measures the submitted preview and its holes without requests or applying unsent draft geometry", async () => {
     const result = backendPreviewResponse("holed");
     const original = structuredClone(result);

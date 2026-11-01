@@ -1,10 +1,12 @@
 import json
 from math import nextafter
+from random import Random
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from shapely.affinity import rotate, skew
 from shapely.errors import GEOSException
-from shapely.geometry import box, shape
+from shapely.geometry import Polygon, box, shape
 
 import app.geometry.footprints as footprints
 from app.config import Config
@@ -381,9 +383,62 @@ async def test_notched_clipping_improves_default_and_preferred_gfa(client, paylo
     assert shape(body["site_geometry"]).covers(shape(body["footprint_geometry"]))
 
 
-async def test_unexpected_geometry_failure_remains_a_server_error(client, payload, monkeypatch):
+async def test_rotated_concave_clipping_retains_strictly_contained_preview(client, payload):
+    site = rotate(
+        Polygon([(0, 0), (50, 0), (50, 20), (30, 20), (30, 6), (20, 6), (20, 20), (0, 20)]),
+        17,
+        origin=(0, 0),
+    )
+    payload["site"] = serialize_site_geometry(site)
+    payload["hard_constraints"].update(setback_m=0, max_footprint_m2=387)
+    payload["targets"] = {"gfa_target_m2": 2300}
+
+    response = await client.post(PREVIEW_URL, json=payload)
+
+    assert response.status_code == 200
+    body = response.json()
+    footprint = shape(body["footprint_geometry"])
+    metrics = body["metrics"]
+    assert footprint.geom_type == "Polygon" and footprint.is_valid and footprint.area > 0
+    assert shape(body["selected_buildable_geometry"]).covers(footprint)
+    assert metrics["footprint_area_m2"] == footprint.area <= metrics["footprint_area_upper_bound_m2"] == 387
+    assert metrics["gfa_m2"] == footprint.area * metrics["floor_count"]
+    assert body["feasibility"]["status"] in {"feasible", "feasible_target_unmet"}
+    assert body["feasibility"]["hard_constraints_satisfied"] is True
+
+
+@pytest.mark.parametrize("case", range(8))
+async def test_seeded_slanted_sites_respect_coverage_and_footprint_caps(client, payload, case):
+    random = Random(20261101 + case)
+    if case % 2:
+        site = Polygon([(0, 0), (50, 0), (43, 22), (3, 20)])
+    else:
+        site = Polygon([(0, 0), (50, 0), (50, 20), (30, 20), (30, 6), (20, 6), (20, 20), (0, 20)])
+    site = rotate(skew(site, xs=random.uniform(-15, 15), origin=(0, 0)), random.uniform(5, 85), origin=(0, 0))
+    coverage = random.uniform(0.35, 0.65)
+    cap = site.area * random.uniform(0.35, 0.65)
+    payload["site"] = serialize_site_geometry(site)
+    payload["hard_constraints"].update(setback_m=0, site_coverage_ratio=coverage, max_footprint_m2=cap)
+
+    response = await client.post(PREVIEW_URL, json=payload)
+
+    assert response.status_code == 200
+    body = response.json()
+    footprint = shape(body["footprint_geometry"])
+    metrics = body["metrics"]
+    assert footprint.geom_type == "Polygon" and footprint.is_valid and footprint.area > 0
+    assert shape(body["selected_buildable_geometry"]).covers(footprint)
+    assert metrics["footprint_area_m2"] == footprint.area <= metrics["footprint_area_upper_bound_m2"]
+    assert footprint.area <= cap
+    assert footprint.area <= metrics["site_area_m2"] * coverage
+    assert metrics["gfa_m2"] == footprint.area * metrics["floor_count"]
+    assert body["feasibility"]["status"] == "feasible"
+
+
+@pytest.mark.parametrize("error_type", [GEOSException, RuntimeError])
+async def test_unexpected_geometry_failure_remains_a_server_error(client, payload, monkeypatch, error_type):
     def fail(*args, **kwargs):
-        raise GEOSException("Unexpected engine failure")
+        raise error_type("Unexpected engine failure")
 
     monkeypatch.setattr(footprints, "generate_footprint", fail)
     monkeypatch.setattr("app.massing.defaults.generate_footprint", fail)

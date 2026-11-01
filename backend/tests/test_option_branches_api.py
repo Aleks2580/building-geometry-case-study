@@ -91,10 +91,11 @@ async def test_branch_recomputes_complete_configuration_and_reloads_after_restar
 
 
 @pytest.mark.integration
+@pytest.mark.parametrize("legacy_policy", ["massing-v1", "massing-v2"])
 async def test_legacy_policy_parent_branches_with_current_policy_without_changing_parent(
-    client, root_payload, branch_payload, monkeypatch
+    client, root_payload, branch_payload, monkeypatch, legacy_policy
 ):
-    legacy_version = f"massing-v1;{ALGORITHM_VERSION.split(';', 1)[1]}"
+    legacy_version = f"{legacy_policy};{ALGORITHM_VERSION.split(';', 1)[1]}"
     with monkeypatch.context() as patch:
         patch.setattr("app.application.options.ALGORITHM_VERSION", legacy_version)
         parent = await _save_parent(client, root_payload)

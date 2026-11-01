@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState, type PointerEvent } from "react";
 import type { PolygonGeometry } from "../../../api/contracts";
-import { clientToViewportPosition, createViewportMapping, geometryPath } from "../../visualization/svgGeometry";
+import { clientToViewportPosition, countSvgVertices, createViewportMapping, geometryPath, MAX_SVG_VERTICES } from "../../visualization/svgGeometry";
 import { closeExteriorRing, drawingGrid, drawingViewport as viewport, type DrawingExtent, type SitePosition } from "./siteDrawing";
 import styles from "./CustomSiteEditor.module.css";
 
@@ -32,7 +32,19 @@ const formatCoordinate = (value: number, step: number) => {
   return text.length > 6 ? value.toExponential(digits - 1) : text;
 };
 
-export default function SiteDrawingCanvas({ points, geometry, drawing, selectedIndex, extent,
+export default function SiteDrawingCanvas(props: SiteDrawingCanvasProps) {
+  // Markers add one rendered position per point; reserve the two-position cursor
+  // segment while drawing so hovering cannot push an already visible surface over budget.
+  const pathVertices = props.drawing ? props.points.length + 2 : countSvgVertices(props.geometry);
+  if (pathVertices + props.points.length > MAX_SVG_VERTICES) {
+    return <p className={styles.hint} role="status">
+      Drawing exceeds the 10,000-vertex display limit. Use Advanced JSON or the point controls. The site input is unchanged.
+    </p>;
+  }
+  return <SupportedSiteDrawingCanvas {...props} />;
+}
+
+function SupportedSiteDrawingCanvas({ points, geometry, drawing, selectedIndex, extent,
   onPlace, onSelect, onFinish, onMoveStart, onMove, onMoveEnd, onMoveCancel,
 }: SiteDrawingCanvasProps) {
   const id = useId();
@@ -45,7 +57,7 @@ export default function SiteDrawingCanvas({ points, geometry, drawing, selectedI
   const grid = drawingGrid(extent);
   const xOrigin = Math.abs(bounds.minX) > extent.size * 100 ? bounds.minX : 0;
   const yOrigin = Math.abs(bounds.minY) > extent.size * 100 ? bounds.minY : 0;
-  const path = geometry && geometryPath(geometry, mapping.toViewport);
+  const path = !drawing && geometry && geometryPath(geometry, mapping.toViewport);
   const canFinish = drawing && closeExteriorRing(points) !== null;
   const polyline = (positions: SitePosition[]) => positions.map((point) => mapping.toViewport(point).join(",")).join(" ");
 

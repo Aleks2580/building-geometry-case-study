@@ -6,7 +6,8 @@ deterministic default footprint construction, maximum-permitted-floor calculatio
 default massing metrics, preference-aware massing integration, and target-driven GFA
 assessment through a typed preview API. Options can be saved, branched, retrieved, and
 listed as immutable PostgreSQL snapshots, with read-only decision-tree retrieval and
-saved-option comparison. Alternatives and visualization remain planned; see
+saved-option comparison. The frontend provides SVG and interactive 3D views of these
+results; automatic alternatives remain deferred. See
 [the design note](../docs/DESIGN.md).
 
 ## Stack
@@ -20,15 +21,19 @@ saved-option comparison. Alternatives and visualization remain planned; see
 
 ## Getting started
 
+From the repository root, start PostgreSQL only, then run the backend locally:
+
 ```bash
+docker compose up -d db
+cd backend
 cp .env.example .env
 uv sync --group dev
 uv run app migrate               # apply schema before serving option requests
 uv run app serve --reload        # http://localhost:8000  (docs at /docs)
 ```
 
-A Postgres is expected at `APP_DATABASE_URL`. The easiest way is the root
-`docker compose up` (brings up db + backend + frontend together).
+The sample `.env` points `APP_DATABASE_URL` at `localhost:5432/casestudy`.
+Run the uv commands below from `backend/`; run Compose commands from the repository root.
 
 ## Database setup and migrations
 
@@ -108,8 +113,8 @@ these tests with the complete backend suite.
   conservative tolerance, and upper-bound/generated-capacity diagnostics.
 - `app/massing/preferences.py` and `app/massing/area_preferences.py` — validated
   preference values, exact floor selection, deterministic preferred-area construction,
-  and its request/effective/actual diagnostics. Per-floor or 3D representations
-  remain planned.
+  and its request/effective/actual diagnostics. The backend returns one repeated
+  floor-plate Polygon with count and spacing; the frontend constructs its 3D display.
 - `app/geometry/tolerances.py` — scale-aware area comparison tolerance, without
   rounding geometry or filtering small positive components.
 
@@ -180,8 +185,8 @@ Retrieval returns the stored configuration/result and versions without recomputa
 Listing returns metadata and metrics. An unknown UUID returns `404 OPTION_NOT_FOUND`.
 The [public API contract](../docs/DESIGN.md#api-contract) defines the complete snapshot,
 request/name validation, pagination, and numerical behavior. Branching requires no new
-migration. There are no update/delete or automatic-alternative
-endpoints; frontend workflows remain planned.
+migration. There are no update/delete or automatic-alternative endpoints. The
+frontend supports preview, root save, branch, history navigation and comparison.
 
 Retrieve a saved decision tree, or use a child UUID to retrieve only its subtree:
 

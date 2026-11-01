@@ -3,6 +3,22 @@ import type { MultiPolygonGeometry, PolygonGeometry } from "../../api/contracts"
 type DisplayGeometry = PolygonGeometry | MultiPolygonGeometry;
 type Position = PolygonGeometry["coordinates"][number][number];
 
+// Bound SVG work without simplifying backend geometry. Closing positions count
+// because geometryPath emits them, and repeated layers each create their own path.
+export const MAX_SVG_VERTICES = 10_000;
+
+export function countSvgVertices(...geometries: (DisplayGeometry | null | undefined)[]): number {
+  let count = 0;
+  for (const geometry of geometries) {
+    if (!geometry) continue;
+    const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
+    for (const polygon of polygons) {
+      for (const ring of polygon) count += ring.length;
+    }
+  }
+  return count;
+}
+
 export type Bounds = {
   minX: number;
   minY: number;

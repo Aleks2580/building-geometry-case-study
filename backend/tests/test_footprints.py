@@ -371,6 +371,35 @@ def test_clipping_retains_primary_without_material_improvement(monkeypatch: pyte
     assert result == primary
 
 
+def test_uncontained_clipping_candidates_retain_the_valid_buffer(monkeypatch: pytest.MonkeyPatch) -> None:
+    setback = calculate_setback(_sample_site("notched"), 0)
+    limits = FootprintLimits(site_coverage_ratio=0.45)
+    with monkeypatch.context() as primary_only:
+        primary_only.setattr(footprints, "_MAX_CLIP_SEARCH_ITERATIONS", 0)
+        primary = generate_footprint(setback, limits)
+    outside = box(100, 100, 100.0001, 100.0001)
+    assert 0 < outside.area < area_tolerance_m2(setback.site_area_m2)
+    assert not setback.selected_buildable_geometry.covers(outside)
+    monkeypatch.setattr(Polygon, "intersection", lambda *args, **kwargs: outside)
+
+    result = generate_footprint(setback, limits)
+
+    assert result == primary
+    assert setback.selected_buildable_geometry.covers(result.generated_footprint_geometry)
+
+
+def test_unexpected_clipping_geos_error_propagates(monkeypatch: pytest.MonkeyPatch) -> None:
+    setback = calculate_setback(_sample_site("notched"), 0)
+
+    def fail(*args, **kwargs):
+        raise GEOSException("Unexpected clipping failure")
+
+    monkeypatch.setattr(Polygon, "intersection", fail)
+
+    with pytest.raises(GEOSException, match="Unexpected clipping failure"):
+        generate_footprint(setback, FootprintLimits(site_coverage_ratio=0.45))
+
+
 def test_positive_generated_footprint_can_be_below_area_tolerance() -> None:
     setback = calculate_setback(box(0, 0, 1e-3, 1e-3), 0)
     result = generate_footprint(setback, FootprintLimits(max_footprint_area_m2=1e-9))

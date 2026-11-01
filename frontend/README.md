@@ -7,6 +7,8 @@ TanStack Query owns server results; React Hook Form owns configuration drafts.
 
 ## Getting started
 
+Run commands from `frontend/` unless otherwise stated.
+
 Use Node.js 20.19+, 22.13+, or a newer supported LTS release.
 
 ```bash
@@ -624,11 +626,26 @@ Show all uses compact 10 px labels with deterministic placement and leader lines
 Site measurements are grey, footprint measurements are green, and the selected
 edge is amber. Click a label or use Measure edge to highlight it. The readout
 reports how many edge dimensions are shown and identifies crowding or labels that
-cannot fit; there is no silent label-count cap. **Enlarge plan** is available
+cannot fit. **Enlarge plan** is available
 throughout Show all and provides more space inside a scrollable plan without changing
 its original SVG viewBox, layers, or model coordinates. **Fit plan** returns to the
 fitted view. Complex geometry can still produce close labels; Selected edge remains
 available for a clear individual measurement rather than shrinking text below 10 px.
+
+SVG rendering is limited to 10,000 coordinate positions across the displayed layers,
+including holes, MultiPolygon components, repeated ring closures and coincident
+layers. The check runs before bounds/path construction. An accessible explanation
+replaces an over-budget plan; it never truncates, drops rings or simplifies geometry.
+The live draft outline and drawing surface use the same budget before SVG work.
+Drawing also counts each point marker and reserves the two-position cursor segment,
+so roughly 5,000 exterior points exhaust its budget; Advanced JSON and point controls
+remain available without changing the site.
+Backend input/results, KPI cards, feasibility, diagnostics, save/branch and comparison
+remain available. A separate 250-edge budget across site and actual-footprint rings,
+including holes, disables dimension controls before measuring or laying out labels
+while retaining the complete plan. These conservative display budgets bound path
+allocation and dimension placement; they are not additional building constraints.
+The SVG budget also applies when the 3D viewer falls back to a plan.
 
 `dimensionAnnotations` calculates Euclidean lengths with `Math.hypot` from the
 original backend coordinates. Formatting uses up to two decimal places for
