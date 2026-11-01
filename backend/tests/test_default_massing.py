@@ -122,7 +122,7 @@ def test_holed_site_keeps_holes_and_uses_hole_aware_coverage() -> None:
     assert restored.area == result.footprint_area_m2
 
 
-def test_heuristic_undershoot_remains_a_feasible_default() -> None:
+def test_dumbbell_fallback_improves_default_capacity() -> None:
     result = generate_default_massing(
         _dumbbell_site(),
         setback_m=0,
@@ -132,11 +132,12 @@ def test_heuristic_undershoot_remains_a_feasible_default() -> None:
 
     assert result.status == "feasible"
     assert result.hard_constraints_satisfied is True
-    assert result.generated_gfa_capacity_m2 < result.gfa_upper_bound_m2
+    assert result.generated_gfa_capacity_m2 <= result.gfa_upper_bound_m2
+    assert result.generated_gfa_capacity_m2 == pytest.approx(700)
     assert result.reason is None
     assert result.footprint_result is not None
-    assert result.footprint_result.secondary_component_count == 2
-    assert result.footprint_result.secondary_discarded_area_m2 > 0
+    assert result.footprint_result.secondary_component_count == 1
+    assert result.footprint_result.secondary_discarded_area_m2 == 0
 
 
 @pytest.mark.parametrize(

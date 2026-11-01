@@ -297,7 +297,27 @@ expands it at most eight times until an empty result is verified, then evaluates
 fixed 48-iteration binary search. Midpoint stagnation and non-finite arithmetic stop
 the search. Every candidate is canonicalized and validated, must remain covered by
 the original component, and is eligible only when its measured area is at or below
-the hard bound. The largest admissible candidate actually evaluated is returned.
+the hard bound. The largest admissible buffer candidate actually evaluated is retained.
+
+Only a positive buffer candidate whose hard-bound undershoot exceeds
+`area_tolerance_m2(site_area_m2)` enables the clipping fallback. Four fixed directions
+retain the lower/upper x and lower/upper y half-planes, intersected with the original
+selected component using boxes bounded by that component's extent. Each direction
+uses at most 48 binary-search iterations; nested clips make the largest connected
+area nondecreasing as retained extent grows. Midpoint stagnation ends a search.
+The fallback evaluates at most 192 intersections per construction, or 384 when
+default and preferred constructions both trigger it. Ordinary satisfactory buffer
+results perform no clipping; absence of a positive buffer candidate remains
+`generation_failed`.
+
+Both methods share candidate validation and deterministic largest-component
+selection. Intersections can include GeometryCollections with polygon parts and
+zero-area boundary lines or points; only positive polygon parts count toward
+construction metadata. The selected Polygon must be valid, covered by the original
+selected component, and at/below the hard cap without a tolerance allowance. No geometry is repaired.
+The largest admissible clipping candidate wins exact area comparisons, with fixed
+direction order resolving exact ties. It replaces the buffer candidate only when
+the area gain exceeds the same tolerance; otherwise the buffer geometry is preserved.
 
 `FootprintResult.secondary_component_count` and
 `secondary_discarded_area_m2` describe the construction associated with the returned
@@ -349,12 +369,10 @@ default massing derives `gfa_upper_bound_m2 = U * N` from this bound and the flo
 capacity. These are necessary hard upper bounds under the adopted single-building,
 setback, and repeated-plate conventions, not promises of attainable geometry.
 
-The engine uses the selected component when its area fits `U`; otherwise it searches
-inward-buffer distances with the extent-derived bracket and fixed iteration budget
-described above. Each distance applies to the original selected component. After
-validation and largest-component selection using the same tie-break, the search
-retains the largest valid candidate actually generated at/below `U`. Its domain
-result records secondary splits, discarded area, and undershoot as described above.
+The deterministic construction described above uses inward buffering first and
+bounded clipping only after material undershoot. Both operate on the original
+selected component and retain one valid Polygon at/below `U`. The domain result
+records the returned construction's secondary splits, discarded area, and undershoot.
 
 This default is `generated_footprint_geometry`, with `generated_footprint_area_m2` and
 `generated_gfa_capacity_m2 = generated_footprint_area_m2 * N`. Capacity demonstrates
@@ -363,34 +381,23 @@ If no positive valid default is generated despite positive buildable area and fl
 the result is `generation_failed` / `FOOTPRINT_NOT_GENERATED`; capacity is unknown
 (`null`), not zero.
 
-A measured dumbbell fixture uses two 20 × 20 m lobes joined by a 2 m corridor, a zero
-setback, and a 350 m² cap. On Python 3.12.14 with Shapely 2.2.0 and GEOS 3.14.1,
-the implementation returns a valid contained Polygon of
-`323.9999999999905 m²`, with two construction components, equal discarded area, and
-`26.000000000009493 m²` undershoot. Independently, `box(0, 0, 20, 17.5)` is a valid
-connected 350 m² rectangle covered by the selected component. This demonstrates a
-larger admissible footprint than this inward-buffer heuristic constructs; it does not
-make the generated area a mathematical maximum. Failure of this heuristic does not
-prove geometric impossibility.
+On Shapely 2.2.0 / GEOS 3.14.1, the supplied notched fixture with zero setback,
+coverage `0.45`, and six permitted floors improves from about 196 m² / 1176 m² GFA
+with buffering alone to `386.9999999999982 m²` / `2321.999999999989 m²` GFA.
+Its hard bounds remain 387 m² / 2322 m²; the independently contained
+`box(0, 0, 19.35, 20)` reaches 387 m². The dumbbell fixture, two 20 × 20 m lobes
+joined by a 2 m corridor with zero setback and a 350 m² cap, improves from about
+324 m² to `349.99999999999784 m²`; `box(0, 0, 20, 17.5)` is its independent witness.
 
-The supplied notched fixture with zero setback, coverage `0.45`, and six permitted
-floors gives a 387 m² footprint bound and 2322 m² GFA bound, but constructs about
-196 m² and 1176 m² respectively. At an inward distance of 3 m, its bridge collapses:
-one component just above 392 m² becomes two 196 m² components, skipping the footprint bound.
-The independently contained `box(0, 0, 19.35, 20)` reaches 387 m². This is the same
-documented heuristic limitation. A target between generated capacity and the hard
-bound receives `TARGET_BEYOND_GENERATED_CAPACITY`; an explicit preferred area can
-receive `FOOTPRINT_AREA_APPROXIMATED`. With neither, this default undershoot currently
-has no HTTP warning.
-
-Inward buffering reuses a mature operation, reduces search to one dimension, and
-supports direct containment checks. Centroid scaling can escape concave regions;
-axis clipping adds an arbitrary direction and can split; inscribed rectangles
-restrict shapes; general optimization adds objectives and complexity. The MVP accepts
-undershoot without adding an optimizer. A possible bounded improvement is four
-axis-aligned clipping searches using GEOS intersection after material undershoot,
-retaining the best valid connected candidate under the same strict limits. This is
-not implemented and would remain axis-dependent without a global optimality guarantee.
+Axis-aligned clipping still has discontinuities and depends on orientation. The
+480 m² four-lobe fixture in [the geometry tests](../backend/tests/conftest.py) returns
+about 118.5 m² under a 150 m² cap, despite an independently verified contained connected
+145.5 m² witness. It retains two construction components and material undershoot.
+A target between generated capacity and the hard bound still receives
+`TARGET_BEYOND_GENERATED_CAPACITY`; a preferred area can still receive
+`FOOTPRINT_AREA_APPROXIMATED`. Neither method proves global optimality or geometric
+impossibility. The bounded fallback reuses GEOS intersection without adding a general
+optimizer, new shape objectives, or a geometry repair policy.
 
 #### Implemented default massing orchestration
 
@@ -449,7 +456,7 @@ validated against `N` before preferred-area construction; exceeding `N` raises
 `PreferenceExceedsHardLimit` rather than clamping.
 
 When no area preference is supplied, the generated default footprint is used. A
-preferred area uses the existing deterministic inward-buffer construction and its
+preferred area uses the same buffer-first construction with bounded clipping and its
 measured Polygon. Successful `met`, `clamped`, and `approximated` area outcomes
 satisfy hard constraints; overall massing status is `feasible` or
 `feasible_target_unmet` according to the GFA target assessment. The nested preference
@@ -615,9 +622,11 @@ stored values without calling the geometry engine, and summaries select metadata
 and metrics without loading full geometry. Listing uses descending creation time
 and UUID, with limit/offset pagination. Future database permissions or an append-only
 trigger can reinforce immutability against direct SQL writes. Root saves and branches
-set `schema_version=1` and record a massing-policy version plus the runtime Shapely and
+set `schema_version=1` and record policy `massing-v2` plus the runtime Shapely and
 GEOS versions in `algorithm_version`. The policy version must change when algorithm
-behavior changes. Saved results preserve historical interpretation without promising
+behavior changes. Existing `massing-v1` snapshots remain readable without recomputation
+or migration; branching from one creates a new `massing-v2` child without changing
+the parent. Saved results preserve historical interpretation without promising
 identical recomputation across changed geometry-engine versions. Breaking snapshot
 schema changes will require compatible readers or explicit migration.
 
@@ -1136,7 +1145,7 @@ before extending the standalone renderer's supported complexity.
 ## Assumptions & trade-offs
 
 Uniform repeated floor plates approximate GFA without architectural layout or
-building-code compliance. Largest-component selection and inward buffering favor
+building-code compliance. Largest-component selection and bounded footprint searches favor
 predictability over optimal utilization; generated capacity is evidence, not an
 optimality certificate. Preferences remain explicit even when they reduce target
 achievement. Basic 2D/3D and manual exploration take priority over suggestions,
@@ -1156,8 +1165,11 @@ context; failed requests must never display stale successful massing.
 Use rectangle, concave/L-shaped, notched, holed, split, near-empty, degenerate, and
 self-intersecting fixtures. Check validity, containment, coverage, deterministic
 selection, geometry/metric round trips, floor/height bounds, and minimal-floor target
-selection at tolerance edges. A measured dumbbell fixture plus an independently
-contained 350 m² polygon must distinguish heuristic undershoot from hard infeasibility.
+selection at tolerance edges. Notched and dumbbell fixtures plus independent
+contained witnesses verify improved utilization. The four-lobe counterexample keeps
+material approximation and generated-capacity diagnostics distinct from hard infeasibility.
+Check the clipping budget, unchanged satisfactory buffer results, and returned
+construction metadata, including GeometryCollections with boundary-only parts.
 
 Cover absent/zero targets, both omitted floor limits, excessive floors versus clamped
 areas, targets between generated GFA capacity and its hard bound, and construction failure

@@ -26,13 +26,6 @@ def _sample_site(name: str) -> Polygon:
     return parse_site_geometry({"type": "Polygon", "coordinates": [[*vertices, vertices[0]]]})
 
 
-def _dumbbell_site() -> Polygon:
-    left = box(0, 0, 20, 20)
-    right = box(30, 0, 50, 20)
-    corridor = box(20, 9, 30, 11)
-    return left.union(right).union(corridor)
-
-
 def _floor_limits() -> FloorLimits:
     return FloorLimits(floor_to_floor_m=3.5, max_height_m=24, max_floors=6)
 
@@ -100,21 +93,22 @@ def test_explicit_floor_preference_takes_precedence_when_target_is_unmet() -> No
     assert result.target_assessment.shortfall_m2 == 416
 
 
-def test_target_floor_selection_uses_measured_preferred_footprint_area() -> None:
+def test_target_floor_selection_uses_measured_preferred_footprint_area(cross_lobed_site: Polygon) -> None:
     result = _generate(
-        DesignPreferences(preferred_footprint_area_m2=350),
-        targets=DesignTargets(1_300),
-        site=_dumbbell_site(),
+        DesignPreferences(preferred_footprint_area_m2=150),
+        targets=DesignTargets(500),
+        site=cross_lobed_site,
         setback_m=0,
-        footprint_limits=FootprintLimits(max_footprint_area_m2=350),
+        footprint_limits=FootprintLimits(max_footprint_area_m2=150),
         floor_limits=FloorLimits(3.5, max_floors=6),
     )
 
     assert result.area_preference_result is not None
     assert result.footprint_area_m2 is not None
-    assert result.footprint_area_m2 < 350
+    assert result.footprint_area_m2 < 150
     assert result.floor_count == 5
     assert result.gfa_m2 == pytest.approx(result.footprint_area_m2 * 5)
+    assert result.footprint_area_m2 * 4 < 500 <= result.gfa_m2
     assert result.target_assessment.status == "met"
 
 
@@ -130,19 +124,19 @@ def test_target_above_hard_upper_bound_is_feasible_but_unmet() -> None:
     assert result.target_assessment.shortfall_m2 == 24
 
 
-def test_target_beyond_generated_capacity_is_reported_for_dumbbell_geometry() -> None:
+def test_target_beyond_generated_capacity_is_reported_for_cross_lobed_geometry(cross_lobed_site: Polygon) -> None:
     result = _generate(
-        DesignPreferences(preferred_footprint_area_m2=350),
-        targets=DesignTargets(680),
-        site=_dumbbell_site(),
+        DesignPreferences(preferred_footprint_area_m2=150),
+        targets=DesignTargets(260),
+        site=cross_lobed_site,
         setback_m=0,
-        footprint_limits=FootprintLimits(max_footprint_area_m2=350),
+        footprint_limits=FootprintLimits(max_footprint_area_m2=150),
         floor_limits=FloorLimits(3.5, max_floors=2),
     )
 
     assert result.status == "feasible_target_unmet"
     assert result.default_result.generated_gfa_capacity_m2 is not None
-    assert result.default_result.generated_gfa_capacity_m2 < 680 < result.default_result.gfa_upper_bound_m2
+    assert result.default_result.generated_gfa_capacity_m2 < 260 < result.default_result.gfa_upper_bound_m2
     assert result.target_assessment.diagnostic_code == "TARGET_BEYOND_GENERATED_CAPACITY"
     assert result.target_assessment.shortfall_m2 is not None
     assert result.target_assessment.shortfall_m2 > 0

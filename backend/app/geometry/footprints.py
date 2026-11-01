@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from math import fsum, hypot, isfinite
 from typing import Literal
 
-from shapely.geometry import MultiPolygon, Polygon
+from shapely.geometry import GeometryCollection, MultiPolygon, Polygon, box
+from shapely.geometry.base import BaseGeometry
 
 from app.geometry.setbacks import SetbackResult, inward_buffer, select_largest_component
 from app.geometry.site import normalize_polygon, serialize_site_geometry
@@ -53,6 +54,7 @@ class FootprintResult:
 
 
 MAX_FOOTPRINT_SEARCH_ITERATIONS = 48
+_MAX_CLIP_SEARCH_ITERATIONS = 48
 _MAX_BRACKET_EXPANSIONS = 8
 
 
@@ -107,6 +109,12 @@ def generate_footprint(setback: SetbackResult, limits: FootprintLimits) -> Footp
 
     if best is None:
         return _result_without_geometry(upper_bound, "generation_failed")
+    # Buffer splits can skip attainable areas. Keep ordinary buffer results and
+    # their geometry unless bounded clipping demonstrates a material improvement.
+    if upper_bound - best.area_m2 > tolerance:
+        clipped = _best_clipped_candidate(selected, upper_bound, tolerance)
+        if clipped is not None and clipped.area_m2 - best.area_m2 > tolerance:
+            best = clipped
     return _result_from_candidate(upper_bound, best)
 
 
@@ -171,15 +179,47 @@ def _buffer_candidate(selected: Polygon, distance: float, tolerance: float) -> _
     buffered = inward_buffer(selected, distance)
     if not isinstance(buffered, (Polygon, MultiPolygon)) or not buffered.is_valid:
         raise RuntimeError("Inward buffer returned invalid non-polygonal geometry.")
-    buffered_area = float(buffered.area)
-    if not isfinite(buffered_area):
-        raise RuntimeError("Inward buffer returned non-finite area.")
-    if buffered.is_empty:
-        return None
-    if not selected.covers(buffered):
-        raise RuntimeError("Inward buffer extends outside the selected buildable component.")
+    return _candidate_from_geometry(selected, buffered, tolerance)
 
-    components = tuple(_positive_components(buffered))
+
+def _best_clipped_candidate(selected: Polygon, upper_bound: float, tolerance: float) -> _Candidate | None:
+    best: _Candidate | None = None
+    original_bounds = selected.bounds
+    # Fixed direction order resolves exact area ties. Each retained half-plane is
+    # nested, so its largest connected area is monotone even when parts split.
+    for axis, keep_lower in ((0, True), (0, False), (1, True), (1, False)):
+        minimum, maximum = original_bounds[axis], original_bounds[axis + 2]
+        low, high = 0.0, maximum - minimum
+        for _ in range(_MAX_CLIP_SEARCH_ITERATIONS):
+            midpoint = low + (high - low) / 2.0
+            if midpoint == low or midpoint == high:
+                break
+            bounds = list(original_bounds)
+            bounds[axis + 2 if keep_lower else axis] = minimum + midpoint if keep_lower else maximum - midpoint
+            clip = box(bounds[0], bounds[1], bounds[2], bounds[3])
+            candidate = _candidate_from_geometry(selected, selected.intersection(clip), tolerance)
+            fits = candidate is None or candidate.area_m2 <= upper_bound
+            if candidate is not None and fits and (best is None or candidate.area_m2 > best.area_m2):
+                best = candidate
+            if fits:
+                low = midpoint
+            else:
+                high = midpoint
+    return best
+
+
+def _candidate_from_geometry(selected: Polygon, geometry: BaseGeometry, tolerance: float) -> _Candidate | None:
+    if not geometry.is_valid:
+        raise RuntimeError("Footprint construction returned invalid geometry.")
+    total_area = float(geometry.area)
+    if not isfinite(total_area):
+        raise RuntimeError("Footprint construction returned non-finite area.")
+    if geometry.is_empty:
+        return None
+    if not selected.covers(geometry):
+        raise RuntimeError("Footprint construction extends outside the selected buildable component.")
+
+    components = tuple(_positive_components(geometry))
     if not components:
         return None
     normalized = tuple(normalize_polygon(component) for component in components)
@@ -192,7 +232,7 @@ def _buffer_candidate(selected: Polygon, distance: float, tolerance: float) -> _
     if not isfinite(area_m2) or area_m2 <= 0:
         raise RuntimeError("Generated footprint must have finite positive area.")
     component_area = fsum(float(component.area) for component in normalized)
-    if abs(component_area - buffered_area) > tolerance:
+    if abs(component_area - total_area) > tolerance:
         raise RuntimeError("Generated footprint and component areas disagree.")
 
     selected_key = serialize_site_geometry(selected_component)
@@ -209,14 +249,18 @@ def _buffer_candidate(selected: Polygon, distance: float, tolerance: float) -> _
     return _Candidate(selected_component, area_m2, len(normalized), discarded)
 
 
-def _positive_components(geometry: Polygon | MultiPolygon) -> Iterable[Polygon]:
-    components = (geometry,) if isinstance(geometry, Polygon) else geometry.geoms
-    for component in components:
-        area = float(component.area)
+def _positive_components(geometry: BaseGeometry) -> Iterable[Polygon]:
+    if isinstance(geometry, (MultiPolygon, GeometryCollection)):
+        # Intersections can retain boundary lines beside polygons. They contribute
+        # no floor area and must not count as building components or be repaired.
+        for component in geometry.geoms:
+            yield from _positive_components(component)
+    elif isinstance(geometry, Polygon):
+        area = float(geometry.area)
         if not isfinite(area):
             raise RuntimeError("Generated footprint component has non-finite area.")
         if area > 0:
-            yield component
+            yield geometry
 
 
 def _finite_float(value: object, field_name: str) -> float | None:

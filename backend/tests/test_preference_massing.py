@@ -154,7 +154,7 @@ def test_clamped_area_preference_keeps_default_bounds_and_is_feasible() -> None:
     assert result.area_preference_result.diagnostic_codes == ("PREFERENCE_CLAMPED_TO_HARD_CAP",)
 
 
-def test_dumbbell_preference_approximation_remains_feasible() -> None:
+def test_dumbbell_preference_reaches_requested_area_with_clipping() -> None:
     result = _generate(
         DesignPreferences(preferred_footprint_area_m2=350),
         site=_dumbbell_site(),
@@ -165,13 +165,17 @@ def test_dumbbell_preference_approximation_remains_feasible() -> None:
 
     assert result.status == "feasible"
     assert result.area_preference_result is not None
-    assert result.area_preference_result.status == "approximated"
-    assert result.footprint_area_m2 is not None and result.footprint_area_m2 < 350
+    assert result.area_preference_result.status == "met"
+    assert result.footprint_area_m2 is not None and result.footprint_area_m2 <= 350
+    assert result.footprint_area_m2 == pytest.approx(350)
     assert result.gfa_m2 == pytest.approx(result.footprint_area_m2 * 2)
     assert result.default_result.gfa_upper_bound_m2 == 700
     assert result.default_result.generated_gfa_capacity_m2 == pytest.approx(result.footprint_area_m2 * 2)
-    assert result.area_preference_result.footprint_result.secondary_component_count == 2
-    assert result.area_preference_result.footprint_result.secondary_discarded_area_m2 > 0
+    assert result.area_preference_result.diagnostic_codes == ()
+    assert result.area_preference_result.footprint_result.secondary_component_count == 1
+    assert result.area_preference_result.footprint_result.secondary_discarded_area_m2 == 0
+    assert result.footprint_geometry is not None and result.footprint_geometry.is_valid
+    assert result.default_result.setback_result.selected_buildable_geometry.covers(result.footprint_geometry)
 
 
 @pytest.mark.parametrize("with_area_preference", [False, True])

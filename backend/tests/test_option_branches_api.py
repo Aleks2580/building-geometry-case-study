@@ -6,6 +6,7 @@ from httpx import ASGITransport, AsyncClient
 from shapely.geometry import Polygon, box
 
 import app.geometry.footprints as footprints
+from app.application.options import ALGORITHM_VERSION
 from app.config import Config
 from app.geometry import serialize_site_geometry
 from app.server import create_app
@@ -87,6 +88,27 @@ async def test_branch_recomputes_complete_configuration_and_reloads_after_restar
         async with AsyncClient(transport=ASGITransport(app=restarted), base_url="http://restart") as second:
             assert (await second.get(response.headers["Location"])).json() == child
             assert (await second.get(f"{OPTIONS_URL}/{parent['id']}")).json() == parent
+
+
+@pytest.mark.integration
+async def test_legacy_policy_parent_branches_with_current_policy_without_changing_parent(
+    client, root_payload, branch_payload, monkeypatch
+):
+    legacy_version = f"massing-v1;{ALGORITHM_VERSION.split(';', 1)[1]}"
+    with monkeypatch.context() as patch:
+        patch.setattr("app.application.options.ALGORITHM_VERSION", legacy_version)
+        parent = await _save_parent(client, root_payload)
+
+    response = await client.post(f"{OPTIONS_URL}/{parent['id']}/branches", json=branch_payload)
+
+    assert response.status_code == 201
+    child = response.json()
+    assert child["parent_id"] == parent["id"]
+    assert child["algorithm_version"] == ALGORITHM_VERSION != legacy_version
+    assert parent["algorithm_version"] == legacy_version
+    assert child["schema_version"] == parent["schema_version"] == 1
+    assert (await client.get(f"{OPTIONS_URL}/{parent['id']}")).json() == parent
+    assert (await client.get(f"{OPTIONS_URL}/{child['id']}")).json() == child
 
 
 @pytest.mark.integration

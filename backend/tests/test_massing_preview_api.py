@@ -356,6 +356,31 @@ async def test_large_representable_geometry_remains_feasible(client, payload, si
     assert body["metrics"]["footprint_area_m2"] == footprint.area
 
 
+@pytest.mark.parametrize("preferred_area", [None, 387])
+async def test_notched_clipping_improves_default_and_preferred_gfa(client, payload, preferred_area):
+    payload["site"]["coordinates"] = [
+        [[0, 0], [50, 0], [50, 20], [30, 20], [30, 6], [20, 6], [20, 20], [0, 20], [0, 0]]
+    ]
+    payload["hard_constraints"].update(setback_m=0, site_coverage_ratio=0.45)
+    payload["preferences"] = {"preferred_footprint_area_m2": preferred_area}
+    payload["targets"] = {"gfa_target_m2": 2000}
+
+    response = await client.post(PREVIEW_URL, json=payload)
+
+    assert response.status_code == 200
+    body = response.json()
+    metrics = body["metrics"]
+    assert metrics["footprint_area_upper_bound_m2"] == 387
+    assert metrics["footprint_area_m2"] <= 387
+    assert metrics["footprint_area_m2"] == pytest.approx(387)
+    assert metrics["gfa_m2"] <= metrics["gfa_upper_bound_m2"] == 2322
+    assert metrics["gfa_m2"] == pytest.approx(2322)
+    assert metrics["generated_gfa_capacity_m2"] == metrics["gfa_m2"]
+    assert body["feasibility"]["status"] == "feasible"
+    assert body["feasibility"]["target_assessment"]["status"] == "met"
+    assert shape(body["site_geometry"]).covers(shape(body["footprint_geometry"]))
+
+
 async def test_unexpected_geometry_failure_remains_a_server_error(client, payload, monkeypatch):
     def fail(*args, **kwargs):
         raise GEOSException("Unexpected engine failure")

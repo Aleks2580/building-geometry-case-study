@@ -23,13 +23,6 @@ def _sample_site(name: str) -> Polygon:
     return parse_site_geometry({"type": "Polygon", "coordinates": [[*vertices, vertices[0]]]})
 
 
-def _dumbbell_site() -> Polygon:
-    left = box(0, 0, 20, 20)
-    right = box(30, 0, 50, 20)
-    corridor = box(20, 9, 30, 11)
-    return left.union(right).union(corridor)
-
-
 def test_no_area_preference_returns_none_without_constructing(monkeypatch: pytest.MonkeyPatch) -> None:
     def fail_if_called(*args: object, **kwargs: object) -> FootprintResult:
         raise AssertionError("preferred footprint construction must be skipped")
@@ -135,42 +128,42 @@ def test_hard_cap_equality_and_tolerance_boundary() -> None:
     assert clamped.diagnostic_codes == ("PREFERENCE_CLAMPED_TO_HARD_CAP",)
 
 
-def test_heuristic_undershoot_is_approximation_and_preserves_components() -> None:
-    setback = calculate_setback(_dumbbell_site(), 0)
+def test_heuristic_undershoot_is_approximation_and_preserves_components(cross_lobed_site: Polygon) -> None:
+    setback = calculate_setback(cross_lobed_site, 0)
     result = generate_preferred_footprint(
         setback,
-        FootprintLimits(max_footprint_area_m2=350),
-        DesignPreferences(preferred_footprint_area_m2=350),
+        FootprintLimits(max_footprint_area_m2=150),
+        DesignPreferences(preferred_footprint_area_m2=150),
     )
 
     assert result is not None
-    assert result.original_hard_area_upper_bound_m2 == 350
-    assert result.actual_area_m2 is not None and result.actual_area_m2 < 350
+    assert result.original_hard_area_upper_bound_m2 == 150
+    assert result.actual_area_m2 is not None and result.actual_area_m2 < 150
     assert result.status == "approximated"
     assert result.diagnostic_codes == ("FOOTPRINT_AREA_APPROXIMATED",)
     assert result.footprint_result.secondary_component_count == 2
     assert result.footprint_result.secondary_discarded_area_m2 > 0
 
 
-def test_clamped_request_preserves_heuristic_undershoot() -> None:
-    setback = calculate_setback(_dumbbell_site(), 0)
+def test_clamped_request_preserves_heuristic_undershoot(cross_lobed_site: Polygon) -> None:
+    setback = calculate_setback(cross_lobed_site, 0)
     result = generate_preferred_footprint(
         setback,
-        FootprintLimits(max_footprint_area_m2=350),
-        DesignPreferences(preferred_footprint_area_m2=400),
+        FootprintLimits(max_footprint_area_m2=150),
+        DesignPreferences(preferred_footprint_area_m2=200),
     )
 
     assert result is not None
-    assert result.original_hard_area_upper_bound_m2 == 350
-    assert result.requested_area_m2 == 400
-    assert result.effective_target_m2 == 350
+    assert result.original_hard_area_upper_bound_m2 == 150
+    assert result.requested_area_m2 == 200
+    assert result.effective_target_m2 == 150
     geometry = result.footprint_result.generated_footprint_geometry
     assert geometry is not None and geometry.is_valid and geometry.area > 0
     assert setback.selected_buildable_geometry.covers(geometry)
-    assert result.actual_area_m2 is not None and result.actual_area_m2 < 350
+    assert result.actual_area_m2 is not None and result.actual_area_m2 < 150
     assert result.effective_target_undershoot_m2 is not None
     assert result.effective_target_undershoot_m2 > area_tolerance_m2(setback.site_area_m2)
-    assert result.difference_m2 == pytest.approx(result.actual_area_m2 - 400)
+    assert result.difference_m2 == pytest.approx(result.actual_area_m2 - 200)
     assert result.status == "clamped"
     assert result.diagnostic_codes == (
         "PREFERENCE_CLAMPED_TO_HARD_CAP",
