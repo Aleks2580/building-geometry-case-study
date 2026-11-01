@@ -44,14 +44,14 @@ export default function OptionComparison({ left, right, onClear }: OptionCompari
   const errorDetails = comparison.error instanceof ApiError ? comparison.error.error?.details : undefined;
 
   return <section className={styles.comparison} aria-labelledby={titleId}>
-    <h3 id={titleId}>Compare saved options</h3>
-    <p>Assign saved nodes to Left and Right, then compare their stored inputs and results. Your workspace stays available above.</p>
+    <h2 id={titleId}>Compare saved options</h2>
+    <p>Choose two saved options to compare their designs. Your workspace draft stays available.</p>
     <div className={styles.slots}>
       {(["left", "right"] as const).map((side) => {
         const option = side === "left" ? left : right;
-        const label = side === "left" ? "Left" : "Right";
+        const label = side === "left" ? "Option 1" : "Option 2";
         return <section className={styles.slot} aria-label={`${label} comparison selection`} key={side}>
-          <h4>{label}</h4>
+          <h3>{label}</h3>
           {option ? <>
             <strong>{option.name ?? "Unnamed option"}</strong>
             <dl className={styles.identity}>
@@ -60,12 +60,12 @@ export default function OptionComparison({ left, right, onClear }: OptionCompari
               <div><dt>Parent</dt><dd>{option.parent_id ?? "None (root option)"}</dd></div>
             </dl>
             <button type="button" onClick={() => onClear(side)}>Clear {label}</button>
-          </> : <p>No option selected. Choose a saved node and assign it to {label}.</p>}
+          </> : <p>No option selected. Assign a saved design to {label}.</p>}
         </section>;
       })}
     </div>
     {left !== null && right !== null && !selection.success && <p role="alert" className={styles.error}>
-      Select two distinct saved options with valid UUIDs. The same UUID cannot occupy both slots, regardless of letter casing.
+      Select two distinct saved options with valid UUIDs for Option 1 and Option 2.
     </p>}
     <div className={styles.actions}>
       <button type="button" onClick={compare} disabled={!selection.success || comparison.isFetching}>Compare</button>
@@ -74,9 +74,9 @@ export default function OptionComparison({ left, right, onClear }: OptionCompari
     {submitted === null ? <p className={styles.notice}>No submitted comparison. Choose two distinct saved options and select Compare.</p>
       : comparison.isPending ? <p role="status">Loading saved option comparison…</p>
         : comparison.isError ? <div role="alert" className={styles.error}>
-          <h4>Could not compare saved options</h4>
+          <h3>Could not compare saved options</h3>
           <p>{comparison.error.message}</p>
-          <p>Left: {submitted[0]}<br />Right: {submitted[1]}</p>
+          <p>Option 1: {submitted[0]}<br />Option 2: {submitted[1]}</p>
           {errorDetails && errorDetails.length > 0 && <ul>{errorDetails.map((detail, index) =>
             <li key={`${detail.path}-${index}`}><strong>{detail.path}</strong>: {detail.message}</li>)}</ul>}
           <button type="button" onClick={() => { void comparison.refetch(); }} disabled={comparison.isFetching}>Retry comparison</button>

@@ -69,7 +69,12 @@ function compare() {
 }
 
 function results() {
-  return screen.getByRole("region", { name: "Saved option comparison" });
+  const region = screen.getByRole("region", { name: "Saved option comparison" });
+  for (const label of ["Saved snapshot details", "Inputs and capacity", "Feasibility and diagnostics"]) {
+    const summary = within(region).getByText(label, { selector: "summary" });
+    if (!summary.parentElement?.hasAttribute("open")) fireEvent.click(summary);
+  }
+  return region;
 }
 
 function displayedResult() {
@@ -77,7 +82,7 @@ function displayedResult() {
 }
 
 async function show3D(result: MassingPreviewResponse) {
-  fireEvent.click(within(results()).getByRole("button", { name: "3D" }));
+  fireEvent.click(within(results()).getByRole("button", { name: "3D Massing" }));
   await screen.findByTestId("comparison-3d-result");
   expect(displayedResult()).toEqual(result);
 }
@@ -114,24 +119,24 @@ describe("OptionComparison integrated visualization", () => {
       compare();
       await screen.findByRole("heading", { name: "Saved option comparison" });
       expectOrderedRequest(0, response);
-      expect(screen.getByRole("radio", { name: "Left plan" })).toBeChecked();
-      expect(within(results()).getByRole("button", { name: "2D" })).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByRole("radio", { name: "Option 1 plan" })).toBeChecked();
+      expect(within(results()).getByRole("button", { name: "2D Plan" })).toHaveAttribute("aria-pressed", "true");
       const metrics = within(results()).getByRole("region", { name: "Actual massing" }).textContent;
       await show3D(response.options[0].result);
       expect(renderer.render.mock.lastCall?.[0]).toBe(cachedComparison(response)?.options[0].result);
 
       for (const side of [1, 0, 1] as const) {
-        fireEvent.click(screen.getByRole("radio", { name: side === 0 ? "Left plan" : "Right plan" }));
+        fireEvent.click(screen.getByRole("radio", { name: side === 0 ? "Option 1 plan" : "Option 2 plan" }));
         expect(displayedResult()).toEqual(response.options[side].result);
         expect(renderer.render.mock.lastCall?.[0]).toBe(cachedComparison(response)?.options[side].result);
-        expect(within(results()).getByRole("button", { name: "3D" })).toHaveAttribute("aria-pressed", "true");
+        expect(within(results()).getByRole("button", { name: "3D Massing" })).toHaveAttribute("aria-pressed", "true");
         expect(screen.getAllByTestId("comparison-3d-result")).toHaveLength(1);
         expect(within(results()).getByRole("region", { name: "Actual massing" })).toHaveTextContent(metrics!);
       }
       expect(within(results()).getByRole("group", { name: "GFA" })).toHaveTextContent("-1,292 m²");
       expect(within(results()).getByRole("group", { name: "Maximum height" })).toHaveTextContent("Not available");
       for (let cycle = 0; cycle < 3; cycle += 1) {
-        fireEvent.click(within(results()).getByRole("button", { name: "2D" }));
+        fireEvent.click(within(results()).getByRole("button", { name: "2D Plan" }));
         expect(screen.queryByTestId("comparison-3d-result")).not.toBeInTheDocument();
         expect(renderer.unmount).toHaveBeenCalledTimes(renderer.mount.mock.calls.length);
         await show3D(response.options[1].result);
@@ -168,17 +173,17 @@ describe("OptionComparison integrated visualization", () => {
     expect(signal?.aborted).toBe(true);
     expect(screen.queryByTestId("comparison-3d-result")).not.toBeInTheDocument();
     compare();
-    await screen.findByRole("heading", { name: `Left: ${latest.options[0].name}` });
+    await screen.findByRole("heading", { name: `Option 1: ${latest.options[0].name}` });
     await show3D(latest.options[0].result);
-    fireEvent.click(screen.getByRole("radio", { name: "Right plan" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Option 2 plan" }));
     expect(displayedResult()).toEqual(latest.options[1].result);
-    const displayedIdentity = within(results()).getByText(/Displaying Right:/).textContent;
+    const displayedIdentity = within(results()).getByText(/Displaying Option 2:/).textContent;
 
     await act(async () => pending.resolve(Response.json(pendingPair)));
 
-    expect(within(results()).getByText(/Displaying Right:/)).toHaveTextContent(displayedIdentity!);
+    expect(within(results()).getByText(/Displaying Option 2:/)).toHaveTextContent(displayedIdentity!);
     expect(renderer.render.mock.lastCall?.[0]).toBe(cachedComparison(latest)?.options[1].result);
-    expect(within(results()).getByRole("button", { name: "3D" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(results()).getByRole("button", { name: "3D Massing" })).toHaveAttribute("aria-pressed", "true");
     expect(fetchMock).toHaveBeenCalledTimes(3);
     [first, pendingPair, latest].forEach((response, index) => expectOrderedRequest(index, response));
   });
@@ -207,7 +212,7 @@ describe("OptionComparison integrated visualization", () => {
     expect(screen.queryByRole("heading", { name: "Saved option comparison" })).not.toBeInTheDocument();
     compare();
     await screen.findByRole("heading", { name: "Saved option comparison" });
-    expect(within(results()).getByRole("button", { name: "2D" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(results()).getByRole("button", { name: "2D Plan" })).toHaveAttribute("aria-pressed", "true");
     await show3D(next.options[0].result);
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
@@ -239,15 +244,15 @@ describe("OptionComparison integrated visualization", () => {
       compare();
       await screen.findByRole("heading", { name: "Saved option comparison" });
       await show3D(response.options[0].result);
-      fireEvent.click(screen.getByRole("radio", { name: "Right plan" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Option 2 plan" }));
       expect(displayedResult()).toEqual(response.options[1].result);
-      fireEvent.click(within(results()).getByRole("button", { name: "2D" }));
+      fireEvent.click(within(results()).getByRole("button", { name: "2D Plan" }));
       await show3D(response.options[1].result);
 
       expect(width).toHaveValue("invalid");
       expect(name).toHaveValue("Unsent workspace name");
       expect(within(workspace).getByRole("img", { name: "Site plan" })).toBe(plan);
-      expect(within(workspace).getByRole("button", { name: "2D" })).toHaveAttribute("aria-pressed", "true");
+      expect(within(workspace).getByRole("button", { name: "2D Plan" })).toHaveAttribute("aria-pressed", "true");
       expect(within(workspace).getByRole("region", { name: "Actual massing" })).toHaveTextContent(metrics!);
       expect(within(workspace).getByRole("button", { name: "Save Option" })).toBeDisabled();
       expect(screen.queryByRole("region", { name: "Replace workspace" })).not.toBeInTheDocument();

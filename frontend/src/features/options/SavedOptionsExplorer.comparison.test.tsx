@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -39,8 +40,21 @@ beforeEach(() => {
 
 afterEach(() => { cleanup(); client.clear(); });
 
+function ExplorerNavigation() {
+  const [view, setView] = useState<"saved-options" | "compare">("saved-options");
+  return <SavedOptionsExplorer activeView={view} onViewChange={setView} />;
+}
+
 function mount() {
-  return render(<QueryClientProvider client={client}><SavedOptionsExplorer /></QueryClientProvider>);
+  return render(<QueryClientProvider client={client}><ExplorerNavigation /></QueryClientProvider>);
+}
+
+function viewComparison() {
+  fireEvent.click(screen.getByRole("button", { name: "View comparison" }));
+}
+
+function browseOptions() {
+  fireEvent.click(screen.getByRole("button", { name: "Browse saved options" }));
 }
 
 async function selectRoot(name = "Rectangle study") {
@@ -54,11 +68,11 @@ function choose(name: string) {
     .getByRole("button", { name: new RegExp(`^${name} `) }));
 }
 
-function assign(side: "Left" | "Right") {
+function assign(side: "Option 1" | "Option 2") {
   fireEvent.click(screen.getByRole("button", { name: `Assign to ${side}` }));
 }
 
-function slot(side: "Left" | "Right") {
+function slot(side: "Option 1" | "Option 2") {
   return screen.getByRole("region", { name: `${side} comparison selection` });
 }
 
@@ -66,41 +80,56 @@ describe("comparison selection in saved histories", () => {
   it("requires explicit assignment and rejects the same identity without losing either slot", async () => {
     mount();
     await selectRoot();
-    expect(slot("Left")).toHaveTextContent("No option selected");
-    assign("Left");
-    assign("Right");
+    viewComparison();
+    expect(slot("Option 1")).toHaveTextContent("No option selected");
+    browseOptions();
+    assign("Option 1");
+    assign("Option 2");
     expect(screen.getByRole("alert")).toHaveTextContent("two distinct saved options");
-    expect(slot("Left")).toHaveTextContent(root.id);
-    expect(slot("Right")).toHaveTextContent("No option selected");
+    viewComparison();
+    expect(slot("Option 1")).toHaveTextContent(root.id);
+    expect(slot("Option 2")).toHaveTextContent("No option selected");
     expect(screen.getByRole("button", { name: "Compare" })).toBeDisabled();
+    browseOptions();
     choose("Child");
-    assign("Right");
+    assign("Option 2");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(slot("Right")).toHaveTextContent(child.id);
+    viewComparison();
+    expect(slot("Option 2")).toHaveTextContent(child.id);
     expect(fetchMock.mock.calls.every(([, init]) => init?.method === undefined)).toBe(true);
   });
 
   it("keeps roots, siblings, and nested choices independent of tree navigation and supports replacing and clearing", async () => {
     mount();
     await selectRoot();
-    assign("Left");
-    choose("Child"); assign("Right");
-    expect(slot("Left")).toHaveTextContent(root.id);
-    expect(slot("Right")).toHaveTextContent(child.id);
-    choose("Sibling"); assign("Left");
-    expect(slot("Left")).toHaveTextContent(sibling.id);
+    assign("Option 1");
+    choose("Child"); assign("Option 2");
+    viewComparison();
+    expect(slot("Option 1")).toHaveTextContent(root.id);
+    expect(slot("Option 2")).toHaveTextContent(child.id);
+    browseOptions();
+    choose("Sibling"); assign("Option 1");
+    viewComparison();
+    expect(slot("Option 1")).toHaveTextContent(sibling.id);
+    browseOptions();
     fireEvent.click(screen.getByRole("button", { name: `Expand branches of Child (${child.id})` }));
-    choose("Nested"); assign("Right");
-    expect(slot("Right")).toHaveTextContent(nested.id);
+    choose("Nested"); assign("Option 2");
+    viewComparison();
+    expect(slot("Option 2")).toHaveTextContent(nested.id);
+    browseOptions();
     await selectRoot("Other root");
-    expect(slot("Left")).toHaveTextContent(sibling.id);
-    expect(slot("Right")).toHaveTextContent(nested.id);
-    assign("Left");
-    expect(slot("Left")).toHaveTextContent(other.id);
+    viewComparison();
+    expect(slot("Option 1")).toHaveTextContent(sibling.id);
+    expect(slot("Option 2")).toHaveTextContent(nested.id);
+    browseOptions();
+    assign("Option 1");
     expect(screen.getByRole("region", { name: "Selected option summary" })).toHaveTextContent(other.id);
-    fireEvent.click(screen.getByRole("button", { name: "Clear Right" }));
-    expect(slot("Right")).toHaveTextContent("No option selected");
-    expect(slot("Left")).toHaveTextContent(other.id);
+    expect(screen.getByRole("status", { name: "Current comparison selections" })).toHaveTextContent("Other root");
+    viewComparison();
+    expect(slot("Option 1")).toHaveTextContent(other.id);
+    fireEvent.click(screen.getByRole("button", { name: "Clear Option 2" }));
+    expect(slot("Option 2")).toHaveTextContent("No option selected");
+    expect(slot("Option 1")).toHaveTextContent(other.id);
     expect(fetchMock.mock.calls.every(([, init]) => init?.method === undefined)).toBe(true);
   });
 
@@ -113,18 +142,28 @@ describe("comparison selection in saved histories", () => {
     mount();
     await selectRoot();
     fireEvent.click(screen.getByRole("button", { name: `Expand branches of Child (${child.id})` }));
-    choose("Nested"); assign("Right");
-    await selectRoot("Other root"); assign("Left");
+    choose("Nested"); assign("Option 2");
+    await selectRoot("Other root"); assign("Option 1");
+    viewComparison();
     expect(screen.queryByRole("region", { name: "Saved option comparison" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Compare" }));
     expect(await screen.findByRole("region", { name: "Saved option comparison" })).toBeInTheDocument();
     const post = fetchMock.mock.calls.filter(([, init]) => init?.method === "POST");
     expect(post).toHaveLength(1);
     expect(JSON.parse(String(post[0][1]?.body))).toEqual({ option_ids: [other.id, nested.id] });
-    fireEvent.click(screen.getByRole("button", { name: "Clear Left" }));
+    const result = screen.getByRole("region", { name: "Saved option comparison" });
+    browseOptions();
+    expect(screen.queryByRole("region", { name: "Saved option comparison" })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Selected option summary" })).toHaveTextContent(other.id);
+    viewComparison();
+    expect(screen.getByRole("region", { name: "Saved option comparison" })).toBe(result);
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Clear Option 1" }));
     expect(screen.queryByRole("region", { name: "Saved option comparison" })).not.toBeInTheDocument();
     expect(screen.getByText(/No submitted comparison/)).toBeInTheDocument();
-    assign("Left");
+    browseOptions();
+    assign("Option 1");
+    viewComparison();
     expect(screen.queryByRole("region", { name: "Saved option comparison" })).not.toBeInTheDocument();
   });
 
@@ -140,16 +179,19 @@ describe("comparison selection in saved histories", () => {
       next.options = [root, sibling];
       return Response.json(next);
     });
-    mount(); await selectRoot(); assign("Left"); choose("Child"); assign("Right");
+    mount(); await selectRoot(); assign("Option 1"); choose("Child"); assign("Option 2");
+    viewComparison();
     fireEvent.click(screen.getByRole("button", { name: "Compare" }));
     await waitFor(() => expect(requests).toHaveLength(1));
-    choose("Sibling"); assign("Right");
+    browseOptions();
+    choose("Sibling"); assign("Option 2");
     expect(requests[0].signal?.aborted).toBe(true);
     expect(screen.queryByText("Loading saved option comparison…")).not.toBeInTheDocument();
+    viewComparison();
     fireEvent.click(screen.getByRole("button", { name: "Compare" }));
-    expect(await screen.findByRole("region", { name: "Right compared option" })).toHaveTextContent(sibling.id);
+    expect(await screen.findByRole("region", { name: "Option 2 compared option" })).toHaveTextContent(sibling.id);
     await act(async () => pending.resolve(Response.json(optionComparisonResponse())));
-    expect(screen.getByRole("region", { name: "Right compared option" })).toHaveTextContent(sibling.id);
-    expect(screen.getByRole("region", { name: "Right compared option" })).not.toHaveTextContent(child.id);
+    expect(screen.getByRole("region", { name: "Option 2 compared option" })).toHaveTextContent(sibling.id);
+    expect(screen.getByRole("region", { name: "Option 2 compared option" })).not.toHaveTextContent(child.id);
   });
 });

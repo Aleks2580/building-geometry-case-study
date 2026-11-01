@@ -29,16 +29,25 @@ function submit() {
 }
 
 function change(label: RegExp, value: string) {
-  fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  const input = screen.getByLabelText(label);
+  const disclosure = input.closest("details");
+  if (disclosure && !disclosure.open) fireEvent.click(disclosure.querySelector("summary")!);
+  fireEvent.change(input, { target: { value } });
 }
 
 function selectShape(kind: "rectangle" | "l-shaped" | "notched" | "custom") {
-  fireEvent.change(screen.getByRole("combobox", { name: "Site shape" }), { target: { value: kind } });
+  const names = { rectangle: "Rectangle / Square", "l-shaped": "L-shaped", notched: "Notched example", custom: "Custom polygon" };
+  fireEvent.click(screen.getByRole("button", { name: names[kind] }));
   if (kind === "custom") fireEvent.click(screen.getByRole("button", { name: "Advanced JSON" }));
 }
 
 function metric(label: string) {
-  const term = screen.getByText(label, { selector: "dt" });
+  if (["Site coverage ratio", "Floor-to-floor height"].includes(label)) {
+    const disclosure = screen.getByText(/^Metrics & capacity/, { selector: "summary" }).closest("details")!;
+    if (!disclosure.open) fireEvent.click(disclosure.querySelector("summary")!);
+  }
+  const name = label === "Footprint area" ? "Footprint" : label === "Floor count" ? "Floors" : label;
+  const term = screen.getByText(name, { selector: "dt" });
   return term.parentElement?.querySelector("dd");
 }
 
@@ -249,7 +258,7 @@ describe("MassingWorkspace", () => {
     expect(screen.queryByRole("button", { name: /Save/ })).not.toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Massing preview" })).toHaveAttribute("aria-busy", "true");
     expect(screen.queryByRole("img", { name: "Site plan" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Footprint area", { selector: "dt" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Footprint", { selector: "dt" })).not.toBeInTheDocument();
     const [url, options] = fetchMock.mock.calls[0];
     expect(url).toBe("http://localhost:8000/api/v1/massing/preview");
     expect(options?.method).toBe("POST");
@@ -272,14 +281,14 @@ describe("MassingWorkspace", () => {
     expect(screen.queryByText("Generating preview…")).not.toBeInTheDocument();
     expectPlanGeometry(previewResponse());
     const plan = screen.getByRole("img", { name: "Site plan" });
-    expect(plan).toHaveAccessibleDescription(/Plan view of backend geometry in metres/);
+    expect(plan).toHaveAccessibleDescription(/Plan view of the massing geometry in metres/);
     expect(plan).toHaveAttribute("viewBox", "0 0 640 400");
     expect(plan).toHaveAttribute("preserveAspectRatio", "xMidYMid meet");
-    expect(plan.compareDocumentPosition(screen.getByText("Footprint area", { selector: "dt" })))
-      .toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(plan.compareDocumentPosition(screen.getByText("Footprint", { selector: "dt" })))
+      .toBe(Node.DOCUMENT_POSITION_PRECEDING);
     expect(screen.getByRole("region", { name: "Massing preview" })).toHaveAttribute("aria-busy", "false");
     expect(within(screen.getByRole("list", { name: "Site plan layers" })).getAllByRole("listitem"))
-      .toHaveLength(4);
+      .toHaveLength(2);
   });
 
   it.each([
@@ -545,7 +554,7 @@ describe("MassingWorkspace", () => {
     expect(draftOutline()).toBe(lShapedDraftPath);
     expect(metric("Floor count")).toHaveTextContent("6");
     expect(screen.getByLabelText(/Maximum floor count/)).toHaveValue("2");
-    expect(screen.getByRole("combobox", { name: "Site shape" })).toHaveValue("l-shaped");
+    expect(screen.getByRole("button", { name: "L-shaped" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText(/Draft inputs have changed/)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -620,7 +629,7 @@ describe("MassingWorkspace", () => {
     expect(error).toHaveTextContent("HTTP 503");
     expect(firstSignal?.aborted).toBe(true);
     expect(screen.queryByRole("img", { name: "Site plan" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Footprint area", { selector: "dt" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Footprint", { selector: "dt" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Diagnostics" })).not.toBeInTheDocument();
     await act(async () => first.resolve(Response.json(oldResult)));
 
@@ -628,7 +637,7 @@ describe("MassingWorkspace", () => {
     expect(error).toHaveTextContent("HTTP 503");
     expect(screen.queryByRole("heading", { name: "Feasible" })).not.toBeInTheDocument();
     expect(screen.queryByRole("img", { name: "Site plan" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Footprint area", { selector: "dt" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Footprint", { selector: "dt" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Diagnostics" })).not.toBeInTheDocument();
     expect(screen.queryByText(oldResult.feasibility.diagnostics[0].message)).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -681,7 +690,7 @@ describe("MassingWorkspace", () => {
     await screen.findByText("Generating preview…");
 
     expect(screen.queryByRole("img", { name: "Site plan" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Footprint area", { selector: "dt" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Footprint", { selector: "dt" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Site and setback" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Generated default capacity" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Preferences and target" })).not.toBeInTheDocument();
@@ -695,7 +704,7 @@ describe("MassingWorkspace", () => {
       failure === "http" ? "HTTP 503" : "Unable to reach the massing API.",
     );
     expect(screen.queryByRole("img", { name: "Site plan" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Footprint area", { selector: "dt" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Footprint", { selector: "dt" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Hard constraints and capacity" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Preferences and target" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Diagnostics" })).not.toBeInTheDocument();
@@ -736,6 +745,7 @@ describe("MassingWorkspace", () => {
     expect(result.footprint_geometry).not.toEqual(result.generated_footprint_geometry);
     const paths = planPaths();
     expect(new Set(paths.map(([, path]) => path)).size).toBe(3);
+    fireEvent.click(screen.getByText(/^Metrics & capacity/, { selector: "summary" }));
     expect(screen.getByRole("region", { name: "Generated default capacity" })).toHaveTextContent("500 m²");
   });
 
@@ -756,6 +766,7 @@ describe("MassingWorkspace", () => {
       .toHaveAccessibleDescription(/No building footprint is available/);
     expect(screen.queryByText("Actual building footprint", { selector: "li" })).not.toBeInTheDocument();
     expect(metric("Footprint area")).toHaveTextContent("Not available");
+    fireEvent.click(screen.getByText(/^Metrics & capacity/, { selector: "summary" }));
     expect(screen.getByRole("region", { name: "Generated default capacity" })).toHaveTextContent("646 m²");
   });
 
@@ -780,8 +791,8 @@ describe("MassingWorkspace", () => {
       expect(path).toHaveAttribute("vector-effect", "non-scaling-stroke");
     }
     expect(within(screen.getByRole("list", { name: "Site plan layers" })).getAllByRole("listitem")
-      .map((item) => item.textContent)).toEqual([
-      "Original site boundary", "Complete buildable region", "Selected buildable component", "Actual building footprint",
-    ]);
+      .map((item) => item.textContent)).toEqual(name === "holed"
+      ? ["Original site boundary", "Actual building footprint"]
+      : ["Original site boundary", "Complete buildable region", "Selected buildable component", "Actual building footprint"]);
   });
 });

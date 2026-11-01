@@ -47,8 +47,8 @@ describe("OptionComparison", () => {
 
     expect(screen.getByText(/No submitted comparison/)).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
-    const left = screen.getByRole("region", { name: "Left comparison selection" });
-    const right = screen.getByRole("region", { name: "Right comparison selection" });
+    const left = screen.getByRole("region", { name: "Option 1 comparison selection" });
+    const right = screen.getByRole("region", { name: "Option 2 comparison selection" });
     expect(left).toHaveTextContent(response.options[0].id);
     expect(right).toHaveTextContent(response.options[1].id);
     expect(right).toHaveTextContent(response.options[0].id);
@@ -67,7 +67,7 @@ describe("OptionComparison", () => {
 
   it.each(["left", "right"] as const)("clears the %s selection through its feature callback", (side) => {
     const view = mount();
-    fireEvent.click(screen.getByRole("button", { name: `Clear ${side === "left" ? "Left" : "Right"}` }));
+    fireEvent.click(screen.getByRole("button", { name: `Clear ${side === "left" ? "Option 1" : "Option 2"}` }));
 
     expect(view.onClear).toHaveBeenCalledExactlyOnceWith(side);
     expect(fetchMock).not.toHaveBeenCalled();
@@ -130,11 +130,11 @@ describe("OptionComparison", () => {
     expect(signal?.aborted).toBe(true);
     expect(screen.queryByRole("heading", { name: "Saved option comparison" })).not.toBeInTheDocument();
     compare();
-    await screen.findByRole("heading", { name: "Right: Latest selected branch" });
+    await screen.findByRole("heading", { name: "Option 2: Latest selected branch" });
 
     await act(async () => pending.resolve(Response.json(first)));
-    expect(screen.getByRole("heading", { name: "Right: Latest selected branch" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Right: Four-floor branch" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Option 2: Latest selected branch" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Option 2: Four-floor branch" })).not.toBeInTheDocument();
     expect(fetchMock.mock.calls.map(([, init]) => JSON.parse(String(init?.body)))).toEqual([
       { option_ids: first.options.map((option) => option.id) },
       { option_ids: next.options.map((option) => option.id) },

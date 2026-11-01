@@ -33,7 +33,7 @@ describe("SitePlan", () => {
     render(<SitePlan {...geometryProps(result)} width={120} height={100} padding={10} />);
 
     const svg = screen.getByRole("img", { name: "Site plan" });
-    expect(svg).toHaveAccessibleDescription(/Plan view of backend geometry in metres/);
+    expect(svg).toHaveAccessibleDescription(/Plan view of the massing geometry in metres/);
     expect(svg).toHaveAccessibleDescription(/Larger y coordinates point upward/);
     expect(svg).toHaveAttribute("viewBox", "0 0 120 100");
     expect(svg).toHaveAttribute("preserveAspectRatio", "xMidYMid meet");
@@ -52,8 +52,26 @@ describe("SitePlan", () => {
     expect(layer(svg, "footprint")).toHaveAttribute("d", "M35 68.75 L85 68.75 L85 31.25 L35 31.25 L35 68.75 Z");
     const legend = screen.getByRole("list", { name: "Site plan layers" });
     expect(within(legend).getAllByRole("listitem").map((item) => item.textContent)).toEqual([
-      "Original site boundary", "Complete buildable region", "Selected buildable component", "Actual building footprint",
+      "Original site boundary", "Selected buildable component", "Actual building footprint",
     ]);
+  });
+
+  it("groups coincident area outlines in the legend while retaining every geometry layer", () => {
+    const result = previewResponse();
+    const area = rectangle(3, 3, 37, 22);
+    result.buildable_geometry = area;
+    result.selected_buildable_geometry = structuredClone(area);
+    result.footprint_geometry = structuredClone(area);
+    render(<SitePlan {...geometryProps(result)} />);
+
+    const svg = screen.getByRole("img", { name: "Site plan" });
+    expect(svg.querySelectorAll("path[data-layer]")).toHaveLength(4);
+    expect(layer(svg, "selected-buildable")).toHaveAttribute("d", layer(svg, "buildable").getAttribute("d"));
+    expect(layer(svg, "footprint")).toHaveAttribute("d", layer(svg, "buildable").getAttribute("d"));
+    expect(within(screen.getByRole("list", { name: "Site plan layers" })).getAllByRole("listitem")
+      .map((item) => item.textContent)).toEqual(["Original site boundary", "Actual building footprint"]);
+    expect(svg).toHaveAccessibleDescription(/Complete buildable region, Selected buildable component, Actual building footprint/);
+    expect(svg).toHaveAccessibleDescription(/The legend groups matching area outlines/);
   });
 
   it("keeps every split setback component separate from selection and the building", () => {
@@ -72,6 +90,31 @@ describe("SitePlan", () => {
     expect(completePath).toBe("M17.5 73.75 L55 73.75 L55 26.25 L17.5 26.25 L17.5 73.75 Z M72.5 73.75 L102.5 73.75 L102.5 26.25 L72.5 26.25 L72.5 73.75 Z");
     expect(layer(svg, "selected-buildable")).toHaveAttribute("d", "M17.5 73.75 L55 73.75 L55 26.25 L17.5 26.25 L17.5 73.75 Z");
     expect(layer(svg, "footprint")).toHaveAttribute("d", "M22.5 68.75 L50 68.75 L50 31.25 L22.5 31.25 L22.5 68.75 Z");
+    expect(within(screen.getByRole("list", { name: "Site plan layers" })).getAllByRole("listitem")
+      .map((item) => item.textContent)).toEqual([
+      "Original site boundary", "Complete buildable region", "Selected buildable component", "Actual building footprint",
+    ]);
+    expect(svg).not.toHaveAccessibleDescription(/The legend groups matching area outlines/);
+  });
+
+  it("identifies a selected split component even when the footprint shares its outline", () => {
+    const selected = rectangle(3, 3, 18, 22);
+    render(<SitePlan
+      siteGeometry={previewResponse().site_geometry}
+      buildableGeometry={{ type: "MultiPolygon", coordinates: [selected.coordinates, rectangle(25, 3, 37, 22).coordinates] }}
+      selectedBuildableGeometry={selected}
+      footprintGeometry={structuredClone(selected)}
+    />);
+
+    const svg = screen.getByRole("img", { name: "Site plan" });
+    expect(svg.querySelectorAll("path[data-layer]")).toHaveLength(4);
+    expect(layer(svg, "footprint")).toHaveAttribute("d", layer(svg, "selected-buildable").getAttribute("d"));
+    expect(layer(svg, "buildable").getAttribute("d")).not.toBe(layer(svg, "selected-buildable").getAttribute("d"));
+    expect(within(screen.getByRole("list", { name: "Site plan layers" })).getAllByRole("listitem")
+      .map((item) => item.textContent)).toEqual([
+      "Original site boundary", "Complete buildable region", "Selected buildable component", "Actual building footprint",
+    ]);
+    expect(svg).toHaveAccessibleDescription(/Complete buildable region, Selected buildable component, Actual building footprint/);
   });
 
   it("preserves holes in every layer even when rings share winding", () => {

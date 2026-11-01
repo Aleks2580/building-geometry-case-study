@@ -1,10 +1,10 @@
 .explorer {
   scroll-margin-top: 1.5rem;
-  margin-top: 2rem;
-  padding: 1.5rem;
+  padding: 1.35rem;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 10px;
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-panel);
   min-width: 0;
 }
 
@@ -13,14 +13,18 @@
   align-items: start;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.header h2 {
+  font-size: 1.2rem;
 }
 
 .header p,
 .prompt,
 .roots p {
   color: var(--color-text-secondary);
-  font-size: 0.85rem;
+  font-size: 0.8rem;
 }
 
 .header p {
@@ -28,17 +32,23 @@
   margin-bottom: 0;
 }
 
-.explorer button {
-  border: 1px solid #a9bbb5;
-  border-radius: 6px;
-  padding: 0.6rem 0.8rem;
-  background: #f6faf8;
+.explorer button,
+.browseButton {
+  min-height: 2.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  padding: 0.55rem 0.8rem;
+  background: var(--color-surface);
   color: var(--color-text);
+  font-size: 0.8rem;
+  font-weight: 600;
   cursor: pointer;
 }
 
-.explorer button:hover:enabled {
-  background: #e8f3ee;
+.explorer button:hover:enabled,
+.browseButton:hover {
+  background: var(--color-surface-subtle);
+  border-color: #b4c8c1;
 }
 
 .explorer button:disabled {
@@ -52,13 +62,22 @@
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
-  gap: 1.5rem;
+  grid-template-columns: minmax(200px, 0.8fr) minmax(0, 2.5fr);
+  align-items: start;
+  gap: 1.35rem;
 }
 
 .roots,
-.history {
+.history,
+.selectedOption {
   min-width: 0;
+}
+
+.roots h3,
+.history h3 {
+  margin: 0 0 0.85rem;
+  color: var(--color-text);
+  font-size: 0.85rem;
 }
 
 .treeAndSummary {
@@ -68,71 +87,170 @@
   gap: 1.25rem;
 }
 
-.selectedOption {
-  min-width: 0;
+.openButton {
+  margin-top: 0.85rem;
+  width: 100%;
 }
 
-.openButton {
-  margin-top: 1rem;
-  max-width: 100%;
+.explorer .openButton,
+.explorer .viewComparison {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: white;
+}
+
+.explorer .openButton:hover:enabled,
+.explorer .viewComparison:hover:enabled {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
 }
 
 .comparisonActions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.5rem;
-  margin-top: 0.75rem;
+  margin-top: 0.6rem;
+}
+
+.comparisonActions button {
+  padding-inline: 0.3rem;
+  font-size: 0.72rem;
 }
 
 .rootList {
+  max-height: min(66dvh, 44rem);
+  overflow: auto;
+  scrollbar-width: thin;
   list-style: none;
-  padding: 0;
-  margin: 0 0 1rem;
+  padding: 0.25rem;
+  margin: -0.25rem -0.25rem 0.8rem;
 }
 
 .rootList li + li {
   margin-top: 0.5rem;
 }
 
-.rootButton {
+.explorer .rootButton {
   display: flex;
   flex-direction: column;
   width: 100%;
   text-align: start;
   gap: 0.3rem;
+  padding: 0.75rem;
   overflow-wrap: anywhere;
   font-size: 0.8rem;
 }
 
 .rootButton[aria-pressed="true"] {
-  border-color: #326359;
-  background: #e2f0e9;
-  box-shadow: inset 3px 0 0 #326359;
+  border-color: var(--color-accent);
+  background: #edf7f3;
+  box-shadow: inset 3px 0 0 var(--color-accent);
+}
+
+.rootButton > span:last-child {
+  width: fit-content;
+  border-radius: 1rem;
+  padding: 0.1rem 0.45rem;
+  background: var(--color-surface-subtle);
+  color: var(--color-text-secondary);
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+
+.selectionSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-subtle);
+}
+
+.selectionSummary > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem 2.5rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.selectionSummary p {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
+}
+
+.selectionSummary span {
+  color: var(--color-text-secondary);
+  font-size: 0.7rem;
+}
+
+.comparisonView {
+  min-width: 0;
+}
+
+.browseButton {
+  margin-bottom: 1rem;
 }
 
 .identifier {
   color: var(--color-text-secondary);
-  font-size: 0.75rem;
+  font-size: 0.68rem;
+  font-weight: 400;
+}
+
+.prompt {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  min-height: 18rem;
+  margin: 0;
+  padding: 2rem;
+  border: 1px dashed #bbcec7;
+  border-radius: var(--radius-control);
+  background: var(--color-surface-subtle);
+  text-align: center;
 }
 
 .error,
 .roots .error {
   color: #8d2028;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   overflow-wrap: anywhere;
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1300px) {
   .treeAndSummary {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
-@media (max-width: 700px) {
+@media (max-width: 1050px) {
   .layout {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .rootList {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+    gap: 0.5rem;
+    max-height: 19rem;
+  }
+
+  .rootList li + li {
+    margin-top: 0;
+  }
+}
+
+@media (max-width: 700px) {
   .header {
     flex-direction: column;
   }
@@ -141,5 +259,19 @@
 @media (max-width: 520px) {
   .explorer {
     padding: 1rem;
+  }
+
+  .rootList {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .selectionSummary {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 0.8rem;
+  }
+
+  .selectionSummary > div {
+    gap: 0.75rem;
   }
 }

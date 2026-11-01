@@ -157,8 +157,8 @@ describe("SaveOption", () => {
 
     expect(await screen.findByRole("button", { name: "Saving…" })).toBeDisabled();
     expect(screen.getByRole("textbox", { name: "Option name (optional)" })).toBeDisabled();
-    expect(screen.getByRole("status")).toHaveTextContent("Saving this submitted preview");
-    expect(screen.getByRole("status")).toHaveTextContent("does not cancel the save");
+    expect(screen.getByRole("status")).toHaveTextContent("Saving your option");
+    expect(screen.getByRole("status")).toHaveTextContent("You can keep exploring while it saves.");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(requestBody().name).toBe("First name");
 
@@ -175,7 +175,7 @@ describe("SaveOption", () => {
     view.rerender(component(true));
 
     expect(screen.getByRole("status")).toHaveTextContent(optionResponse().id);
-    expect(screen.getByRole("status")).toHaveTextContent("This receipt belongs to the generated preview.");
+    expect(screen.getByRole("status")).toHaveTextContent("Your saved design is available in Saved Options.");
     expect(screen.getByRole("button", { name: "Save Another Root Option" })).toBeDisabled();
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -188,7 +188,7 @@ describe("SaveOption", () => {
     submit();
     await screen.findByText("Root option saved");
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(/Each save creates a new option/)).toBeInTheDocument();
+    expect(screen.getByText(/Each save creates a separate option/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Save Another Root Option" }));
 
@@ -437,7 +437,7 @@ describe("SaveOption branch saves", () => {
 
     expect(await screen.findByRole("button", { name: "Saving…" })).toBeDisabled();
     expect(screen.getByRole("textbox", { name: "Option name (optional)" })).toBeDisabled();
-    expect(screen.getByRole("status")).toHaveTextContent("Saving this submitted preview");
+    expect(screen.getByRole("status")).toHaveTextContent("Saving your option");
     expect(screen.queryByRole("button", { name: "Create Branch" })).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(requestBody().name).toBe("First child");

@@ -1,20 +1,39 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 import ConfigurationForm from "./ConfigurationForm";
+import WorkspaceActionBar from "./WorkspaceActionBar";
 import { configurationDraftFromOption, initialConfigurationDraft } from "./configuration";
 import type { Configuration, ConfigurationDraft } from "./configuration";
 import { optionResponse } from "../../test/optionFixtures";
+
+function ConfigurationFormWithActions({ isGenerating = false, ...props }: ComponentProps<typeof ConfigurationForm> & { isGenerating?: boolean }) {
+  return <>
+    <ConfigurationForm {...props} id="configuration-test" />
+    <WorkspaceActionBar mode="edit" formId="configuration-test" isGenerating={isGenerating} onNewDesign={vi.fn()} />
+  </>;
+}
 
 function submit() {
   fireEvent.click(screen.getByRole("button", { name: "Generate Preview" }));
 }
 
+function revealOptional(name: string) {
+  const title = name.startsWith("Preferred") ? "Design preferences" : name.startsWith("GFA target") ? "GFA target" : null;
+  if (!title) return;
+  const summary = screen.getByText(title, { selector: "summary strong" });
+  if (!summary.closest("details")?.open) fireEvent.click(summary);
+}
+
 function change(name: string, value: string) {
+  revealOptional(name);
   fireEvent.change(screen.getByRole("textbox", { name }), { target: { value } });
 }
 
+const shapeLabels = { rectangle: "Rectangle / Square", "l-shaped": "L-shaped", notched: "Notched example", custom: "Custom polygon" };
+
 function selectShape(kind: "rectangle" | "l-shaped" | "notched" | "custom") {
-  fireEvent.change(screen.getByRole("combobox", { name: "Site shape" }), { target: { value: kind } });
+  fireEvent.click(screen.getByRole("button", { name: shapeLabels[kind] }));
   if (kind === "custom") fireEvent.click(screen.getByRole("button", { name: "Advanced JSON" }));
 }
 
@@ -26,7 +45,7 @@ function renderForm(submittedDraft?: ConfigurationDraft) {
   const onSubmit = vi.fn<(configuration: Configuration, draft: ConfigurationDraft) => void>();
   const onDraftChange = vi.fn<(changed: boolean) => void>();
   const view = render(
-    <ConfigurationForm onSubmit={onSubmit} submittedDraft={submittedDraft} onDraftChange={onDraftChange} />,
+    <ConfigurationFormWithActions onSubmit={onSubmit} submittedDraft={submittedDraft} onDraftChange={onDraftChange} />,
   );
   return { onSubmit, onDraftChange, ...view };
 }
@@ -44,7 +63,7 @@ describe("ConfigurationForm", () => {
     const initialDraft = configurationDraftFromOption(saved);
     const onSubmit = vi.fn<(configuration: Configuration, draft: ConfigurationDraft) => void>();
     const onDraftChange = vi.fn();
-    render(<ConfigurationForm
+    render(<ConfigurationFormWithActions
       initialDraft={initialDraft}
       inheritedSite={saved.site_geometry}
       submittedDraft={structuredClone(initialDraft)}
@@ -56,7 +75,7 @@ describe("ConfigurationForm", () => {
     expect(screen.getByRole("group", { name: "Inherited site (read-only)" })).toBeInTheDocument();
     expect(screen.getByText(/site is inherited and cannot be changed/)).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Inherited site preview" })).toBeInTheDocument();
-    expect(screen.queryByRole("combobox", { name: "Site shape" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Site shape" })).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: "Site Polygon JSON" })).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: "Width (m)" })).not.toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Setback (m)" })).toHaveValue("0");
@@ -95,7 +114,7 @@ describe("ConfigurationForm", () => {
     const initialDraft = configurationDraftFromOption(saved);
     initialDraft.site = { kind: "custom", json: "invalid draft geometry" };
     const onSubmit = vi.fn<(configuration: Configuration, draft: ConfigurationDraft) => void>();
-    render(<ConfigurationForm initialDraft={initialDraft} inheritedSite={saved.site_geometry} onSubmit={onSubmit} />);
+    render(<ConfigurationFormWithActions initialDraft={initialDraft} inheritedSite={saved.site_geometry} onSubmit={onSubmit} />);
 
     submit();
 
@@ -109,20 +128,25 @@ describe("ConfigurationForm", () => {
   it("focuses the first branch input on entry and focuses an accessible invalid field on form submission", async () => {
     const saved = optionResponse();
     const onSubmit = vi.fn();
-    render(<ConfigurationForm
+    render(<ConfigurationFormWithActions
       initialDraft={configurationDraftFromOption(saved)}
       inheritedSite={saved.site_geometry}
       focusOnMount
       onSubmit={onSubmit}
     />);
     await waitFor(() => expect(screen.getByRole("textbox", { name: "Setback (m)" })).toHaveFocus());
+    revealOptional("Preferred floor count (optional)");
     const invalid = screen.getByRole("textbox", { name: "Preferred floor count (optional)" });
     change("Preferred floor count (optional)", "invalid");
+    const preferences = screen.getByText("Design preferences", { selector: "summary strong" });
+    fireEvent.click(preferences);
+    expect(preferences.closest("details")).not.toHaveAttribute("open");
 
-    fireEvent.submit(screen.getByRole("form", { name: "Massing configuration" }));
+    submit();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Enter a finite decimal number or leave blank.");
     await waitFor(() => expect(invalid).toHaveFocus());
+    expect(preferences.closest("details")).toHaveAttribute("open");
     expect(invalid).toHaveAttribute("aria-invalid", "true");
     expect(invalid).toHaveAccessibleDescription(/Enter a finite decimal number or leave blank/);
     expect(onSubmit).not.toHaveBeenCalled();
@@ -132,10 +156,14 @@ describe("ConfigurationForm", () => {
     const { onSubmit } = renderForm();
 
     expect(screen.getByRole("form", { name: "Massing configuration" })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Site shape" })).toHaveValue("rectangle");
-    expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual([
-      "Rectangle", "L-shaped example", "Notched example", "Custom Polygon",
+    const presets = within(screen.getByRole("group", { name: "Site shape" }));
+    expect(presets.getByRole("button", { name: "Rectangle / Square" })).toHaveAttribute("aria-pressed", "true");
+    expect(presets.getAllByRole("button").map((button) => button.textContent)).toEqual([
+      "Rectangle / Square", "L-shaped", "Notched example", "Custom polygon",
     ]);
+    expect(screen.getByRole("group", { name: "Site outline" })).toBeInTheDocument();
+    expect(screen.getByText("Design preferences", { selector: "summary strong" }).closest("details")).not.toHaveAttribute("open");
+    expect(screen.getByText("GFA target", { selector: "summary strong" }).closest("details")).not.toHaveAttribute("open");
     expect(screen.getByRole("textbox", { name: "Width (m)" })).toHaveValue("40");
     expect(screen.getByRole("textbox", { name: "Length (m)" })).toHaveValue("25");
     expect(screen.queryByRole("textbox", { name: "Site Polygon JSON" })).not.toBeInTheDocument();
@@ -150,6 +178,7 @@ describe("ConfigurationForm", () => {
       "Preferred footprint (m²) (optional)",
       "GFA target (m²) (optional)",
     ]) {
+      revealOptional(name);
       expect(screen.getByRole("textbox", { name })).toHaveValue("");
     }
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -183,7 +212,7 @@ describe("ConfigurationForm", () => {
   it("shows the live draft rectangle and updates its proportions while editing without submitting", () => {
     const { onSubmit } = renderForm();
     expect(screen.getByText("Live draft site")).toBeInTheDocument();
-    expect(screen.getByText(/Site outline only\. Generate Preview to .*calculate massing\./)).toBeInTheDocument();
+    expect(screen.getByText(/Generate Preview to check feasibility\./)).toBeInTheDocument();
     const initialPath = draftOutline();
     const initialPositions = [...initialPath.matchAll(/[ML]([^ ]+) ([^ ]+)/g)]
       .map((match) => [Number(match[1]), Number(match[2])]);
@@ -329,7 +358,7 @@ describe("ConfigurationForm", () => {
     const { onSubmit } = renderForm();
     selectShape(kind);
 
-    expect(screen.getByRole("combobox", { name: "Site shape" })).toHaveValue(kind);
+    expect(screen.getByRole("button", { name: shapeLabels[kind] })).toHaveAttribute("aria-pressed", "true");
     expect(screen.queryByRole("textbox", { name: "Width (m)" })).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: "Site Polygon JSON" })).not.toBeInTheDocument();
     expect(onSubmit).not.toHaveBeenCalled();
@@ -437,6 +466,8 @@ describe("ConfigurationForm", () => {
     change("Preferred floor count (optional)", "2");
     change("Preferred footprint (m²) (optional)", "350");
     change("GFA target (m²) (optional)", "1e3");
+    fireEvent.click(screen.getByText("Design preferences", { selector: "summary strong" }));
+    fireEvent.click(screen.getByText("GFA target", { selector: "summary strong" }));
 
     submit();
 
@@ -577,7 +608,7 @@ describe("ConfigurationForm", () => {
     submittedDraft.hard_constraints.setback_m = "3.0";
 
     rerender(
-      <ConfigurationForm onSubmit={onSubmit} submittedDraft={submittedDraft} onDraftChange={onDraftChange} />,
+      <ConfigurationFormWithActions onSubmit={onSubmit} submittedDraft={submittedDraft} onDraftChange={onDraftChange} />,
     );
 
     expect(onDraftChange).toHaveBeenLastCalledWith(false);
@@ -586,8 +617,8 @@ describe("ConfigurationForm", () => {
 
   it("allows editing and replacing a pending submission", async () => {
     const onSubmit = vi.fn<(configuration: Configuration, draft: ConfigurationDraft) => void>();
-    render(<ConfigurationForm onSubmit={onSubmit} isGenerating />);
-    expect(screen.getByText("You can keep editing and submit again to replace the pending request."))
+    render(<ConfigurationFormWithActions onSubmit={onSubmit} isGenerating />);
+    expect(screen.getByText("Keep editing or submit again to update the preview."))
       .toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Generate Preview" })).toBeEnabled();
     change("Setback (m)", "4");

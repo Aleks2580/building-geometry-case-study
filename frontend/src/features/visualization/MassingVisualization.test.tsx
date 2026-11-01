@@ -31,15 +31,15 @@ describe("MassingVisualization", () => {
     render(<MassingVisualization result={result} />);
     expect(viewer.loaded).not.toHaveBeenCalled();
     expect(screen.getByRole("img", { name: "Site plan" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "2D" })).toHaveAttribute("aria-pressed", "true");
-    const threeD = screen.getByRole("button", { name: "3D" });
+    expect(screen.getByRole("button", { name: "2D Plan" })).toHaveAttribute("aria-pressed", "true");
+    const threeD = screen.getByRole("button", { name: "3D Massing" });
     expect(threeD).toHaveAttribute("type", "button");
     expect(screen.getByRole("group", { name: "Visualization view" })).toContainElement(threeD);
     fireEvent.click(threeD);
     expect(screen.getByRole("status")).toHaveTextContent("Loading 3D visualization");
     expect(screen.queryByRole("img", { name: "Site plan" })).not.toBeInTheDocument();
     // The pending import may complete after the user returns to 2D; it must not mount a scene.
-    fireEvent.click(screen.getByRole("button", { name: "2D" }));
+    fireEvent.click(screen.getByRole("button", { name: "2D Plan" }));
     await act(async () => { viewer.finishLoading(); await viewer.loading; });
     expect(viewer.mount).not.toHaveBeenCalled();
     fireEvent.click(threeD);
@@ -56,18 +56,18 @@ describe("MassingVisualization", () => {
     const mounted = viewer.mount.mock.calls.length;
     const unmounted = viewer.unmount.mock.calls.length;
     for (let index = 0; index < 4; index++) {
-      fireEvent.click(screen.getByRole("button", { name: "3D" }));
+      fireEvent.click(screen.getByRole("button", { name: "3D Massing" }));
       await screen.findByTestId("3d-view");
-      fireEvent.click(screen.getByRole("button", { name: "2D" }));
+      fireEvent.click(screen.getByRole("button", { name: "2D Plan" }));
       expect(screen.queryByTestId("3d-view")).not.toBeInTheDocument();
     }
     expect(viewer.mount.mock.calls.length - mounted).toBe(4);
     expect(viewer.unmount.mock.calls.length - unmounted).toBe(4);
-    fireEvent.click(screen.getByRole("button", { name: "3D" }));
+    fireEvent.click(screen.getByRole("button", { name: "3D Massing" }));
     await screen.findByTestId("3d-view");
     rerender(<MassingVisualization result={replacement} />);
     expect(viewer.render.mock.lastCall?.[0]).toBe(replacement);
-    expect(screen.getByRole("button", { name: "3D" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "3D Massing" })).toHaveAttribute("aria-pressed", "true");
     expect(replacement).toEqual(original);
   });
 });

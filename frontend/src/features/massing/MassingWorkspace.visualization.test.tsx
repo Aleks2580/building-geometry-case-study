@@ -42,11 +42,14 @@ function generate() {
 }
 
 function change(label: RegExp, value: string) {
-  fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  const input = screen.getByLabelText(label);
+  const disclosure = input.closest("details");
+  if (disclosure && !disclosure.open) fireEvent.click(disclosure.querySelector("summary")!);
+  fireEvent.change(input, { target: { value } });
 }
 
 function setSite(result: MassingPreviewResponse) {
-  fireEvent.change(screen.getByRole("combobox", { name: "Site shape" }), { target: { value: "custom" } });
+  fireEvent.click(screen.getByRole("button", { name: "Custom polygon" }));
   fireEvent.click(screen.getByRole("button", { name: "Advanced JSON" }));
   change(/Site Polygon JSON/, JSON.stringify(result.site));
   change(/Setback \(m\)/, String(result.hard_constraints.setback_m));
@@ -62,7 +65,7 @@ function expectSubmitted(index: number, result: MassingPreviewResponse) {
 }
 
 async function show3D(result: MassingPreviewResponse) {
-  fireEvent.click(screen.getByRole("button", { name: "3D" }));
+  fireEvent.click(screen.getByRole("button", { name: "3D Massing" }));
   expect(JSON.parse((await screen.findByTestId("3d-result")).textContent ?? "null")).toEqual(result);
   expect(renderer.render.mock.lastCall?.[0]).toEqual(result);
 }
@@ -146,7 +149,7 @@ describe("MassingWorkspace integrated visualization", () => {
     generate();
     await screen.findByRole("heading", { name: "Feasible" });
     await show3D(result);
-    fireEvent.change(screen.getByRole("combobox", { name: "Site shape" }), { target: { value: "custom" } });
+    fireEvent.click(screen.getByRole("button", { name: "Custom polygon" }));
     fireEvent.click(screen.getByRole("button", { name: "Replace polygon and draw" }));
     for (const [x, y] of [[0, 0], [30, 0], [30, 20], [0, 20]]) {
       change(/^X \(m\)$/, String(x));
@@ -174,7 +177,7 @@ describe("MassingWorkspace integrated visualization", () => {
     await screen.findByRole("heading", { name: "Feasible" });
     expectSubmitted(0, result);
 
-    expect(screen.getByRole("button", { name: "2D" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "2D Plan" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("img", { name: "Site plan" })).toBeInTheDocument();
     expect(renderer.render).not.toHaveBeenCalled();
     for (let cycle = 0; cycle < 3; cycle += 1) {
@@ -184,7 +187,7 @@ describe("MassingWorkspace integrated visualization", () => {
       expect(screen.queryByRole("img", { name: "Site plan" })).not.toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Save Option" })).toBeEnabled();
       expect(screen.getByRole("region", { name: "Actual massing" })).toHaveTextContent("6");
-      fireEvent.click(screen.getByRole("button", { name: "2D" }));
+      fireEvent.click(screen.getByRole("button", { name: "2D Plan" }));
       expect(screen.queryByTestId("3d-result")).not.toBeInTheDocument();
       expect(screen.getByRole("img", { name: "Site plan" })).toBeInTheDocument();
     }
@@ -200,7 +203,7 @@ describe("MassingWorkspace integrated visualization", () => {
     await show3D(result);
 
     change(/Maximum floor count/, "2");
-    fireEvent.change(screen.getByRole("combobox", { name: "Site shape" }), { target: { value: "custom" } });
+    fireEvent.click(screen.getByRole("button", { name: "Custom polygon" }));
     fireEvent.click(screen.getByRole("button", { name: "Advanced JSON" }));
     change(/Site Polygon JSON/, JSON.stringify(backendPreviewResponse("notched").site));
     expect(screen.getByText(/Draft inputs have changed/)).toBeInTheDocument();
@@ -211,8 +214,8 @@ describe("MassingWorkspace integrated visualization", () => {
 
     expect(await screen.findByText("Enter valid Polygon JSON.")).toBeInTheDocument();
     expect(JSON.parse(screen.getByTestId("3d-result").textContent ?? "null")).toEqual(result);
-    expect(screen.getByText("Floor count", { selector: "dt" }).parentElement?.querySelector("dd")).toHaveTextContent("6");
-    fireEvent.click(screen.getByRole("button", { name: "2D" }));
+    expect(screen.getByText("Floors", { selector: "dt" }).parentElement?.querySelector("dd")).toHaveTextContent("6");
+    fireEvent.click(screen.getByRole("button", { name: "2D Plan" }));
     await show3D(result);
     expect(fetchMock).toHaveBeenCalledOnce();
   });
@@ -232,7 +235,7 @@ describe("MassingWorkspace integrated visualization", () => {
 
     await screen.findByText("Generating preview…");
     expect(screen.queryByTestId("3d-result")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "3D" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "3D Massing" })).not.toBeInTheDocument();
     await act(async () => pending.resolve(new Response("Unavailable", { status: 503 })));
     expect(await screen.findByRole("alert")).toHaveTextContent("HTTP 503");
     expect(screen.queryByTestId("3d-result")).not.toBeInTheDocument();
@@ -263,7 +266,7 @@ describe("MassingWorkspace integrated visualization", () => {
     await act(async () => old.resolve(Response.json(previous)));
     expect(JSON.parse(screen.getByTestId("3d-result").textContent ?? "null")).toEqual(current);
     expect(renderer.render.mock.lastCall?.[0]).toEqual(current);
-    expect(screen.getByText("Footprint area", { selector: "dt" }).parentElement?.querySelector("dd")).toHaveTextContent("300 m²");
+    expect(screen.getByText("Footprint", { selector: "dt" }).parentElement?.querySelector("dd")).toHaveTextContent("300 m²");
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 

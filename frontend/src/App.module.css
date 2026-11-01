@@ -1,59 +1,333 @@
-.page {
-  max-width: 1320px;
-  margin: 0 auto;
-  padding: 2.5rem;
+.shell {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.skipLink {
+  position: fixed;
+  top: 0.75rem;
+  left: 1rem;
+  z-index: 10;
+  transform: translateY(-200%);
+  border-radius: var(--radius-control);
+  padding: 0.75rem 1rem;
+  background: var(--color-surface);
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.skipLink:focus {
+  transform: translateY(0);
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+  padding: 1.9rem 1.1rem 1.25rem;
+  background-image: linear-gradient(165deg, #153737, #102729);
+  background-color: var(--color-sidebar);
+  color: #e5f1ee;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0 0.5rem;
+}
+
+.brandIcon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2.4rem;
+  height: 2.6rem;
+  border: 1px solid #4c7773;
+  border-radius: 0.65rem;
+  background: #234b4a;
+  color: #d8efea;
+}
+
+.brandIcon svg {
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
+.brandName,
+.brandCaption,
+.sidebarFooter span {
+  display: block;
+}
+
+.brandName {
+  font-size: 0.95rem;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.brandCaption {
+  margin-top: 0.15rem;
+  color: #afc3ba;
+  font-size: 0.7rem;
+}
+
+.navigation {
+  margin-top: 2.75rem;
+}
+
+.navigationLabel {
+  margin: 0 0 0.8rem 0.9rem;
+  color: #9abbb6;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.navigation button {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  width: 100%;
+  min-height: 3.25rem;
+  margin-bottom: 0.6rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: #bed3cf;
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-align: start;
+  cursor: pointer;
+}
+
+.navigation button:hover {
+  background: #ffffff0c;
+  color: white;
+}
+
+.navigation button[aria-current="page"] {
+  border-color: transparent;
+  background: #255750;
+  color: white;
+  box-shadow: inset 3px 0 0 #5cc8a9;
+}
+
+.navigation svg {
+  flex-shrink: 0;
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.sidebar :focus-visible {
+  outline-color: #b5dbbe;
+}
+
+.sidebarFooter {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-top: auto;
+  padding: 1.25rem 0.5rem 0;
+  border-top: 1px solid #ffffff18;
+  font-size: 0.7rem;
+}
+
+.sidebarFooter strong {
+  font-weight: 500;
+}
+
+.sidebarFooter span:not(.footerMark) {
+  margin-top: 0.2rem;
+  color: #afc3ba;
+  font-size: 0.65rem;
+}
+
+.footerMark {
+  border-radius: 0.5rem;
+  padding: 0.55rem;
+  background: #ffffff0d;
+  color: #b9cdc0;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sectionContent {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 1.4rem clamp(1rem, 1.5vw, 1.75rem) 2rem;
+}
+
+.sectionContent.workspaceContent {
+  overflow: hidden;
+  padding: 0;
 }
 
 .pageHeader {
   display: flex;
-  align-items: start;
+  flex-shrink: 0;
+  align-items: center;
   justify-content: space-between;
-  gap: 2rem;
-  margin-bottom: 2rem;
-}
-
-.pageHeader p {
-  color: var(--color-text-muted);
-  margin-bottom: 0;
-  max-width: 44rem;
+  flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+  padding: 1rem clamp(1rem, 1.5vw, 1.75rem);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
 }
 
 .eyebrow {
+  margin-bottom: 0.3rem;
   color: var(--color-accent);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 0.72rem;
+  font-size: 0.6rem;
   font-weight: 700;
-  margin-bottom: 0.65rem;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.pageHeader h1 {
+  margin-bottom: 0.15rem;
+}
+
+.description {
+  margin-bottom: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
 }
 
 .health {
-  font-size: 0.85rem;
-  flex-shrink: 0;
-  padding-top: 0.4rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  max-width: 24rem;
+  margin: 0 0 0 auto;
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: 2rem;
+  background: var(--color-surface-subtle);
+  color: var(--color-accent);
+  font-size: 0.7rem;
+  overflow-wrap: anywhere;
 }
 
-.savedOptionsLink {
-  display: inline-block;
-  margin-top: 0.8rem;
-  color: var(--color-accent);
-  font-size: 0.9rem;
+.health strong {
   font-weight: 600;
 }
 
-@media (max-width: 900px) {
-  .page {
-    padding: 1.5rem;
+.healthDot {
+  flex-shrink: 0;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: #2c7b50;
+}
+
+.health[data-state="pending"] .healthDot {
+  background: #947237;
+}
+
+.health[data-state="error"] .healthDot {
+  background: #b34747;
+}
+
+@media (max-width: 1100px) {
+  .shell {
+    grid-template-columns: 200px minmax(0, 1fr);
   }
 
-  .pageHeader {
-    flex-direction: column;
-    gap: 0.7rem;
+  .sidebar {
+    padding-inline: 0.75rem;
+  }
+
+  .brand {
+    gap: 0.5rem;
+  }
+
+  .brandName {
+    font-size: 0.75rem;
+  }
+
+  .navigation button {
+    font-size: 0.8rem;
   }
 }
 
-@media (max-width: 520px) {
-  .page {
+@media (max-width: 760px) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .sidebar {
+    position: static;
+    height: auto;
     padding: 1rem;
+  }
+
+  .brandName {
+    font-size: 0.95rem;
+  }
+
+  .navigation {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.4rem;
+    margin-top: 1.25rem;
+  }
+
+  .navigationLabel,
+  .sidebarFooter {
+    display: none;
+  }
+
+  .navigation button {
+    justify-content: center;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0.65rem 0.3rem;
+    font-size: 0.75rem;
+  }
+
+  .sectionContent {
+    padding: 1rem;
+  }
+
+  .pageHeader {
+    padding: 1rem;
+    gap: 0.75rem;
+  }
+
+  .eyebrow {
+    margin-bottom: 0.4rem;
+  }
+}
+
+@media (max-width: 390px) {
+  .sidebar {
+    padding-inline: 0.6rem;
+  }
+
+  .navigation button {
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .sectionContent,
+  .pageHeader {
+    padding-inline: 0.75rem;
   }
 }

@@ -19,7 +19,7 @@ export default function Diagnostics({ diagnostics }: { diagnostics: Diagnostic[]
         <p>No diagnostics reported.</p>
       ) : (
         // WebKit drops list semantics when CSS removes the markers.
-        <ol className={styles.diagnostics} role="list" aria-label="Backend diagnostics">
+        <ol className={styles.diagnostics} role="list" aria-label="Diagnostics">
           {diagnostics.map((diagnostic, index) => (
             <li className={styles.diagnostic} data-severity={diagnostic.severity} key={`${diagnostic.code}-${index}`}>
               <p className={styles.diagnosticMeta}>

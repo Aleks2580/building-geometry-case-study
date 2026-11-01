@@ -65,11 +65,15 @@ describe("integrated 3D renderer states", () => {
       const result = resultForStatus(status);
       const original = structuredClone(result);
       render(<MassingResult result={result} />);
+      for (const label of ["Metrics & capacity", "Preferences & target", "Diagnostics"]) {
+        const summary = screen.getByText(new RegExp(`^${label}`), { selector: "summary" });
+        if (!summary.parentElement?.hasAttribute("open")) fireEvent.click(summary);
+      }
       const sections = ["Actual massing", "Hard constraints and capacity", "Generated default capacity", "Preferences and target", "Diagnostics"];
       const before = sections.map((name) => screen.getByRole("region", { name }).textContent);
       const plan = planPaths();
 
-      fireEvent.click(screen.getByRole("button", { name: "3D" }));
+      fireEvent.click(screen.getByRole("button", { name: "3D Massing" }));
       await screen.findByTestId("integrated-canvas");
 
       expect(sections.map((name) => screen.getByRole("region", { name }).textContent)).toEqual(before);
@@ -83,7 +87,7 @@ describe("integrated 3D renderer states", () => {
         expect(scene.building.floorCount).toBe(result.metrics.floor_count);
         expect(scene.building.footprint.rings).toHaveLength(result.footprint_geometry.coordinates.length);
       }
-      fireEvent.click(screen.getByRole("button", { name: "2D" }));
+      fireEvent.click(screen.getByRole("button", { name: "2D Plan" }));
       expect(screen.queryByTestId("integrated-canvas")).not.toBeInTheDocument();
       expect(planPaths()).toEqual(plan);
       expect(result).toEqual(original);
@@ -101,7 +105,7 @@ describe("integrated 3D renderer states", () => {
       const plan = planPaths();
       const actual = screen.getByRole("region", { name: "Actual massing" }).textContent;
       mocks.failCanvas = true;
-      fireEvent.click(screen.getByRole("button", { name: "3D" }));
+      fireEvent.click(screen.getByRole("button", { name: "3D Massing" }));
       await screen.findByText(/Interactive 3D is unavailable/);
       expect(screen.queryByTestId("integrated-canvas")).not.toBeInTheDocument();
       expect(planPaths()).toEqual(plan);
@@ -119,7 +123,7 @@ describe("integrated 3D renderer states", () => {
 
   it("unmounts after context loss and every return to 2D, then mounts a fresh renderer", async () => {
     render(<MassingResult result={backendPreviewResponse("holed")} />);
-    fireEvent.click(screen.getByRole("button", { name: "3D" }));
+    fireEvent.click(screen.getByRole("button", { name: "3D Massing" }));
     await screen.findByTestId("integrated-canvas");
     fireEvent.click(screen.getByRole("button", { name: "Lose WebGL context" }));
     expect(screen.getByText(/Interactive 3D is unavailable/)).toBeInTheDocument();
@@ -128,11 +132,11 @@ describe("integrated 3D renderer states", () => {
     expect(within(screen.getByRole("region", { name: "Actual massing" })).getByText("2,250 m²")).toBeInTheDocument();
 
     for (let index = 0; index < 3; index++) {
-      fireEvent.click(screen.getByRole("button", { name: "2D" }));
+      fireEvent.click(screen.getByRole("button", { name: "2D Plan" }));
       expect(screen.queryByText(/Interactive 3D is unavailable/)).not.toBeInTheDocument();
-      fireEvent.click(screen.getByRole("button", { name: "3D" }));
+      fireEvent.click(screen.getByRole("button", { name: "3D Massing" }));
       await screen.findByTestId("integrated-canvas");
-      fireEvent.click(screen.getByRole("button", { name: "2D" }));
+      fireEvent.click(screen.getByRole("button", { name: "2D Plan" }));
       expect(screen.queryByTestId("integrated-canvas")).not.toBeInTheDocument();
     }
     expect(mocks.mount).toHaveBeenCalledTimes(4);

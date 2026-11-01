@@ -18,13 +18,13 @@ describe("DraftSitePreview", () => {
     expect(screen.queryByText(/Enter valid site dimensions/)).not.toBeInTheDocument();
   });
 
-  it("fits the current site outline and labels it separately from a backend result", () => {
+  it("fits the current site outline and labels it separately from a submitted result", () => {
     render(<DraftSitePreview geometry={createRectangleSite(40, 20)} />);
 
     const image = screen.getByRole("img", { name: "Draft site preview" });
     expect(screen.getByText("Live draft site")).toBeInTheDocument();
     expect(image).toHaveAccessibleDescription(/Unvalidated site outline in metres/);
-    expect(image).toHaveAccessibleDescription(/Geometry validity and massing are checked by the backend/);
+    expect(image).toHaveAccessibleDescription(/Choose Generate Preview to check geometry and calculate massing/);
     expect(image).toHaveAttribute("viewBox", "0 0 320 180");
     expect(image).toHaveAttribute("preserveAspectRatio", "xMidYMid meet");
     expect(image.querySelector("path")).toHaveAttribute("d", "M16 162 L304 162 L304 18 L16 18 L16 162 Z");

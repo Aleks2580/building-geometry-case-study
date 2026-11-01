@@ -34,30 +34,52 @@ afterEach(() => { cleanup(); client.clear(); });
 
 async function mountAndBrowse() {
   render(<QueryClientProvider client={client}><App /></QueryClientProvider>);
+  navigate("Saved Options");
   const roots = within(screen.getByRole("region", { name: "Root options" }));
   fireEvent.click(await roots.findByRole("button", { name: /Rectangle study/ }));
   await screen.findByRole("list", { name: "Saved decision tree" });
 }
 
+function navigate(section: "Workspace" | "Saved Options" | "Compare") {
+  fireEvent.click(within(screen.getByRole("navigation", { name: "Main navigation" }))
+    .getByRole("button", { name: section }));
+}
+
 async function compareSelectedHistory() {
-  fireEvent.click(screen.getByRole("button", { name: "Assign to Left" }));
+  navigate("Saved Options");
+  fireEvent.click(screen.getByRole("button", { name: "Assign to Option 1" }));
   fireEvent.click(within(screen.getByRole("list", { name: "Saved decision tree" }))
     .getByRole("button", { name: /Four-floor branch/ }));
-  fireEvent.click(screen.getByRole("button", { name: "Assign to Right" }));
-  fireEvent.click(screen.getByRole("button", { name: "Compare" }));
+  fireEvent.click(screen.getByRole("button", { name: "Assign to Option 2" }));
+  navigate("Compare");
+  fireEvent.click(within(screen.getByRole("region", { name: "Compare saved options" })).getByRole("button", { name: "Compare" }));
   await screen.findByRole("region", { name: "Saved option comparison" });
 }
 
 describe("comparison workspace isolation", () => {
   it("preserves an invalid unsent root draft without any geometry or persistence request", async () => {
     await mountAndBrowse();
+    expect(screen.queryByRole("group", { name: "Workspace actions" })).not.toBeInTheDocument();
+    navigate("Workspace");
+    expect(screen.getByRole("group", { name: "Workspace actions" })).toBeInTheDocument();
     const width = screen.getByRole("textbox", { name: "Width (m)" });
     fireEvent.change(width, { target: { value: "" } });
     await compareSelectedHistory();
+    expect(screen.queryByRole("group", { name: "Workspace actions" })).not.toBeInTheDocument();
+    const result = screen.getByRole("region", { name: "Saved option comparison" });
+    navigate("Workspace");
+    expect(screen.getByRole("group", { name: "Workspace actions" })).toBeInTheDocument();
     expect(width).toHaveValue("");
+    expect(screen.getByRole("textbox", { name: "Width (m)" })).toBe(width);
     expect(screen.getByRole("heading", { name: "New root option" })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Replace workspace" })).not.toBeInTheDocument();
     expect(screen.getByText(/No preview yet/)).toBeInTheDocument();
+    navigate("Saved Options");
+    expect(screen.getByRole("region", { name: "Selected option summary" })).toHaveTextContent(child.id);
+    navigate("Compare");
+    expect(screen.getByRole("region", { name: "Saved option comparison" })).toBe(result);
+    expect(screen.getByRole("region", { name: "Option 1 comparison selection" })).toHaveTextContent(root.id);
+    expect(screen.getByRole("region", { name: "Option 2 comparison selection" })).toHaveTextContent(child.id);
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST").map(([url]) => String(url)))
       .toEqual(["http://localhost:8000/api/v1/options/compare"]);
   });
@@ -83,6 +105,7 @@ describe("comparison workspace isolation", () => {
     const beforeWrites = fetchMock.mock.calls.filter(([, init]) => init?.method === "POST").length;
 
     await compareSelectedHistory();
+    navigate("Workspace");
 
     expect(screen.getByRole("region", { name: "Option creation context" })).toHaveTextContent(root.id);
     expect(setback).toHaveValue("");

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ApiError, getOption, previewMassing } from "../../api/api";
 import type { OptionResponse } from "../../api/contracts";
@@ -7,9 +7,9 @@ import { optionKeys } from "../options/optionQueries";
 import ConfigurationForm from "./ConfigurationForm";
 import MassingResult from "./MassingResult";
 import SavedOptionSnapshot from "./SavedOptionSnapshot";
+import WorkspaceActionBar from "./WorkspaceActionBar";
 import type { Configuration, ConfigurationDraft } from "./configuration";
 import { configurationDraftFromOption } from "./configuration";
-import shared from "./massing.module.css";
 import styles from "./MassingWorkspace.module.css";
 
 interface Submission {
@@ -22,7 +22,7 @@ function PreviewError({ error }: { error: Error }) {
   const details = error instanceof ApiError ? error.error?.details : undefined;
   return (
     <div className={styles.previewError} role="alert">
-      <h3>Preview request failed</h3>
+      <h2>Preview request failed</h2>
       <p>{error.message}</p>
       {details && details.length > 0 && (
         <ul>{details.map((detail, index) => (
@@ -34,13 +34,15 @@ function PreviewError({ error }: { error: Error }) {
   );
 }
 
-function WorkspaceSession({ parent, focusOnMount, onCreateBranch, onStartRoot, onWorkChange }: {
+function WorkspaceSession({ parent, focusOnMount, onCreateBranch, onStartRoot, onWorkChange, navigation }: {
   parent: OptionResponse | null;
   focusOnMount: boolean;
   onCreateBranch: (option: OptionResponse) => void;
   onStartRoot: () => void;
   onWorkChange: (hasWork: boolean) => void;
+  navigation: ReactNode;
 }) {
+  const formId = useId();
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [draftChanged, setDraftChanged] = useState(false);
   // A submitted preview is work even at default inputs or after a save: the save
@@ -63,69 +65,74 @@ function WorkspaceSession({ parent, focusOnMount, onCreateBranch, onStartRoot, o
   });
 
   return (
-    <div className={styles.workspace}>
-      <div className={styles.editor}>
-        <section className={styles.context} aria-label="Option creation context">
-          <h2>{parent ? "Branch from saved option" : "New root option"}</h2>
-          {parent ? <>
-            <p>Selected parent: <strong>{parent.name ?? "Unnamed option"}</strong></p>
-            <dl>
-              <div><dt>Parent ID</dt><dd>{parent.id}</dd></div>
-              <div><dt>Saved status</dt><dd>{parent.feasibility_status}</dd></div>
-            </dl>
-            <p>Edits create a new child. The saved parent stays unchanged.</p>
-            <button type="button" onClick={onStartRoot}>Start New Root</button>
-          </> : <p>Preview a site and configuration, then save a new root option.</p>}
-        </section>
-        <ConfigurationForm
-          initialDraft={parent ? configurationDraftFromOption(parent) : undefined}
-          inheritedSite={parent?.site_geometry}
-          focusOnMount={focusOnMount}
-          submittedDraft={submission?.draft}
-          isGenerating={preview.isFetching}
-          onDraftChange={setDraftChanged}
-          onDirtyChange={reportDirty}
-          onSubmit={(configuration, draft) => setSubmission({
-            configuration,
-            draft,
-            id: crypto.randomUUID(),
-          })}
-        />
-      </div>
-      <section className={`${shared.panel} ${styles.previewPanel}`} aria-labelledby="preview-title" aria-busy={preview.isFetching}>
-        <div className={shared.panelHeading}>
-          <p className={shared.eyebrow}>Backend result</p>
-          <h2 id="preview-title">Massing preview</h2>
-        </div>
-        {draftChanged && (
-          <p className={styles.draftNotice} role="status">
-            Draft inputs have changed since the last submission. Generate a preview to apply them.
-          </p>
-        )}
-        {submission === null ? (
-          <p className={styles.emptyState}>No preview yet. Review the configuration and choose Generate Preview.</p>
-        ) : preview.isPending ? (
-          <p role="status">Generating preview…</p>
-        ) : preview.isError ? (
-          <PreviewError error={preview.error} />
-        ) : (
-          <>
-            <SaveOption
-              // A receipt belongs to one preview attempt. A new submission detaches
-              // any pending save without implying that the server rolled it back.
-              key={submission.id}
-              configuration={submission.configuration}
-              draftChanged={draftChanged}
-              parent={parent ?? undefined}
-              onCreateBranch={onCreateBranch}
+    <div className={styles.session}>
+      <div className={styles.workspaceScroll}>
+        {navigation}
+        <div className={styles.workspace}>
+          <div className={styles.editor}>
+            <section className={styles.context} data-mode={parent ? "branch" : "root"} aria-label="Option creation context">
+              <h2>{parent ? "Branch from saved option" : "New root option"}</h2>
+              {parent ? <>
+                <p>Selected parent: <strong>{parent.name ?? "Unnamed option"}</strong></p>
+                <dl>
+                  <div><dt>Parent ID</dt><dd>{parent.id}</dd></div>
+                  <div><dt>Saved status</dt><dd>{parent.feasibility_status}</dd></div>
+                </dl>
+                <p>Changes create a new branch. Your saved design stays unchanged.</p>
+              </> : <p>Unsaved design</p>}
+            </section>
+            <ConfigurationForm
+              id={formId}
+              initialDraft={parent ? configurationDraftFromOption(parent) : undefined}
+              inheritedSite={parent?.site_geometry}
+              focusOnMount={focusOnMount}
+              submittedDraft={submission?.draft}
+              onDraftChange={setDraftChanged}
+              onDirtyChange={reportDirty}
+              onSubmit={(configuration, draft) => setSubmission({
+                configuration,
+                draft,
+                id: crypto.randomUUID(),
+              })}
             />
-            <MassingResult result={preview.data} />
-            <p className={styles.previewNote}>
-              Result from the last submitted configuration. All geometry and metrics are calculated by the backend.
-            </p>
-          </>
-        )}
-      </section>
+          </div>
+          <section className={styles.previewPanel} aria-label="Massing preview" aria-busy={preview.isFetching}>
+            {draftChanged && (
+              <p className={styles.draftNotice} role="status">
+                Draft inputs have changed since the last submission. Generate a preview to apply them.
+              </p>
+            )}
+            {submission === null ? (
+              <div className={styles.emptyState}>
+                <div className={styles.emptyIcon} aria-hidden="true">
+                  <svg viewBox="0 0 80 80" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="m15 55 25 14 25-14V25L40 11 15 25zm0-30 25 14 25-14M40 39v30M15 35l25 14 25-14M15 45l25 14 25-14" />
+                  </svg>
+                </div>
+                <p className={styles.emptyEyebrow}>Your design starts here</p>
+                <h2>Massing preview</h2>
+                <p>No preview yet. Choose your site outline and constraints, then select <strong>Generate Preview</strong>.</p>
+                <div className={styles.emptyFeatures}><span>Site &amp; footprint</span><span>Floor area &amp; height</span><span>2D &amp; 3D views</span></div>
+              </div>
+            ) : preview.isPending ? (
+              <div className={styles.loadingState} role="status"><span className={styles.spinner} aria-hidden="true" /><h2>Massing preview</h2><p>Generating preview…</p></div>
+            ) : preview.isError ? (
+              <PreviewError error={preview.error} />
+            ) : (
+              <MassingResult result={preview.data} actions={<SaveOption
+                  // A receipt belongs to one preview attempt. A new submission detaches
+                  // any pending save without implying that the server rolled it back.
+                  key={submission.id}
+                  configuration={submission.configuration}
+                  draftChanged={draftChanged}
+                  parent={parent ?? undefined}
+                  onCreateBranch={onCreateBranch}
+                />} />
+            )}
+          </section>
+        </div>
+      </div>
+      <WorkspaceActionBar mode="edit" formId={formId} isGenerating={preview.isFetching} onNewDesign={onStartRoot} />
     </div>
   );
 }
@@ -163,6 +170,8 @@ function ReplacementConfirmation({ opening, destination, onKeepEditing, onReplac
 }) {
   const keepEditing = useRef<HTMLButtonElement>(null);
   useEffect(() => {
+    // A saved read can finish while another shell section is visible.
+    if (keepEditing.current?.closest("[hidden]")) return;
     keepEditing.current?.focus();
     keepEditing.current?.scrollIntoView?.({ block: "center" });
   }, []);
@@ -235,52 +244,54 @@ export default function MassingWorkspace({ openRequest = null }: {
     workspace.current?.querySelector<HTMLElement>("input:not(:disabled), h2[tabindex]")?.focus();
   }
 
-  return <>
-    {currentNavigation && <div className={styles.navigation}>
-      {navigation.needsConfirmation && ready ? <ReplacementConfirmation
-        key={navigation.requestId}
-        opening={navigation.target.mode === "saved"}
-        destination={navigation.target.mode === "root" ? "Start a new root option."
-          : `${navigation.target.mode === "saved" ? "Open" : "Branch from"} ${requested.data?.name ?? "Unnamed option"} (${navigation.target.optionId}).`}
-        onKeepEditing={cancelNavigation}
-        onReplace={() => commitNavigation(navigation)}
-      /> : requested.isError ? <div className={styles.previewError} role="alert">
-        <h2>Could not open saved option</h2>
-        <p>Requested option: {requestedOptionId}</p>
-        <p>{requested.error.message}</p>
-        {requested.error instanceof ApiError && requested.error.error?.details.map((detail, index) =>
-          <p key={`${detail.path}-${index}`}>{detail.path}: {detail.message}</p>)}
-        <div className={styles.actions}>
-          <button type="button" onClick={() => { void requested.refetch(); }}>Retry opening option</button>
-          <button type="button" onClick={cancelNavigation}>Cancel opening</button>
-        </div>
-      </div> : <div className={styles.context}>
-        <p role="status">Loading saved option…</p>
-        <p>Requested option: {requestedOptionId}</p>
+  const navigationContent = currentNavigation && <div className={styles.navigation}>
+    {navigation.needsConfirmation && ready ? <ReplacementConfirmation
+      key={navigation.requestId}
+      opening={navigation.target.mode === "saved"}
+      destination={navigation.target.mode === "root" ? "Start a new root option."
+        : `${navigation.target.mode === "saved" ? "Open" : "Branch from"} ${requested.data?.name ?? "Unnamed option"} (${navigation.target.optionId}).`}
+      onKeepEditing={cancelNavigation}
+      onReplace={() => commitNavigation(navigation)}
+    /> : requested.isError ? <div className={styles.previewError} role="alert">
+      <h2>Could not open saved option</h2>
+      <p>Requested option: {requestedOptionId}</p>
+      <p>{requested.error.message}</p>
+      {requested.error instanceof ApiError && requested.error.error?.details.map((detail, index) =>
+        <p key={`${detail.path}-${index}`}>{detail.path}: {detail.message}</p>)}
+      <div className={styles.actions}>
+        <button type="button" onClick={() => { void requested.refetch(); }}>Retry opening option</button>
         <button type="button" onClick={cancelNavigation}>Cancel opening</button>
-      </div>}
+      </div>
+    </div> : <div className={styles.context}>
+      <p role="status">Loading saved option…</p>
+      <p>Requested option: {requestedOptionId}</p>
+      <button type="button" onClick={cancelNavigation}>Cancel opening</button>
     </div>}
-    <div ref={workspace}>
-      {session.mode === "root" ? <WorkspaceSession
-        key={session.id}
-        parent={null}
-        focusOnMount={session.id !== "initial-root"}
-        onWorkChange={reportWork}
-        onCreateBranch={(parent) => requestNavigation({ mode: "branch", optionId: parent.id })}
-        onStartRoot={() => requestNavigation({ mode: "root" })}
-      /> : active.data ? session.mode === "saved" ? <SavedOptionSnapshot
-        key={session.id}
-        option={active.data}
-        onCreateBranch={() => requestNavigation({ mode: "branch", optionId: session.optionId })}
-        onStartRoot={() => requestNavigation({ mode: "root" })}
-      /> : <WorkspaceSession
-        key={session.id}
-        parent={active.data}
-        focusOnMount
-        onWorkChange={reportWork}
-        onCreateBranch={(parent) => requestNavigation({ mode: "branch", optionId: parent.id })}
-        onStartRoot={() => requestNavigation({ mode: "root" })}
-      /> : <p role="status">Loading saved option…</p>}
-    </div>
-  </>;
+  </div>;
+
+  return <div ref={workspace} className={styles.workspaceContainer}>
+    {session.mode === "root" ? <WorkspaceSession
+      key={session.id}
+      parent={null}
+      navigation={navigationContent}
+      focusOnMount={session.id !== "initial-root"}
+      onWorkChange={reportWork}
+      onCreateBranch={(parent) => requestNavigation({ mode: "branch", optionId: parent.id })}
+      onStartRoot={() => requestNavigation({ mode: "root" })}
+    /> : active.data ? session.mode === "saved" ? <SavedOptionSnapshot
+      key={session.id}
+      option={active.data}
+      navigation={navigationContent}
+      onCreateBranch={() => requestNavigation({ mode: "branch", optionId: session.optionId })}
+      onStartRoot={() => requestNavigation({ mode: "root" })}
+    /> : <WorkspaceSession
+      key={session.id}
+      parent={active.data}
+      navigation={navigationContent}
+      focusOnMount
+      onWorkChange={reportWork}
+      onCreateBranch={(parent) => requestNavigation({ mode: "branch", optionId: parent.id })}
+      onStartRoot={() => requestNavigation({ mode: "root" })}
+    /> : <p role="status">Loading saved option…</p>}
+  </div>;
 }

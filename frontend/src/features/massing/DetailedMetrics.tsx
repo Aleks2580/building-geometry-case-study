@@ -4,7 +4,7 @@ import { formatCount, formatMetric, formatRatio } from "./metricFormatting";
 import shared from "./massing.module.css";
 import styles from "./DetailedMetrics.module.css";
 
-export default function DetailedMetrics({ result }: { result: MassingPreviewResponse }) {
+export default function DetailedMetrics({ result, includeActual = true }: { result: MassingPreviewResponse; includeActual?: boolean }) {
   const id = useId();
   const { metrics, setback } = result;
   const actual = [
@@ -47,10 +47,10 @@ export default function DetailedMetrics({ result }: { result: MassingPreviewResp
   return (
     <>
       <section className={shared.resultSection} aria-labelledby={`${id}-actual`}>
-        <h3 id={`${id}-actual`}>Actual massing</h3>
-        <dl className={styles.metrics}>
+        <h3 id={`${id}-actual`}>{includeActual ? "Actual massing" : "Massing measurements"}</h3>
+        {includeActual && <dl className={styles.metrics}>
           {actual.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
-        </dl>
+        </dl>}
         <dl className={shared.metricDetails}>
           <div><dt>Site coverage ratio</dt><dd>{formatRatio(metrics.site_coverage_ratio)}</dd></div>
           <div><dt>Floor-to-floor height</dt><dd>{formatMetric(metrics.floor_to_floor_m, "m")}</dd></div>

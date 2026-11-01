@@ -1,56 +1,173 @@
-.form fieldset {
-  border: 0;
-  border-top: 1px solid var(--color-border);
-  padding: 1.25rem 0 0;
-  margin: 0 0 1.5rem;
+.form {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0;
+}
+
+.formSections {
   min-width: 0;
 }
 
-.form legend {
+.form fieldset {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.form .section {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.section legend {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  float: left;
+  width: 100%;
+  padding: 0;
+  color: var(--color-text);
+  font-size: 0.85rem;
   font-weight: 650;
-  padding: 0 0.65rem 0 0;
+}
+
+.section legend + * {
+  clear: both;
+}
+
+.step {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  background: #e5f3ee;
+  color: var(--color-accent);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.sectionHint {
+  color: var(--color-text-secondary);
+  margin: 0 0 0.9rem 2.35rem;
+  font-size: 0.7rem;
 }
 
 .fieldsetHint,
-.fieldHint {
+.siteHint {
   color: var(--color-text-secondary);
-  font-size: 0.8rem;
-  margin: 0.4rem 0 0;
+  font-size: 0.7rem;
+  margin: 0.55rem 0 0;
 }
 
 .fieldsetHint {
-  margin: 0 0 1rem;
+  margin: 0.6rem 0 0;
+}
+
+.siteHint {
+  font-size: 0.65rem;
+}
+
+.siteShapes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.siteShapes button {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  min-height: 2.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 0.5rem 0.6rem;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.siteShapes button:hover {
+  background: var(--color-surface-subtle);
+  border-color: #a9cfc0;
+}
+
+.siteShapes button[aria-pressed="true"] {
+  border-color: #369f7f;
+  background: #edf8f3;
+  box-shadow: inset 0 0 0 1px #369f7f;
+  color: var(--color-accent);
+}
+
+.siteShapes svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  flex-shrink: 0;
 }
 
 .fieldGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1.1rem;
+  gap: 0.75rem 0.65rem;
+}
+
+.siteInputs {
+  margin-top: 0.8rem;
 }
 
 .field label {
   display: block;
-  font-size: 0.85rem;
+  min-height: 1.05rem;
+  font-size: 0.7rem;
   font-weight: 600;
-  margin-bottom: 0.4rem;
+  margin-bottom: 0.3rem;
 }
 
-.field input,
-.field select {
+.field input {
   width: 100%;
-  border: 1px solid #a9bbb5;
+  min-width: 0;
+  min-height: 2.15rem;
+  border: 1px solid #c9d9d7;
   border-radius: 6px;
-  padding: 0.65rem 0.75rem;
+  padding: 0.4rem 0.6rem;
   color: var(--color-text);
-  background: #fcfdfc;
+  background: var(--color-surface);
+  font-size: 0.8rem;
 }
 
-.siteInputs {
-  margin-top: 1.1rem;
+.field input:focus-visible {
+  border-color: var(--color-accent);
 }
 
-.field select {
-  font: inherit;
+.inputHint,
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  border: 0;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.field:focus-within .inputHint {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0.3rem 0 0;
+  clip-path: none;
+  white-space: normal;
+  color: var(--color-text-secondary);
+  font-size: 0.65rem;
 }
 
 .field [aria-invalid="true"] {
@@ -59,31 +176,106 @@
 
 .fieldError {
   color: #a51e29;
-  font-size: 0.85rem;
+  font-size: 0.7rem;
   margin: 0.35rem 0 0;
 }
 
-.formActions {
-  border-top: 1px solid var(--color-border);
-  padding-top: 1.5rem;
+.optionalSection {
+  border-bottom: 1px solid var(--color-border);
 }
 
-.submitButton {
-  border: 0;
-  border-radius: 6px;
-  padding: 0.75rem 1.2rem;
-  background: #1d6654;
-  color: white;
-  font-weight: 650;
+.optionalSection summary {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 4.1rem;
+  padding: 0.8rem 1.25rem;
+  list-style: none;
   cursor: pointer;
 }
 
-.submitButton:hover {
-  background: #144b3e;
+.optionalSection summary::-webkit-details-marker {
+  display: none;
 }
 
-@media (max-width: 520px) {
+.optionalSection summary::after {
+  content: "";
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-left: auto;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  color: var(--color-text-secondary);
+}
+
+.optionalSection[open] summary::after {
+  transform: rotate(225deg);
+}
+
+.optionalSection strong {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.summaryHint {
+  display: block;
+  margin-top: 0.1rem;
+  color: var(--color-text-secondary);
+  font-size: 0.7rem;
+}
+
+.optionalSection > fieldset {
+  padding: 0 1.25rem 1.25rem;
+}
+
+.optionalSection .fieldsetHint {
+  margin: 0 0 0.75rem;
+}
+
+.errorBadge {
+  color: #a51e29;
+  font-size: 0.65rem;
+  font-weight: 600;
+}
+
+@media (max-width: 760px) {
+  .field input {
+    min-height: 2.75rem;
+    font-size: 1rem;
+  }
+
+  .siteShapes button {
+    min-height: 2.75rem;
+  }
+}
+
+@media (max-width: 390px) {
+  .form .section {
+    padding: 1rem;
+  }
+
+  .siteShapes button {
+    padding-inline: 0.45rem;
+    font-size: 0.68rem;
+  }
+
+  .optionalSection summary {
+    padding-inline: 1rem;
+  }
+
+  .optionalSection > fieldset {
+    padding-inline: 1rem;
+  }
+
   .fieldGrid {
-    grid-template-columns: 1fr;
+    gap: 0.7rem 0.5rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .fieldGrid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

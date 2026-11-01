@@ -1,37 +1,50 @@
 .preview {
-  margin: 1.1rem 0 0;
+  display: flex;
+  flex-direction: column;
+  margin: 0.8rem 0 0;
   min-width: 0;
 }
 
+.preview figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.5rem;
+  order: 1;
+  margin-top: 0.4rem;
+}
+
 .heading {
-  font-size: 0.85rem;
+  font-size: 0.65rem;
   font-weight: 650;
-  margin-bottom: 0.25rem;
+  margin: 0;
+  color: var(--color-accent);
 }
 
 .hint {
   color: var(--color-text-secondary);
-  font-size: 0.8rem;
-  margin-bottom: 0.65rem;
+  font-size: 0.62rem;
+  margin: 0;
 }
 
 .viewport,
 .unavailable {
   border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: #f8faf9;
+  border-radius: 7px;
+  background-color: #f7fbfa;
+  background-image: linear-gradient(#dfebe980 1px, transparent 1px), linear-gradient(90deg, #dfebe980 1px, transparent 1px);
+  background-size: 13px 13px;
 }
 
 .viewport {
   display: block;
   width: 100%;
-  height: auto;
-  max-height: 180px;
+  height: 7rem;
 }
 
 .viewport path {
-  fill: rgb(41 125 145 / 15%);
-  stroke: #297d91;
+  fill: #dff1e9;
+  stroke: #149579;
   stroke-width: 2;
   stroke-linejoin: round;
 }
@@ -39,6 +52,6 @@
 .unavailable {
   padding: 1rem;
   color: var(--color-text-muted);
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   margin: 0;
 }

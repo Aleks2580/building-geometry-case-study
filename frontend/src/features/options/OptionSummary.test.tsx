@@ -56,7 +56,7 @@ describe("OptionSummary", () => {
     }
     render(<OptionSummary option={option} />);
 
-    expect(value("Status")).toHaveTextContent(new RegExp(`^${status}$`));
+    expect(value("Status")).toHaveTextContent(new RegExp(`^${status.replace(/_/g, " ")}$`));
     if (status === "infeasible" || status === "generation_failed") {
       for (const label of ["Footprint area", "Floor count", "Height", "GFA", "Site coverage ratio"]) {
         expect(value(label)).toHaveTextContent(/^Not available$/);

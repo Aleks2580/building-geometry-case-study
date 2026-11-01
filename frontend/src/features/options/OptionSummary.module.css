@@ -2,24 +2,25 @@
   min-width: 0;
   padding: 1rem;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: #f8faf9;
+  border-radius: var(--radius-control);
+  background: var(--color-surface-subtle);
 }
 
 .summary h4 {
   margin: 0 0 0.8rem;
+  font-size: 0.9rem;
 }
 
 .values {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
 }
 
 .values > div {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
-  gap: 0.75rem;
-  padding: 0.4rem 0;
+  gap: 0.65rem;
+  padding: 0.45rem 0;
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -34,12 +35,21 @@
 .values dd {
   margin: 0;
   font-weight: 600;
+  text-align: end;
   overflow-wrap: anywhere;
 }
 
-@media (max-width: 520px) {
+@media (max-width: 390px) {
+  .summary {
+    padding: 0.8rem;
+  }
+
   .values > div {
     grid-template-columns: minmax(0, 1fr);
     gap: 0.15rem;
+  }
+
+  .values dd {
+    text-align: start;
   }
 }

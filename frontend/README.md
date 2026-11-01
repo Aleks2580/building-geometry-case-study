@@ -22,7 +22,7 @@ The backend base URL defaults to `http://localhost:8000`; override with
 - `src/api/api.ts` — health, preview, root/branch save, option-detail, list, tree, and comparison clients.
 - `src/api/contracts.ts` — Zod contracts inferred as strict TypeScript types.
 - `src/queryClient.ts` — reusable QueryClient factory and application instance.
-- `src/App.tsx` — backend health, the configuration workspace, and Saved Options.
+- `src/App.tsx` — application shell, section navigation, backend health, and explicit workspace-open requests.
 - `src/features/massing/configuration.ts` — typed draft parsing using existing Zod API contracts.
 - `src/features/massing/siteGeometry.ts` — deterministic rectangle and supplied-example input coordinates.
 - `src/features/massing/ConfigurationForm.tsx` — accessible site, constraint, preference, and target inputs.
@@ -31,8 +31,9 @@ The backend base URL defaults to `http://localhost:8000`; override with
 - `src/features/massing/siteDrawing.ts` — pure ring editing, fitting, and adaptive metric-grid helpers.
 - `src/features/massing/DraftSitePreview.tsx` — immediate outline of the active site draft, with its own CSS Module.
 - `src/features/massing/MassingWorkspace.tsx` — new-root, saved-option, and branch-draft sessions.
+- `src/features/massing/WorkspaceActionBar.tsx` — persistent preview, new-design, and saved-snapshot branch actions.
 - `src/features/massing/SavedOptionSnapshot.tsx` — read-only saved metadata, configuration, and result.
-- `src/features/massing/MassingResult.tsx` — shared visualization, feasibility, metrics, assessments, and diagnostics.
+- `src/features/massing/MassingResult.tsx` — result dashboard with KPI cards, feasibility, visualization, action slot, and advanced result disclosures.
 - `src/features/options/SaveOption.tsx` — optional naming, explicit root/branch saves, and saved-snapshot receipts.
 - `src/features/options/SavedOptionsExplorer.tsx` — paginated root discovery, nested branches, and explicit workspace navigation.
 - `src/features/options/optionQueries.ts` — shared option-detail, list, tree, and comparison query keys.
@@ -62,11 +63,55 @@ Previews, opened saved snapshots, and comparison share
 [2D/3D view switching](#result-2d3d-views) and the same
 [3D renderer contract](#interactive-3d-renderer).
 
+## Application navigation
+
+The sidebar switches between **Workspace**, **Saved Options**, and **Compare**.
+Workspace contains the existing configuration, preview, save, and branch workflows.
+Saved Options provides root/tree browsing and Option 1 / Option 2 assignment; **View comparison**
+opens Compare, where **Browse saved options** returns to the current history.
+Section changes focus the page heading, and inactive sections are hidden from
+keyboard navigation and the accessibility tree. A skip link reaches the main content.
+Workspace keeps its scroll position; switching between saved history and comparison
+starts that section at the top.
+
+`App` owns only the active section and explicit option-open request. Both feature
+owners stay mounted: `MassingWorkspace` retains its editing session, invalid and
+unsent drafts, preview, save name, receipt, and pending requests;
+`SavedOptionsExplorer` retains tree selection/expansion and comparison selection.
+Its comparison component retains the submitted pair and result while hidden.
+Changing a slot still detaches the previous comparison until explicit submission.
+Switching sections does not submit, cancel, or replace work. **Open in Workspace**
+selects Workspace immediately so loading, retry/cancel, and existing replacement
+confirmation remain available. Late saved reads do not move focus into a hidden view.
+
+Navigation is local React state without a router or additional state library.
+Browser reload resets section and interaction state to a new Workspace; immutable
+saved history remains in PostgreSQL.
+
+The workspace pairs a compact configuration column with a result dashboard.
+**Footprint**, **GFA**, **Floors**, and **Height** show the submitted result; their
+hard-bound captions remain distinct from generated capacity. The large **2D Plan** /
+**3D Massing** viewer, feasibility, and option details stay prominent. Save controls
+sit below the viewer. A persistent Workspace action bar offers **Generate Preview**
+and **New design**; read-only saved snapshots offer **Create Branch** and **New design**.
+The empty state displays no invented metrics or geometry.
+**Metrics & capacity**, **Preferences & target**, and **Diagnostics** disclosures
+retain all advanced result data. Error diagnostics start expanded. Opening these
+sections changes presentation only and never submits or replaces work.
+
+**Generate Preview** submits the current inputs through the existing form validation,
+including Enter from a field. It stays available while a preview is pending, so an
+explicit new submission can supersede that attempt. **New design** starts a fresh
+root with the default site and constraints. The existing replacement confirmation
+protects an edited draft or submitted preview, including its save name and receipt;
+**Keep Editing** retains them. Confirming replacement resets only the current workspace,
+preserving saved history and comparison choices. A save already sent may still finish.
+
 ## Styling
 
 Component styles live beside their owners in `.module.css` files and are imported
-explicitly through scoped class names. `App.module.css` owns the page container and
-header; the massing components own their form, workspace, metrics, feasibility,
+explicitly through scoped class names. `App.module.css` owns the full-width shell,
+sidebar, navigation, and header; the massing components own their form, workspace, metrics, feasibility,
 and diagnostic styles. `PreferenceAssessments` uses the shared result styles directly.
 The comparison feature owns its selection/result layout in `comparison.module.css`.
 
@@ -74,12 +119,19 @@ The comparison feature owns its selection/result layout in `comparison.module.cs
 panel headings, eyebrows, result sections, and metric rows. Reuse these classes
 within the feature rather than duplicating them or adding global component selectors.
 Global CSS remains limited to document defaults, typography, shared custom properties,
-and accessibility defaults. No additional styling dependency is required.
+and accessibility defaults, including enforced native `hidden` behavior. Shared
+tokens define green actions, neutral surfaces, borders, panel radii, and shadows.
+No additional styling dependency is required.
 
-The desktop workspace gives the results column more space for the plan.
-Responsive rules stay with their owners: the header and workspace stack at 900 px;
-page/panel padding and the form field grid adjust at 520 px. Status and validation
-styles retain their existing data and accessibility attributes.
+The desktop configuration column is 350–410 px wide, reducing to 300 px on smaller
+laptops while results fill the remaining space. Responsive rules stay with their
+owners: the workspace stacks at 960 px, and the
+sidebar becomes a compact top navigation at 760 px. Page/panel padding and the form
+field grid adjust for narrow screens; KPI cards also respond to the result column's
+width. The shell fills the viewport; Workspace content scrolls above an ordinary,
+reserved action-bar row. Actions cannot cover the field focused after failed validation.
+Saved Options and Compare use their own section scroller. Status and validation styles
+retain their data and accessibility attributes.
 
 ## Commands
 
@@ -126,17 +178,17 @@ development-tooling security fixes. Jest DOM stays on 6.9 to retain Node 20 supp
 
 `ConfigurationForm` uses React Hook Form with the Zod resolver. Its typed draft is
 parsed by `src/features/massing/configuration.ts`, reusing the API contracts for
-numeric bounds. The **Site shape** selector offers:
+numeric bounds. The **Site outline** section's preset buttons offer:
 
-- **Rectangle**: editable Width and Length in metres, initially 40 × 25 m. Positive
+- **Rectangle / Square**: editable Width and Length in metres, initially 40 × 25 m. Equal dimensions make a square. Positive
   finite decimal dimensions produce a closed, axis-aligned Polygon at the local
   origin. Empty, zero, negative, or invalid dimensions block submission and show
   inline errors; a previously valid rectangle is never submitted instead.
-- **L-shaped example**: the supplied concave site, demonstrating setbacks around a
+- **L-shaped**: the supplied concave site, demonstrating setbacks around a
   reflex corner.
 - **Notched example**: the supplied deep-notch site, whose setback can split or
   collapse the buildable region.
-- **Custom Polygon**: visual exterior drawing with an **Advanced JSON** alternative
+- **Custom polygon**: visual exterior drawing with an **Advanced JSON** alternative
   for a GeoJSON Polygon with a closed exterior ring and optional closed hole rings.
   It starts from the current valid Polygon, shown in **Draw polygon** mode. If
   rectangle dimensions are invalid, it starts empty.
@@ -147,6 +199,12 @@ Docker build context unchanged; tests compare them with the source files.
 Choosing another preset intentionally replaces the active site draft; returning to
 Rectangle restores 40 × 25 m. Switching shapes preserves constraints, preferences,
 and the target, and never submits a preview automatically.
+
+Secondary **Design preferences** and **GFA target** groups use native disclosures.
+They initially expand when a saved configuration contains values, can be freely
+collapsed, and retain mounted inputs and drafts. Failed validation opens any invalid
+optional groups before focusing the field; their summaries also flag invalid values.
+Numeric hints remain accessible descriptions and appear alongside the focused input.
 
 In **Draw polygon**, choose **Replace polygon and draw** or **Start drawing**, then
 click or tap the grid to place points in order. The temporary next segment appears
@@ -236,10 +294,10 @@ metrics, and diagnostics while loading. Failed requests show a summary and backe
 field paths/messages when available; correcting the inputs and submitting again
 retries explicitly.
 
-Successful responses show feasibility, a 2D/3D visualization above the detailed metrics,
-and grouped site/setback, capacity, actual massing, preference, and target measurements.
-The prominent footprint area, floor count, height, and GFA summarize the selected
-building. Theoretical hard upper
+Successful responses show feasibility and four KPI cards above the 2D/3D viewer.
+Detailed site/setback, capacity, preference, and target measurements remain in the
+dashboard disclosures. The prominent footprint area, floor count, height, and GFA
+summarize the selected building. Theoretical hard upper
 bounds do not guarantee a constructible footprint; generated default capacity
 describes demonstrated construction before preferences and target-driven floor
 selection. All values come directly from the response.
@@ -337,7 +395,7 @@ response cannot appear in another parent session or preview attempt.
 
 **Save Another Branch** creates another sibling under the same selected parent.
 To branch from the newly saved child instead, choose **Create Branch** on its receipt.
-Choose **Start New Root** to clear the branch session and return to the initial root
+Choose **New design** to clear the branch session and return to the initial root
 configuration, confirming replacement when active work would be discarded. Neither
 action persists a snapshot. Reload clears the session and receipts while PostgreSQL
 retains every saved option. Use Saved Options to reopen any persisted root or nested
@@ -345,7 +403,7 @@ child after reload and create further branches from it.
 
 Branch errors use the existing structured messages and field paths. A missing parent
 returns `404 PARENT_OPTION_NOT_FOUND`; the selected parent's identity remains visible
-for diagnosis. Use **Start New Root** to continue with a new root, or open a different
+for diagnosis. Use **New design** to continue with a new root, or open a different
 option through Saved Options. Network failures, server errors, and malformed success
 responses can leave the outcome unknown:
 the child may have been saved, and another explicit save may
@@ -355,7 +413,7 @@ replay, and leaving a session does not establish server rollback.
 ## Saved Options
 
 The independent **Saved Options** section discovers persisted root options on page
-load; **Browse saved options** in the page header jumps to it. Choose a root to
+load; select it in the sidebar to browse. Choose a root to
 request its complete decision tree, then use the native
 branch controls to expand or collapse children and selection buttons to inspect a
 node. Selection has a visible state and a read-only summary with the saved name,
@@ -401,9 +459,11 @@ remain future improvements.
 
 ### Compare saved options
 
-Select a saved node and choose **Assign to Left** or **Assign to Right**, then browse
-another root or branch to choose the other side. Comparison selections survive tree
-navigation and show each option's name, UUID, and status. Either slot can be replaced or cleared.
+Select a saved node and choose **Assign to Option 1** or **Assign to Option 2**, then browse
+another root or branch to choose the other side. The selection summary shows both
+names; **View comparison** or the sidebar's **Compare** opens their full selection
+details and comparison controls. Selections survive tree and section navigation
+and show each option's name, UUID, and status. Either slot can be replaced or cleared.
 The selections must contain two distinct UUIDs; equivalent UUID casing does not
 make an option distinct. Assigning a slot does not open the option in the workspace.
 
@@ -418,18 +478,21 @@ keys isolate superseded comparisons.
 **Cancel comparison** stops a pending read without changing either selection.
 Failed reads expose **Retry comparison**; Compare also retries a failed submitted pair.
 
-Results identify the Left and Right names, UUIDs, statuses, and parents. Side-by-side
+Results identify the Option 1 and Option 2 names, UUIDs, statuses, and parents. The
+viewer and actual massing appear first; **Saved snapshot details**, **Inputs and
+capacity**, and **Feasibility and diagnostics** disclosures retain detailed values.
+Side-by-side
 sections show the stored site, all hard constraints, preferences, targets, metrics,
 feasibility fields, complete target assessments, and diagnostics. Changed/unchanged
 labels and numeric differences come from the backend using the
 [comparison contract](../docs/DESIGN.md#stored-versus-derived). Differences are
-**Right − Left** and retain their sign and units. Missing values display
+**Option 2 − Option 1** and retain their sign and units. Missing values display
 **Not available**; missing input settings remain distinct from zero. Hard upper
 bounds, demonstrated generated capacity, and actual massing use separate sections.
 Site comparison reports structural stored-coordinate changes rather than claiming
 spatial equivalence. Each side's complete site JSON remains available for inspection.
 
-Select **Left plan** or **Right plan**, then **2D** or **3D**, to inspect one saved
+Select **Option 1 plan** or **Option 2 plan**, then **2D Plan** or **3D Massing**, to inspect one saved
 result at a time. Switching sides retains the chosen representation; a new comparison
 pair starts in 2D. The label identifies the displayed option, and its complete
 immutable comparison snapshot supplies the site, setbacks, selected component,
@@ -443,7 +506,7 @@ interaction state while persisted snapshots remain available for a new compariso
 
 ### Open a saved option
 
-Select a root or any nested child, then choose **Open in Workspace**. The workspace
+Select a root or any nested child, then choose **Open in Workspace** to switch to Workspace. The workspace
 retrieves `GET /api/v1/options/{option_id}`; tree summaries are never used as complete
 snapshots. Loading and retrieval errors keep the current workspace intact. A missing
 option, malformed response, or response for another UUID shows an explicit error
@@ -457,12 +520,16 @@ assessments, and diagnostics. The same result components present saved values an
 with a clear saved-snapshot label. Null configuration fields display **Not set**;
 null result metrics display **Not available**, and zero values remain zero. Opening
 sends no POST request, recalculates no massing, and writes nothing. Successful
-navigation moves focus to the workspace heading and brings it into view.
+navigation moves focus to the workspace heading and brings it into view when that
+section is visible.
+
+Saved metadata is available under **Snapshot details**, with the saved configuration
+alongside the same result dashboard. The site JSON remains available in a disclosure.
 
 **Create Branch** initializes an editable **Branch Draft** from that saved option.
 Its exact UUID becomes the parent and its site, including holes, is inherited
 read-only. The stored result remains historical; a branch requires an explicit new
-preview before saving a separate child. **Start New Root** opens the initial editable
+preview before saving a separate child. **New design** opens the initial editable
 root configuration. These sessions are distinct from the read-only Saved Option.
 
 ### Replacing active work
@@ -526,7 +593,13 @@ Optional `width`, `height`, and `padding` props control the logical fit; sizes m
 be finite and positive, and finite non-negative padding must leave a positive interior.
 The SVG scales responsively to its container using `xMidYMid meet`. Padding scales
 with the viewport; strokes retain their screen width. Fills, solid/dashed strokes,
-and a visible legend distinguish the four layers. An instance-specific SVG title
+and a visible legend distinguish the four layers. The legend groups identical SVG
+paths under the topmost area layer, keeping the site boundary and building footprint
+explicit. Split regions retain both the complete area and selected component, even
+when the footprint fills the selected component. This is an exact display-path check,
+not a geometric equivalence test; all geometry layers remain rendered. The site uses
+a wider dashed outline and the footprint a solid green outline, with matching legend
+swatches. An instance-specific SVG title
 and description identify displayed context and missing building geometry.
 
 **Show dimensions** is a keyboard-accessible checkbox, initially off. Enable it
@@ -559,7 +632,7 @@ least 1,000,000 m. It never rounds a small nonzero measurement to zero. These ar
 display annotations: toggling or selecting edges changes no geometry, logical
 framing, backend metrics, constraints, requests, or saved snapshots. Missing actual
 footprints produce no footprint measurements, even when default-generation
-geometry exists. Preview, restored root/child snapshots, and the active Left/Right
+geometry exists. Preview, restored root/child snapshots, and the active Option 1 / Option 2
 comparison use the same controls; selection always resolves against the currently
 displayed geometry.
 
@@ -571,9 +644,9 @@ topology or determine feasibility. General pan/zoom, geometry editing, and 3D
 remain outside this component; the enlarged overview only changes display size.
 
 For browser smoke checks, run the app with its backend and select Rectangle,
-L-shaped example, and Notched example in turn, submitting each explicitly.
+L-shaped, and Notched example in turn, submitting each explicitly.
 The default rectangle and L-shaped site use a 3 m setback; the notched site at 3 m
-shows two setback components. Select Custom Polygon to try the holed-site case in
+shows two setback components. Select Custom polygon to try the holed-site case in
 `backend/tests/test_massing_preview_api.py`, using a zero setback. Check the legend,
 hole openings, and selected component at desktop, tablet, 390 px, and 320 px widths.
 Toggle dimensions with the keyboard and inspect exterior, hole, diagonal, and
@@ -591,8 +664,8 @@ diagnostics; an unsubmitted edit must retain them with the changed-draft notice.
 
 Generated root and branch previews and opened root/child snapshots use
 `MassingVisualization` through the shared `MassingResult` presentation. Comparison
-reuses it directly for one selected saved snapshot. **2D** is the default; choose
-**3D** to inspect the same complete `MassingPreviewResponse`
+reuses it directly for one selected saved snapshot. **2D Plan** is the default; choose
+**3D Massing** to inspect the same complete `MassingPreviewResponse`
 interactively. Native buttons expose the active view with `aria-pressed`, work with
 Tab and Enter/Space, retain visible focus, and never submit a configuration form.
 The view choice is local React interaction state and sends no API request.
@@ -612,7 +685,7 @@ drafts never replace submitted geometry; a new pending or failed preview removes
 the prior result and viewer. Opened snapshots use their exact stored result without
 regeneration. Workspace session boundaries isolate different saved options and
 new root/branch sessions, including renderer state. Comparison keeps display choice
-outside the subtree keyed by the active option UUID: switching Left/Right retains
+outside the subtree keyed by the active option UUID: switching Option 1 / Option 2 retains
 3D selection while disposing the previous renderer and resetting its camera and
 error/fallback state. It never mounts both comparison canvases together. Existing
 selection-session and Query boundaries remove old results when the comparison pair
@@ -880,9 +953,9 @@ With the frontend and backend running:
    appears. Empty, zero, negative, and non-numeric dimensions must replace the
    draft outline with its unavailable state, show inline errors on validation, and
    block submission. Correct them and submit to update the backend result.
-3. Select L-shaped example and Notched example, checking that each selection alone
+3. Select L-shaped and Notched example, checking that each selection alone
    updates only the draft outline and sends no preview request. Submit each and
-   check the generated backend plan matches the selected site. Enter Custom Polygon
+   check the generated backend plan matches the selected site. Enter Custom polygon
    and check its seeded outline. Draw a concave polygon with pointer placement and
    exact X/Y entry; inspect next-segment cleanup on leave, scroll, and input-method
    changes. Finish with the button, starting point, and Enter on the surface;
@@ -898,7 +971,7 @@ With the frontend and backend running:
    footprint of 300 m² (requested/effective/actual assessment), and a setback of 100
    (infeasible, actual metrics unavailable). Inspect diagnostic codes and details.
    A preferred floor count above the cap remains a backend validation error.
-5. In Custom Polygon's Advanced JSON, enter malformed JSON to check inline errors
+5. In Custom polygon's Advanced JSON, enter malformed JSON to check inline errors
    and an unavailable draft outline. Remove both height/floor caps to check
    constraint errors; a valid site outline must remain visible. Try zero
    setback/target and a valid Polygon
@@ -945,11 +1018,11 @@ With the frontend and backend running:
    unchanged historical values. Try failed/missing reads and rapidly switch options;
    no failure or older response may replace the current session. Repeat replacement
    cancellation with pre-preview/invalid edits, a name draft, and a pending save.
-10. After reload, assign persisted nodes to Left and Right and compare a parent with
+10. After reload, assign persisted nodes to Option 1 and Option 2 and compare a parent with
    a child, siblings, a nested child, and nodes from different roots. Verify selection
    survives root switching and replacing/clearing a slot hides previous results until
    Compare is chosen. Check every input/metric, changed and unchanged fields,
-   Right − Left differences, nulls, all four statuses, and complete diagnostics.
+   Option 2 − Option 1 differences, nulls, all four statuses, and complete diagnostics.
    Inspect both saved options in 2D and 3D, including holes, split setbacks, different
    sites/floor counts, and missing buildings. Keep 3D selected while switching sides;
    check the displayed identity and matching geometry, reset framing, one canvas,
@@ -966,6 +1039,12 @@ With the frontend and backend running:
    saved configuration, replacement prompt, keyboard focus, and form submission.
    Reach selection, Compare, clear, plan/view switching, Open in Workspace, Keep Editing,
    discard, Create Branch, and Save Branch with Tab and activate them with the keyboard.
+   Switch all three sidebar sections with an invalid unsent draft and again with
+   an active branch preview, save name, and receipt. Confirm they persist on return,
+   together with selected tree nodes and Option 1 / Option 2 choices. A submitted comparison
+   must remain available without another request. Navigate away during a pending
+   preview or saved read and verify it completes in its own session without moving
+   focus into hidden content. Only the active section's controls should be reachable.
    Request races, cancellation, network/malformed-response failures, and
    generation-failure rendering have focused automated coverage, as do duplicate
    save events, uncertain save failures, and late responses after new previews.
