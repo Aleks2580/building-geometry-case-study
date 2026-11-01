@@ -1,0 +1,232 @@
+.editor {
+  margin-top: 1rem;
+  min-width: 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.6rem 0;
+}
+
+.editor button {
+  min-height: 44px;
+  border: 1px solid #537b6e;
+  border-radius: 6px;
+  background: white;
+  color: var(--color-text);
+  padding: 0.55rem 0.7rem;
+  cursor: pointer;
+}
+
+.editor button[aria-pressed="true"] {
+  background: #e4f1eb;
+  border-color: #1d6654;
+  font-weight: 650;
+}
+
+.editor button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.hint {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  margin: 0.5rem 0;
+  overflow-wrap: anywhere;
+}
+
+.canvas {
+  position: relative;
+  background: #f8fbfa;
+  border: 1px solid #a9bbb5;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.canvas svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: pan-y;
+}
+
+.canvas:focus-within {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+
+.gridBoundary {
+  fill: none;
+  stroke: #a9bbb5;
+}
+
+.grid line {
+  stroke: #d5e1dc;
+  stroke-width: 1;
+}
+
+.grid text {
+  fill: #50636a;
+  font-size: 18px;
+}
+
+.outline {
+  fill: #c5ded0;
+  stroke: #326359;
+  stroke-width: 2;
+}
+
+.line,
+.next {
+  fill: none;
+  stroke: #326359;
+  stroke-width: 2;
+}
+
+.next {
+  stroke-dasharray: 5 4;
+}
+
+.vertex {
+  fill: #1d6654;
+  pointer-events: none;
+}
+
+.selectedVertex {
+  fill: #b26013;
+}
+
+.startVertex {
+  fill: white;
+  stroke: #1d6654;
+  stroke-width: 3;
+}
+
+.vertexTarget {
+  position: absolute;
+  display: block;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.vertexTarget:active {
+  cursor: grabbing;
+}
+
+.editor .primary {
+  background: #1d6654;
+  color: white;
+  font-weight: 650;
+}
+
+.state,
+.notice {
+  font-size: 0.85rem;
+  margin: 0.6rem 0;
+  color: #1d6654;
+}
+
+.state {
+  font-weight: 650;
+}
+
+.scaleControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: end;
+}
+
+.scaleControls label {
+  flex: 1;
+}
+
+.pointSelector {
+  margin: 0.7rem 0;
+}
+
+.pointEntry,
+.viewInputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 0.6rem;
+}
+
+.pointEntry button {
+  width: 100%;
+}
+
+.pointEntry p {
+  grid-column: 1 / -1;
+}
+
+.editor label {
+  display: block;
+  min-width: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.editor input,
+.editor textarea,
+.editor select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #a9bbb5;
+  border-radius: 6px;
+  padding: 0.6rem;
+  background: #fcfdfc;
+  color: var(--color-text);
+}
+
+.editor select {
+  min-height: 44px;
+  font: inherit;
+}
+
+.json textarea {
+  margin-top: 0.4rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  resize: vertical;
+}
+
+.json textarea[aria-invalid="true"] {
+  border-color: #b12e30;
+}
+
+.error {
+  color: #a51e29;
+  font-size: 0.85rem;
+  margin: 0.5rem 0;
+}
+
+.details {
+  margin-top: 0.8rem;
+  font-size: 0.85rem;
+}
+
+.details summary {
+  cursor: pointer;
+  padding: 0.5rem 0;
+}
+
+.segments {
+  max-height: 9rem;
+  overflow: auto;
+  padding-left: 1.8rem;
+}
+
+@media (max-width: 520px) {
+  .viewInputs {
+    grid-template-columns: 1fr;
+  }
+}

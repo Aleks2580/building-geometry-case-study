@@ -103,6 +103,39 @@ beforeEach(() => {
 afterEach(() => client.clear());
 
 describe("MassingWorkspace saved snapshots", () => {
+  it.each(["root", "child"] as const)("inspects stored dimensions for a restored %s without recomputation or snapshot changes", async (kind) => {
+    const saved = optionResponse(backendPreviewResponse("holed"), {
+      id: kind === "child" ? childId : optionResponse().id,
+      parent_id: kind === "child" ? optionResponse().id : null,
+      name: `Stored ${kind} courtyard`,
+    });
+    const original = structuredClone(saved);
+    fetchMock.mockResolvedValueOnce(Response.json(saved));
+    mount(saved);
+    await savedHeading();
+    const svg = screen.getByRole("img", { name: "Site plan" });
+    const beforePaths = [...svg.querySelectorAll("path")].map((path) => path.getAttribute("d"));
+    const beforeMetrics = screen.getByRole("region", { name: "Actual massing" }).textContent;
+    expect(screen.getByRole("checkbox", { name: "Show dimensions" })).not.toBeChecked();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Show dimensions" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Measure edge" }), { target: { value: "site-1-0" } });
+    expect(svg.closest("figure")?.querySelector("figcaption [aria-live='polite']")).toHaveTextContent("Site hole 1 · edge 1: 5 m");
+    fireEvent.change(screen.getByRole("combobox", { name: "Measure edge" }), { target: { value: "footprint-1-0" } });
+    expect(svg.closest("figure")?.querySelector("figcaption [aria-live='polite']")).toHaveTextContent("Footprint hole 1 · edge 1: 5 m");
+    fireEvent.click(screen.getByRole("button", { name: "Show all" }));
+    expect(svg.querySelectorAll("[data-overview-dimension]")).toHaveLength(16);
+    expect(svg.querySelector("[data-overview-dimension='site-1-0'] text")).toHaveTextContent("5 m");
+    expect(svg.querySelector("[data-overview-dimension='footprint-1-0'] text")).toHaveTextContent("5 m");
+    expect(screen.getByText(/16 of 16 edge dimensions shown/)).toBeInTheDocument();
+    expect([...svg.querySelectorAll("path")].map((path) => path.getAttribute("d"))).toEqual(beforePaths);
+    expect(screen.getByRole("region", { name: "Actual massing" }).textContent).toBe(beforeMetrics);
+    expect(screen.queryByRole("button", { name: "Generate Preview" })).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledOnce();
+    assertReadsOnly();
+    expect(client.getQueryData(optionKeys.detail(saved.id))).toEqual(original);
+    expect(saved).toEqual(original);
+  });
+
   it("opens a complete root snapshot without computation and preserves stored geometry, inputs and result", async () => {
     const result = backendPreviewResponse("holed");
     const saved = optionResponse(result, { name: "Persisted courtyard" });

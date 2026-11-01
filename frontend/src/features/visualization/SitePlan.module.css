@@ -75,3 +75,157 @@
   color: var(--color-text-muted);
   font-size: 0.85rem;
 }
+
+.dimensionControls {
+  margin-bottom: 0.65rem;
+  font-size: 0.85rem;
+  min-width: 0;
+}
+
+.dimensionToggle {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.dimensionToggle input {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--color-accent);
+}
+
+.edgeSelector {
+  display: block;
+  margin: 0.3rem 0;
+  font-weight: 600;
+}
+
+.edgeSelect {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid #a9bbb5;
+  border-radius: 6px;
+  background: white;
+  color: var(--color-text);
+  font: inherit;
+  padding: 0.5rem;
+}
+
+.dimension {
+  stroke: #9a4d0b;
+  stroke-width: 1;
+  fill: none;
+  pointer-events: none;
+}
+
+.measuredEdge {
+  stroke: #c2610c;
+  stroke-width: 3;
+}
+
+.edgeMarker {
+  fill: #c2610c;
+  stroke: white;
+}
+
+.dimensionBackground {
+  fill: white;
+  stroke: #9a4d0b;
+  stroke-width: 1;
+}
+
+.dimensionText {
+  fill: #65330d;
+  stroke: none;
+  font-weight: 600;
+}
+
+.measurement {
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.measurement p {
+  margin-bottom: 0.4rem;
+}
+
+.dimensionHelp {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.dimensionModes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.3rem 0 0.7rem;
+}
+
+.dimensionModes button {
+  min-height: 40px;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #a9bbb5;
+  border-radius: 6px;
+  background: white;
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.dimensionModes button[aria-pressed="true"] {
+  border-color: #326359;
+  background: #e4f1eb;
+  font-weight: 650;
+}
+
+.planViewport {
+  min-width: 0;
+  width: 100%;
+}
+
+.planViewport[data-expanded="true"] {
+  overflow: auto;
+  max-height: 70vh;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+}
+
+.overviewLabel {
+  stroke: var(--dimension-color);
+  color: var(--dimension-color);
+  cursor: pointer;
+}
+
+.overviewSite {
+  --dimension-color: #50636a;
+}
+
+.overviewFootprint {
+  --dimension-color: #204e44;
+}
+
+.overviewLabel line {
+  stroke-width: 0.7;
+  opacity: 0.65;
+}
+
+.overviewLabel rect {
+  fill: white;
+  fill-opacity: 0.96;
+  stroke-width: 0.7;
+}
+
+.overviewLabel text {
+  fill: currentColor;
+  stroke: none;
+}
+
+.overviewLabel[data-selected="true"] {
+  --dimension-color: #9a4d0b;
+  font-weight: 700;
+}

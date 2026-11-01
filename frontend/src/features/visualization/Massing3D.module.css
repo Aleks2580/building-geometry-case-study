@@ -14,7 +14,7 @@
   overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: 0.5rem;
-  background: #f8faf9;
+  background: #f4f5f1;
 }
 
 .controls {
@@ -65,7 +65,43 @@
 .site { color: #50636a; }
 .legend .buildable { color: #71639d; border-top-style: dashed; }
 .selected { color: #297d91; }
-.building { color: #326359; }
+.building { color: #668477; }
+
+.dimensions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 1rem;
+  margin-top: 0.85rem;
+  padding: 0.65rem 0.85rem;
+  border-left: 3px solid #668477;
+  background: #f1f5f2;
+  border-radius: 0 0.35rem 0.35rem 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.dimensions p { margin: 0; }
+
+.dimensions strong {
+  color: #234b40;
+  font-size: 1.15rem;
+  font-weight: 650;
+}
+
+.heightLabel {
+  display: block;
+  white-space: nowrap;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid #b7c7bf;
+  border-radius: 0.3rem;
+  background: #ffffffed;
+  color: #234b40;
+  font-size: 13px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
 
 .fallback > p { margin-bottom: 0.5rem; }
 .fallback > button { margin-bottom: 0.75rem; }

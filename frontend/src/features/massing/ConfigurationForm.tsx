@@ -10,6 +10,7 @@ import {
 } from "./configuration";
 import type { Configuration, ConfigurationDraft } from "./configuration";
 import DraftSitePreview from "./DraftSitePreview";
+import CustomSiteEditor from "./CustomSiteEditor";
 import shared from "./massing.module.css";
 import styles from "./ConfigurationForm.module.css";
 
@@ -142,7 +143,7 @@ export default function ConfigurationForm({
                 <option value="rectangle">Rectangle</option>
                 <option value="l-shaped">L-shaped example</option>
                 <option value="notched">Notched example</option>
-                <option value="custom">Custom Polygon (advanced)</option>
+                <option value="custom">Custom Polygon</option>
               </select>
               <p className={styles.fieldHint} id="site-shape-hint">
                 Changing shape replaces the site draft. Other inputs stay as entered.
@@ -167,27 +168,15 @@ export default function ConfigurationForm({
                 Choose Custom Polygon to edit its coordinates.
               </p>
             )}
-            {siteKind === "custom" && <div className={`${styles.field} ${styles.siteInputs}`}>
-              <label htmlFor="site">Site Polygon JSON</label>
-              <textarea
-                id="site"
-                rows={12}
-                spellCheck={false}
-                aria-required="true"
-                aria-invalid={Boolean(customSiteError)}
-                aria-describedby={`site-hint${customSiteError ? " site-error" : ""}`}
-                {...register("site.json")}
-              />
-              <p className={styles.fieldHint} id="site-hint">
-                Local coordinates in metres. Use a GeoJSON Polygon with closed [x, y] rings:
-                the first ring is the boundary; subsequent rings are holes.
-                Geometry validity is checked by the backend.
-                Start from a valid selected shape, or enter Polygon JSON here.
-              </p>
-              {customSiteError && (
-                <p className={styles.fieldError} id="site-error" role="alert">{customSiteError.message}</p>
-              )}
-            </div>}
+            {siteKind === "custom" && <CustomSiteEditor
+              value={draft.site?.kind === "custom" ? draft.site.json ?? "" : ""}
+              jsonField={register("site.json")}
+              error={customSiteError?.message}
+              onChange={(json) => {
+                clearErrors("site");
+                setValue("site.json", json, { shouldDirty: true });
+              }}
+            />}
           </>
         ) : (
           <p className={styles.fieldsetHint}>

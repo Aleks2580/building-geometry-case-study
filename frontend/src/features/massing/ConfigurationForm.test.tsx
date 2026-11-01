@@ -15,6 +15,7 @@ function change(name: string, value: string) {
 
 function selectShape(kind: "rectangle" | "l-shaped" | "notched" | "custom") {
   fireEvent.change(screen.getByRole("combobox", { name: "Site shape" }), { target: { value: kind } });
+  if (kind === "custom") fireEvent.click(screen.getByRole("button", { name: "Advanced JSON" }));
 }
 
 function draftOutline(name = "Draft site preview") {
@@ -133,7 +134,7 @@ describe("ConfigurationForm", () => {
     expect(screen.getByRole("form", { name: "Massing configuration" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Site shape" })).toHaveValue("rectangle");
     expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual([
-      "Rectangle", "L-shaped example", "Notched example", "Custom Polygon (advanced)",
+      "Rectangle", "L-shaped example", "Notched example", "Custom Polygon",
     ]);
     expect(screen.getByRole("textbox", { name: "Width (m)" })).toHaveValue("40");
     expect(screen.getByRole("textbox", { name: "Length (m)" })).toHaveValue("25");

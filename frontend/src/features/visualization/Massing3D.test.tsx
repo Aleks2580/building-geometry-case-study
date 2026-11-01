@@ -23,9 +23,33 @@ vi.mock("./Massing3DScene", () => ({
 describe("Massing3D presentation", () => {
   it("renders a standalone actual building, legend, and backend dimensions", () => {
     render(<Massing3D result={previewResponse()} />);
-    expect(screen.getByText("6 floors · 3.5 m per floor · 21 m total height.")).toBeInTheDocument();
+    const dimensions = screen.getByRole("group", { name: "Building dimensions" });
+    expect(dimensions).toHaveTextContent("21 m total height");
+    expect(dimensions).toHaveTextContent("6 floors · 3.5 m per floor");
     expect(screen.getByRole("list", { name: "3D massing layers" })).toHaveTextContent("Actual building and footprint");
     expect(mocks.scene.mock.lastCall?.[0].scene.building.floorCount).toBe(6);
+    expect(mocks.scene.mock.lastCall?.[0].heightLabel).toBe("21 m");
+  });
+
+  it("updates the readout and height marker from the current backend result without mutating either snapshot", () => {
+    const first = previewResponse();
+    const second = previewResponse();
+    second.hard_constraints.floor_to_floor_m = 4.25;
+    second.metrics.floor_count = 3;
+    second.metrics.floor_to_floor_m = 4.25;
+    second.metrics.height_m = 12.75;
+    second.metrics.gfa_m2 = 1938;
+    const originals = structuredClone([first, second]);
+    const { rerender } = render(<Massing3D result={first} />);
+    rerender(<Massing3D result={second} />);
+    const dimensions = screen.getByRole("group", { name: "Building dimensions" });
+    expect(dimensions).toHaveTextContent("12.75 m total height");
+    expect(dimensions).toHaveTextContent("3 floors · 4.25 m per floor");
+    expect(dimensions).not.toHaveTextContent("21 m");
+    const current = mocks.scene.mock.lastCall?.[0];
+    expect(current.heightLabel).toBe("12.75 m");
+    expect(current.scene.building.totalHeight / current.scene.frame.scale).toBeCloseTo(second.metrics.height_m!);
+    expect([first, second]).toEqual(originals);
   });
 
   it("increments reset interaction without changing the backend result", () => {
@@ -50,6 +74,8 @@ describe("Massing3D presentation", () => {
     expect(result.generated_footprint_geometry).not.toBeNull();
     render(<Massing3D result={result} />);
     expect(mocks.scene.mock.lastCall?.[0].scene.building).toBeNull();
+    expect(mocks.scene.mock.lastCall?.[0].heightLabel).toBeUndefined();
+    expect(screen.queryByRole("group", { name: "Building dimensions" })).not.toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("No actual building footprint is available");
     expect(screen.getByRole("list")).not.toHaveTextContent("Actual building and footprint");
   });
@@ -58,6 +84,8 @@ describe("Massing3D presentation", () => {
     const { rerender } = render(<Massing3D result={previewResponse()} />);
     rerender(<Massing3D result={backendPreviewResponse("preferred_failed")} />);
     expect(mocks.scene.mock.lastCall?.[0].scene.building).toBeNull();
+    expect(mocks.scene.mock.lastCall?.[0].heightLabel).toBeUndefined();
+    expect(screen.queryByRole("group", { name: "Building dimensions" })).not.toBeInTheDocument();
     expect(screen.queryByText(/6 floors/)).not.toBeInTheDocument();
   });
 
@@ -67,6 +95,7 @@ describe("Massing3D presentation", () => {
     render(<Massing3D result={result} />);
     expect(screen.getByRole("status")).toHaveTextContent("3D display input is invalid");
     expect(screen.queryByTestId("canvas")).not.toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Building dimensions" })).not.toBeInTheDocument();
   });
 
   it("rejects excessive floor counts rather than truncating them", () => {
@@ -84,6 +113,7 @@ describe("Massing3D presentation", () => {
     expect(screen.getByText(/Interactive 3D is unavailable/)).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Site plan" }).querySelector('[data-layer="footprint"]')).not.toBeNull();
     expect(screen.queryByTestId("canvas")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("group", { name: "Building dimensions" })).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "Retry 3D" }));
     expect(screen.getByTestId("canvas")).toBeInTheDocument();
   });

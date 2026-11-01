@@ -34,6 +34,7 @@ function change(label: RegExp, value: string) {
 
 function selectShape(kind: "rectangle" | "l-shaped" | "notched" | "custom") {
   fireEvent.change(screen.getByRole("combobox", { name: "Site shape" }), { target: { value: kind } });
+  if (kind === "custom") fireEvent.click(screen.getByRole("button", { name: "Advanced JSON" }));
 }
 
 function metric(label: string) {

@@ -13,7 +13,8 @@
 > a typed editable configuration workspace and explicit backend preview with detailed
 > metrics, preference/target assessments, feasibility, diagnostics, and an integrated
 > SVG site plan. Site input supports rectangle dimensions, the supplied concave and
-> notched examples, advanced Polygon JSON with holes, and an immediate draft outline.
+> notched examples, visual exterior-ring drawing, advanced Polygon JSON with holes,
+> and an immediate draft outline.
 > Successful previews can be explicitly saved as immutable roots or children of a
 > selected saved option, with optional names and returned snapshot receipts.
 > A Saved Options explorer discovers persisted roots, browses nested branches,
@@ -937,12 +938,24 @@ in the [frontend README](../frontend/README.md).
 [React Hook Form](https://react-hook-form.com/get-started) owns editable drafts,
 dirty state, errors, and submission; [Zod](https://zod.dev/) provides typed parsing
 and cross-field checks. A single active site draft contains either rectangle
-dimensions, a supplied example selection, or advanced Polygon JSON with holes.
+dimensions, a supplied example selection, or custom Polygon JSON with holes.
 Zod constructs the existing `site` request Polygon and excludes UI-only fields;
 invalid dimensions cannot leave a previous valid Polygon available for submission.
 Preset changes intentionally replace the site while retaining other configuration
-fields, and Custom starts from the current valid Polygon. These input helpers do
-not compute setbacks, massing, or feasibility. `DraftSitePreview` derives its outline
+fields, and Custom starts from the current valid Polygon. `CustomSiteEditor` uses
+that same JSON field for visual exterior drawing and advanced text input. Unfinished
+points, selection, gestures, view controls, and bounded Undo snapshots remain local:
+starting a replacement clears the RHF field immediately, so incomplete drawing
+cannot submit or save an older polygon. Finishing writes a closed exterior ring;
+finished exterior edits write directly to RHF and preserve every hole ring. One
+drag is one undoable operation; cancellation restores its starting draft. Manual
+JSON edits reset visual history. Mode switching preserves geometry and holes;
+an explicit replacement drawing clears them. `SiteDrawingCanvas` handles pointer
+cleanup, point gestures, and keyboard completion over the shared reversible SVG
+mapping. View presets and fitting change only the frame, without snapping,
+coordinate clamping, topology repair, or another live geometry store. Branch sites
+remain read-only. These input helpers do not compute
+setbacks, massing, or feasibility. `DraftSitePreview` derives its outline
 directly from the watched RHF site through the existing site schema, without another
 geometry state. It reuses the SVG display utilities and even-odd hole filling;
 invalid structure or unsafe display bounds show an unavailable state instead of
@@ -975,14 +988,22 @@ styles for the backend-selected component and actual footprint. No component is
 selected or constructed in the renderer, and default-generation geometry never
 substitutes for an absent actual footprint. Holes use even-odd fills regardless of
 ring winding. A visible legend and SVG title/description identify available context.
+Optional edge measurements use pure display helpers over the original backend
+coordinates, with selected-edge inspection and an all-edge overview for site,
+actual-footprint, and hole rings. Deterministic label placement reports crowding
+and unavailable labels instead of silently limiting the edge count. An enlarged,
+scrollable display preserves the original logical frame and model coordinates;
+selected-edge inspection remains available when an overview is crowded. Local
+controls preserve authoritative metrics, send no requests, and resolve selection
+against the current snapshot rather than retaining copied geometry.
 The [renderer usage contract](../frontend/README.md#svg-plan-renderer) documents fitting,
-empty layers, and the display-only boundary. The workspace consumes this component
-without copying results into local state or substituting generated default geometry.
+empty layers, dimension controls, and the display-only boundary. The workspace
+consumes this component without copying results into local state or substituting
+generated default geometry.
 
 The 3D view helps architects read volume, floor count, and height that overlap in a
 plan, making footprint/height trade-offs easier to judge. It complements precise plan
-inspection; basic interactive 3D is part of this design's delivery scope, with visual
-polish deferred.
+inspection with restrained materials, directional lighting, and clear floor outlines.
 
 [React Three Fiber](https://r3f.docs.pmnd.rs/getting-started/introduction) integrates
 Three.js with React's component lifecycle, avoiding an independent imperative scene
@@ -993,9 +1014,12 @@ retain React 18; runtime and Three.js declarations use matching revisions.
 Pure display conversion maps backend XY onto the XZ ground plane with positive Y
 up, using one centred, uniformly normalized frame for the original site and actual
 height. Polygon holes become shape holes. One instanced extrusion represents all
-actual repeated floor plates at the reported spacing; alternating colours distinguish
-floors without gaps or height changes. Complete setback MultiPolygons remain outlines,
-with separate selected-component and actual-footprint context. Generated default
+actual repeated floor plates at the reported spacing; shared floor/roof outlines and
+subtle alternating colours distinguish floors without gaps or height changes.
+A camera-facing ground-to-roof marker and adjacent accessible dimension readout use
+the backend's actual height and floor metrics; missing buildings have neither.
+Complete setback MultiPolygons remain outlines, with separate selected-component
+and actual-footprint context. Generated default
 geometry never replaces an absent actual building.
 
 The renderer supplies orbit/zoom, responsive fitting, reset, a visible legend, and

@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { MultiPolygonGeometry, PolygonGeometry } from "../../api/contracts";
 import {
+  clientToViewportPosition,
+  createViewportMapping,
   createViewportTransform,
   geometryBounds,
   geometryPath,
@@ -131,6 +133,128 @@ describe("createViewportTransform", () => {
     { width: 100, height: 100, padding: 60 },
   ])("rejects an invalid viewport: %j", (viewport) => {
     expect(() => createViewportTransform(bounds, viewport)).toThrow(RangeError);
+  });
+});
+
+describe("createViewportMapping", () => {
+  it.each([
+    [{ minX: 0, minY: 0, maxX: 50, maxY: 50 }, [12.125, 30.875]],
+    [{ minX: -150, minY: -90, maxX: -50, maxY: -40 }, [-123.456789, -70.123456]],
+    [{ minX: 800, minY: 1500, maxX: 820, maxY: 1580 }, [813.33, 1510.25]],
+  ] satisfies [Bounds, Position][])("round-trips model coordinates in %j", (bounds, position) => {
+    const viewport = { width: 400, height: 400, padding: 40 };
+    const mapping = createViewportMapping(bounds, viewport);
+    expect(mapping).not.toBeNull();
+    if (mapping === null) return;
+
+    const projected = mapping.toViewport(position);
+    const restored = mapping.toModel(projected);
+    expect(restored[0]).toBeCloseTo(position[0], 10);
+    expect(restored[1]).toBeCloseTo(position[1], 10);
+    expect(projected).toEqual(createViewportTransform(bounds, viewport)?.(position));
+    expect(mapping.scale).toBe(320 / Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY));
+  });
+
+  it("maps offset negative bounds with an upward model Y axis", () => {
+    const mapping = createViewportMapping(
+      { minX: -40, minY: -20, maxX: 40, maxY: 60 },
+      { width: 400, height: 400, padding: 40 },
+    )!;
+
+    expect(mapping.scale).toBe(4);
+    expect(mapping.toViewport([-40, -20])).toEqual([40, 360]);
+    expect(mapping.toViewport([40, 60])).toEqual([360, 40]);
+    expect(mapping.toModel([40, 360])).toEqual([-40, -20]);
+    expect(mapping.toModel([360, 40])).toEqual([40, 60]);
+    expect(mapping.toModel([200, 200])).toEqual([0, 20]);
+  });
+
+  it("changes only the display scale when the drawing extent changes", () => {
+    const viewport = { width: 400, height: 400, padding: 40 };
+    const small = createViewportMapping({ minX: 0, minY: 0, maxX: 40, maxY: 40 }, viewport)!;
+    const large = createViewportMapping({ minX: 0, minY: 0, maxX: 160, maxY: 160 }, viewport)!;
+    const position: Position = [12.3456789, 25.6789123];
+    const original = [...position];
+
+    expect(small.scale).toBe(8);
+    expect(large.scale).toBe(2);
+    expect(small.toModel([200, 200])).toEqual([20, 20]);
+    expect(large.toModel([200, 200])).toEqual([80, 80]);
+    for (const mapping of [small, large]) {
+      const restored = mapping.toModel(mapping.toViewport(position));
+      expect(restored[0]).toBeCloseTo(position[0], 10);
+      expect(restored[1]).toBeCloseTo(position[1], 10);
+    }
+    expect(position).toEqual(original);
+  });
+
+  it("shares invalid-frame behavior with the existing transform API", () => {
+    expect(createViewportMapping(
+      { minX: 0, minY: 0, maxX: 0, maxY: 10 }, { width: 400, height: 400, padding: 40 },
+    )).toBeNull();
+    expect(() => createViewportMapping(
+      { minX: 0, minY: 0, maxX: 10, maxY: 10 }, { width: 400, height: 400, padding: 200 },
+    )).toThrow(RangeError);
+  });
+});
+
+describe("clientToViewportPosition", () => {
+  const viewport = { width: 400, height: 400 };
+
+  it.each([390, 320, 243.5])("maps pointer coordinates at a %s px mobile display width", (size) => {
+    const rect = { left: 18, top: 137, width: size, height: size };
+    expect(clientToViewportPosition([18, 137], rect, viewport)).toEqual([0, 0]);
+    expect(clientToViewportPosition([18 + size / 2, 137 + size / 2], rect, viewport)).toEqual([200, 200]);
+    expect(clientToViewportPosition([18 + size, 137 + size], rect, viewport)).toEqual([400, 400]);
+  });
+
+  it.each([
+    [{ left: 20, top: 30, width: 600, height: 400 }, [120, 30], [520, 430], [119, 200], [521, 200]],
+    [{ left: 20, top: 30, width: 200, height: 400 }, [20, 130], [220, 330], [100, 129], [100, 331]],
+  ] satisfies [Parameters<typeof clientToViewportPosition>[1], Position, Position, Position, Position][])(
+    "accounts for centered SVG letterboxing in %j",
+    (rect, topLeft, bottomRight, before, after) => {
+      expect(clientToViewportPosition(topLeft, rect, viewport)).toEqual([0, 0]);
+      expect(clientToViewportPosition(bottomRight, rect, viewport)).toEqual([400, 400]);
+      expect(clientToViewportPosition(before, rect, viewport)).toBeNull();
+      expect(clientToViewportPosition(after, rect, viewport)).toBeNull();
+    },
+  );
+
+  it("composes client mapping with the shared model transform", () => {
+    const mapping = createViewportMapping(
+      { minX: -25, minY: -25, maxX: 75, maxY: 75 }, { ...viewport, padding: 40 },
+    )!;
+    const rect = { left: 10, top: 100, width: 320, height: 400 };
+    const position = clientToViewportPosition([170, 300], rect, viewport);
+
+    expect(position).toEqual([200, 200]);
+    expect(mapping.toModel(position!)).toEqual([25, 25]);
+  });
+
+  it.each([
+    [-1, 0], [0, -1], [401, 400], [400, 401], [Infinity, 0], [0, NaN],
+  ] satisfies Position[])("rejects an out-of-bounds or non-finite pointer [%s, %s]", (x, y) => {
+    expect(clientToViewportPosition([x, y], { left: 0, top: 0, width: 400, height: 400 }, viewport))
+      .toBeNull();
+  });
+
+  it.each([
+    { left: Infinity, top: 0, width: 400, height: 400 },
+    { left: 0, top: NaN, width: 400, height: 400 },
+    { left: 0, top: 0, width: 0, height: 400 },
+    { left: 0, top: 0, width: 400, height: -1 },
+    { left: 0, top: 0, width: Infinity, height: 400 },
+  ])("rejects an invalid client rectangle %j", (rect) => {
+    expect(clientToViewportPosition([100, 100], rect, viewport)).toBeNull();
+  });
+
+  it.each([
+    { width: 0, height: 400 }, { width: 400, height: -1 },
+    { width: Infinity, height: 400 }, { width: 400, height: NaN },
+  ])("rejects invalid SVG dimensions %j", (invalidViewport) => {
+    expect(clientToViewportPosition([100, 100], { left: 0, top: 0, width: 400, height: 400 }, invalidViewport))
+      .toBeNull();
   });
 });
 

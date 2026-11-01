@@ -5,7 +5,7 @@ import { createRectangleSite, exampleSite } from "./siteGeometry";
 
 const decimalNumber = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 
-const requiredNumberDraft = z.string().trim().transform((value, context) => {
+export const requiredNumberDraft = z.string().trim().transform((value, context) => {
   if (value === "") {
     context.addIssue({ code: "custom", message: "Enter a number." });
     return z.NEVER;

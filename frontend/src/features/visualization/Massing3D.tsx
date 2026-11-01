@@ -5,6 +5,7 @@ import type { MassingPreviewResponse } from "../../api/contracts";
 import SitePlan from "./SitePlan";
 import Massing3DScene from "./Massing3DScene";
 import { prepareMassingScene } from "./massing3DGeometry";
+import { formatDimensionLength } from "./dimensionAnnotations";
 import styles from "./Massing3D.module.css";
 
 class CanvasBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { failed: boolean }> {
@@ -54,14 +55,15 @@ export default function Massing3D({ result }: { result: MassingPreviewResponse }
   }
 
   const { scene } = prepared;
+  const heightLabel = scene.building ? formatDimensionLength(result.metrics.height_m) : undefined;
   return <figure className={styles.viewer} aria-labelledby={`${id}-title`}>
     <figcaption id={`${id}-title`} className={styles.caption}>3D massing</figcaption>
     {contextLost ? fallback : <CanvasBoundary key={attempt} fallback={fallback}>
       <div className={styles.viewport}>
         <Canvas gl={createRenderer} frameloop="demand" dpr={[1, 1.5]} camera={{ fov: 45 }}
-          role="img" aria-label="Interactive 3D massing canvas" aria-describedby={`${id}-instructions`}>
+          role="img" aria-label="Interactive 3D massing canvas" aria-describedby={`${id}-instructions${scene.building ? ` ${id}-dimensions` : ""}`}>
           <StrictMode>
-            <Massing3DScene scene={scene} reset={reset} onContextLost={onContextLost} />
+            <Massing3DScene scene={scene} heightLabel={heightLabel} reset={reset} onContextLost={onContextLost} />
           </StrictMode>
         </Canvas>
       </div>
@@ -70,14 +72,16 @@ export default function Massing3D({ result }: { result: MassingPreviewResponse }
         <p id={`${id}-instructions`}>Drag to orbit. Scroll or pinch to zoom.</p>
       </div>
     </CanvasBoundary>}
+    {scene.building && <div id={`${id}-dimensions`} className={styles.dimensions} role="group" aria-label="Building dimensions">
+      <p><strong>{heightLabel}</strong> total height</p>
+      <p>{result.metrics.floor_count} {result.metrics.floor_count === 1 ? "floor" : "floors"} · {formatDimensionLength(result.metrics.floor_to_floor_m)} per floor</p>
+    </div>}
     <ul className={styles.legend} aria-label="3D massing layers">
       <li><span className={styles.site} />Original site boundary</li>
       {scene.buildable.length > 0 && <li><span className={styles.buildable} />Complete buildable region</li>}
       {scene.selectedBuildable.length > 0 && <li><span className={styles.selected} />Selected buildable component</li>}
       {scene.building && <li><span className={styles.building} />Actual building and footprint</li>}
     </ul>
-    {scene.building ? <p className={styles.notice}>
-      {result.metrics.floor_count} floors · {result.metrics.floor_to_floor_m} m per floor · {result.metrics.height_m} m total height.
-    </p> : <p className={styles.notice} role="status">No actual building footprint is available. Showing site and setback context.</p>}
+    {!scene.building && <p className={styles.notice} role="status">No actual building footprint is available. Showing site and setback context.</p>}
   </figure>;
 }

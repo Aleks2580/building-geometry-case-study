@@ -47,6 +47,7 @@ function change(label: RegExp, value: string) {
 
 function setSite(result: MassingPreviewResponse) {
   fireEvent.change(screen.getByRole("combobox", { name: "Site shape" }), { target: { value: "custom" } });
+  fireEvent.click(screen.getByRole("button", { name: "Advanced JSON" }));
   change(/Site Polygon JSON/, JSON.stringify(result.site));
   change(/Setback \(m\)/, String(result.hard_constraints.setback_m));
 }
@@ -77,6 +78,93 @@ beforeEach(() => {
 afterEach(() => client.clear());
 
 describe("MassingWorkspace integrated visualization", () => {
+  it("measures the submitted preview and its holes without requests or applying unsent draft geometry", async () => {
+    const result = backendPreviewResponse("holed");
+    const original = structuredClone(result);
+    fetchMock.mockResolvedValueOnce(Response.json(result));
+    mount();
+    setSite(result);
+    generate();
+    await screen.findByRole("heading", { name: "Feasible" });
+    const svg = screen.getByRole("img", { name: "Site plan" });
+    const beforePaths = [...svg.querySelectorAll("path")].map((path) => path.getAttribute("d"));
+    const beforeMetrics = screen.getByRole("region", { name: "Actual massing" }).textContent;
+    expect(screen.getByRole("checkbox", { name: "Show dimensions" })).not.toBeChecked();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Show dimensions" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Measure edge" }), { target: { value: "footprint-1-0" } });
+    expect(svg.closest("figure")?.querySelector("figcaption [aria-live='polite']")).toHaveTextContent("Footprint hole 1 · edge 1: 5 m");
+    fireEvent.click(screen.getByRole("button", { name: "Show all" }));
+    expect(svg.querySelectorAll("[data-overview-dimension]")).toHaveLength(16);
+    expect(svg.querySelector("[data-overview-dimension='footprint-1-0'] text")).toHaveTextContent("5 m");
+    change(/Site Polygon JSON/, "{");
+    expect(screen.getByRole("button", { name: "Save Option" })).toBeDisabled();
+    expect(screen.getByText(/Draft inputs have changed/)).toBeInTheDocument();
+    generate();
+    expect(await screen.findByText("Enter valid Polygon JSON.")).toBeInTheDocument();
+    expect(svg.closest("figure")?.querySelector("figcaption [aria-live='polite']")).toHaveTextContent("Footprint hole 1 · edge 1: 5 m");
+    expect(svg.querySelectorAll("[data-overview-dimension]")).toHaveLength(16);
+    expect(screen.getByRole("button", { name: "Show all" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("checkbox", { name: "Show dimensions" }));
+    expect(svg.querySelectorAll("[data-overview-dimension]")).toHaveLength(0);
+    expect([...svg.querySelectorAll("path")].map((path) => path.getAttribute("d"))).toEqual(beforePaths);
+    expect(screen.getByRole("region", { name: "Actual massing" }).textContent).toBe(beforeMetrics);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(result).toEqual(original);
+  });
+
+  it("isolates finished-point edits from the submitted result and restores its save eligibility on Undo", async () => {
+    const result = previewResponse();
+    fetchMock.mockResolvedValueOnce(Response.json(result));
+    mount();
+    setSite(result);
+    generate();
+    await screen.findByRole("heading", { name: "Feasible" });
+    await show3D(result);
+    fireEvent.click(screen.getByRole("button", { name: "Draw polygon" }));
+    expect(screen.getByRole("button", { name: "Save Option" })).toBeEnabled();
+    const initialOutline = screen.getByRole("img", { name: "Draft site preview" }).querySelector("path")?.getAttribute("d");
+    fireEvent.change(screen.getByRole("combobox", { name: "Selected point" }), { target: { value: "1" } });
+    change(/^X \(m\)$/, "35.1234567890123");
+    fireEvent.click(screen.getByRole("button", { name: "Update point" }));
+    expect(screen.getByRole("button", { name: "Save Option" })).toBeDisabled();
+    expect(screen.getByText(/Draft inputs have changed/)).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Draft site preview" }).querySelector("path")?.getAttribute("d")).not.toBe(initialOutline);
+    expect(JSON.parse(screen.getByTestId("3d-result").textContent ?? "null")).toEqual(result);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(screen.getByRole("button", { name: "Save Option" })).toBeEnabled();
+    expect(screen.queryByText(/Draft inputs have changed/)).not.toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Draft site preview" }).querySelector("path")?.getAttribute("d")).toBe(initialOutline);
+    expect(JSON.parse(screen.getByTestId("3d-result").textContent ?? "null")).toEqual(result);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("isolates unfinished and closed drawings from the submitted result until Generate Preview", async () => {
+    const result = previewResponse();
+    fetchMock.mockResolvedValueOnce(Response.json(result));
+    mount();
+    generate();
+    await screen.findByRole("heading", { name: "Feasible" });
+    await show3D(result);
+    fireEvent.change(screen.getByRole("combobox", { name: "Site shape" }), { target: { value: "custom" } });
+    fireEvent.click(screen.getByRole("button", { name: "Replace polygon and draw" }));
+    for (const [x, y] of [[0, 0], [30, 0], [30, 20], [0, 20]]) {
+      change(/^X \(m\)$/, String(x));
+      change(/^Y \(m\)$/, String(y));
+      fireEvent.click(screen.getByRole("button", { name: "Add point" }));
+    }
+    generate();
+    expect(await screen.findByText("Finish the polygon before generating a preview.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save Option" })).toBeDisabled();
+    expect(JSON.parse(screen.getByTestId("3d-result").textContent ?? "null")).toEqual(result);
+    fireEvent.click(screen.getByRole("button", { name: "Finish Polygon" }));
+    expect(screen.getByRole("img", { name: "Draft site preview" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save Option" })).toBeDisabled();
+    expect(screen.getByText(/Draft inputs have changed/)).toBeInTheDocument();
+    expect(JSON.parse(screen.getByTestId("3d-result").textContent ?? "null")).toEqual(result);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   it("defaults to 2D and repeatedly switches the exact submitted result without requests", async () => {
     const result = backendPreviewResponse("notched");
     fetchMock.mockResolvedValueOnce(Response.json(result));
@@ -113,6 +201,7 @@ describe("MassingWorkspace integrated visualization", () => {
 
     change(/Maximum floor count/, "2");
     fireEvent.change(screen.getByRole("combobox", { name: "Site shape" }), { target: { value: "custom" } });
+    fireEvent.click(screen.getByRole("button", { name: "Advanced JSON" }));
     change(/Site Polygon JSON/, JSON.stringify(backendPreviewResponse("notched").site));
     expect(screen.getByText(/Draft inputs have changed/)).toBeInTheDocument();
     expect(JSON.parse(screen.getByTestId("3d-result").textContent ?? "null")).toEqual(result);
@@ -220,6 +309,8 @@ describe("MassingWorkspace integrated visualization", () => {
     await show3D(parent.result);
     fireEvent.click(screen.getByRole("button", { name: "Create Branch" }));
     expect(screen.getByRole("group", { name: "Inherited site (read-only)" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Draw polygon" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Selected point" })).not.toBeInTheDocument();
     expect(screen.queryByTestId("3d-result")).not.toBeInTheDocument();
     change(/Preferred footprint \(m²\)/, "300");
     change(/Maximum footprint \(m²\)/, "500");

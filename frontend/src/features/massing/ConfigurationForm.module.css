@@ -36,8 +36,7 @@
 }
 
 .field input,
-.field select,
-.field textarea {
+.field select {
   width: 100%;
   border: 1px solid #a9bbb5;
   border-radius: 6px;
@@ -52,13 +51,6 @@
 
 .field select {
   font: inherit;
-}
-
-.field textarea {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.8rem;
-  resize: vertical;
-  line-height: 1.6;
 }
 
 .field [aria-invalid="true"] {
