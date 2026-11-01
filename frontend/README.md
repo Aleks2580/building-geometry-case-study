@@ -42,6 +42,9 @@ The backend base URL defaults to `http://localhost:8000`; override with
 - `src/features/massing/metricFormatting.ts` — display-only numeric formatting.
 - `src/features/visualization/svgGeometry.ts` — pure display bounds, viewport fitting, and SVG paths.
 - `src/features/visualization/SitePlan.tsx` — independent read-only SVG geometry layers and legend.
+- `src/features/visualization/massing3DGeometry.ts` — pure display conversion, floor placement, and camera fitting.
+- `src/features/visualization/Massing3D.tsx` — standalone interactive viewer, display states, and SVG fallback.
+- `src/features/visualization/Massing3DScene.tsx` — Three.js context outlines, instanced floors, and orbit controls.
 - `src/styles.css` — document defaults, base typography, design tokens, and keyboard focus styling.
 - `src/vite-env.d.ts` — types the optional `VITE_API_BASE` environment variable.
 
@@ -50,8 +53,9 @@ transport tests live beside the client in `src/api/`. Shared fixtures and test s
 stay in `src/test/`. Application entry points, global styles, and QueryClient setup remain
 at the root. Imports use direct relative paths.
 
-The interactive 3D view remains a separate delivery; see
-[the design note](../docs/DESIGN.md).
+The standalone 3D renderer is available independently of the workspace. Preview and
+saved-option view switching, followed by comparison reuse, remain separate deliveries;
+see the [3D renderer contract](#interactive-3d-renderer).
 
 ## Styling
 
@@ -77,11 +81,16 @@ styles retain their existing data and accessibility attributes.
 ```bash
 npm run dev        # dev server
 npm run typecheck  # strict TypeScript validation
+npm run typecheck:renderer-test # typecheck the standalone browser harness
 npm run lint       # ESLint checks
 npm run test       # run automated tests once
 npm run build      # typecheck, then production build
+npm run build:renderer-test # typecheck and bundle the standalone renderer harness
 npm run preview    # preview the build
 ```
+
+On machines where the default Vitest worker pool times out, the same suite can run
+with `npm run test -- --pool=threads --maxWorkers=2`.
 
 ESLint uses a flat configuration with TypeScript, React Hooks, and React Refresh
 rules. Generated files and dependencies are excluded.
@@ -476,6 +485,134 @@ Use a maximum height of 3 m with the floor cap blank to check infeasible context
 or a preferred footprint of `1e-30` to check generation failure with available
 default capacity. A backend validation failure must remove the previous backend plan and
 diagnostics; an unsubmitted edit must retain them with the changed-draft notice.
+
+## Interactive 3D renderer
+
+`Massing3D` consumes a complete existing backend response without an API request,
+Query provider, or workspace state:
+
+```tsx
+import Massing3D from "./features/visualization/Massing3D";
+
+<Massing3D result={result} />
+```
+
+The component is standalone. The preview and saved-option workspace still display
+SVG; adding their 2D/3D switch is the next integration slice. Comparison reuse follows
+that integration. The renderer never previews, saves, branches, or modifies a result.
+
+### Input and geometry
+
+| Backend field | Display use |
+| --- | --- |
+| `site_geometry` | Original Polygon boundary and interior rings; establishes the shared horizontal frame. |
+| `buildable_geometry` | Complete nullable Polygon or MultiPolygon setback context; every component remains visible. |
+| `selected_buildable_geometry` | Separately styled nullable Polygon selected by the backend. |
+| `footprint_geometry` | Actual nullable building footprint, including holes. |
+| `floor_plate_geometry` | Actual nullable repeated Polygon extruded for each represented floor. |
+| `metrics.floor_count`, `metrics.floor_to_floor_m`, `metrics.height_m` | Actual count, uniform floor spacing, and reported total height. |
+
+`generated_footprint_geometry`, generated capacity, and hard upper bounds never
+substitute for an absent actual building. A diagnostic response with null actual
+geometry and metrics displays the available site/setback outlines and an explicit
+missing-building message. All geometry and metrics remain backend-authoritative:
+the renderer performs no setbacks, footprint construction, area/GFA calculations,
+floor selection, or feasibility assessment.
+
+Backend XY maps to the Three.js XZ ground plane with positive Y up. For site centre
+`(cx, cy)`, elevation `z`, and uniform display scale `s`, the mapping is
+`(s * (x - cx), s * z, -s * (y - cy))`. The largest of original site width, depth,
+and actual building height spans 10 display units. Centering and normalization
+preserve horizontal/vertical proportions and improve Float32 buffer precision;
+backend coordinates and displayed metre values are unchanged. The camera fits the
+original site and reported height, including when the footprint is small or absent.
+
+Conversion copies closed rings, removes their repeated closing position, and
+normalizes winding for Three.js `Shape`/`Path` holes. Three.js supplies triangulation
+and extrusion, with bevels disabled. One instanced extrusion represents the repeated
+floor plate: floor `i` occupies elevations `i * floor_to_floor_m` through
+`(i + 1) * floor_to_floor_m`. Alternating floor colours distinguish storeys without
+adding gaps or changing total height. No building is added to an unselected setback
+component. Original site, complete setback, selected component, and actual footprint
+use separate outline styles and a visible legend.
+
+### Interaction, limits, and ownership
+
+Drag to orbit, scroll or pinch to zoom, and use **Reset to fit** to restore framing.
+The camera also refits when result geometry or canvas dimensions change. Panning,
+shadows, animation, textures, advanced materials, editing, and floor selection are
+outside this component. Responsive canvas sizing uses React Three Fiber's container
+measurement, demand rendering avoids an idle animation loop, and pixel ratio is
+capped at 1.5.
+
+Display guards check finite closed rings, distinct positions, triangulation,
+consistent repeated-floor geometry and height fields, and representability in
+Float32 buffers. They do not revalidate topology, repair geometry, or determine
+feasibility. Extreme scales and thin features can exceed display precision even
+when valid on the backend. Current resource guards reject more than 512 floors,
+20,000 ring vertices across supplied layers (excluding repeated closure positions),
+or 500,000 extruded triangles across floor instances. The combined triangle budget
+bounds work that instancing still submits for each floor. Guards never truncate
+floors or simplify polygons; these are renderer limits, not additional building
+constraints.
+
+Invalid display input produces an explicit message without a canvas. Unsupported
+3D input retains the existing SVG plan only after its source rings have passed
+bounded structural validation; unsupported types or excessive vertex input are not
+sent to fallback. Missing WebGL2, renderer initialization errors, and runtime context
+loss show the same response's SVG plan with **Retry 3D**. A WebGL1-only browser uses
+this fallback.
+
+React Three Fiber owns the instanced extrusion/material and renderer teardown.
+Each outline owns and disposes its complete geometry when replaced or unmounted;
+replacing only its attributes would leave old GPU buffers outside geometry cleanup.
+Drei owns orbit-control listeners, and the viewer removes its context-loss listener
+before normal canvas teardown. Scene children run under React StrictMode.
+
+Dependencies are pinned to `three@0.173.0`, `@types/three@0.173.0`,
+`@react-three/fiber@8.18.0`, and `@react-three/drei@9.122.0`, retaining React 18.
+Fiber and Drei provide their own declarations. Orbit controls use Drei's focused
+module; its unused transitive `three-mesh-bvh@0.7.8` emits a deprecation warning and
+is not imported by this renderer. Dependency changes require checking the resolved
+React/Three peers, strict types, production build, and browser rendering together.
+
+### Standalone browser verification
+
+Run from `frontend/`:
+
+```bash
+npm run typecheck:renderer-test
+npm run build:renderer-test
+npm run dev
+```
+
+Open `http://localhost:5173/renderer-test/`. This separate Vite entry is a browser
+verification harness, not a workspace route or production entry. It loads captured
+backend responses with a matching SVG crosscheck; no running service is required.
+The harness has a separate TypeScript configuration and build because the normal
+production entry does not import the standalone renderer yet. CI checks both entry
+points; the separate bundle goes to ignored `dist/renderer-test/`. To regenerate
+the additional fixtures through the backend preview mapping, run
+`uv run --project ../backend python renderer-test/capture_fixtures.py` after backend
+dependencies are installed.
+
+Check rectangular, L-shaped, notched/split, holed, missing-building, zero-buildable,
+single-floor, target-selected, tall, translated, and small-scale fixtures. Compare
+footprint and hole openings, all setback components, floor count, and reported
+height against the accompanying SVG and backend metrics. Orbit, zoom, reset, change
+fixtures, and resize through desktop, 390 px, and 320 px widths. Check the floor-limit
+and beyond-limit cases and the combined triangle budget: a 256-vertex fixture with
+490 floors submits 499,800 triangles, while 491 floors exceeds the limit. Check the
+**Verify unavailable WebGL** link, deliberate context loss, and retry.
+
+Use **Replace with equal response**, **Run 30 fixture updates**, and repeated
+mount/unmount to inspect native WebGL allocation/deletion and viewer interaction
+listeners. Inspect both during updates and after delayed canvas cleanup; context-loss
+release is reported separately from explicit GPU deletion. **Measure 30 response
+replacements** reports elapsed browser latency through two animation frames,
+including scheduling, rather than GPU execution time. Pure-function and focused
+React tests cover conversion and display states, while this harness supplies the
+real-WebGL verification that jsdom cannot establish.
 
 ## Massing preview API
 
