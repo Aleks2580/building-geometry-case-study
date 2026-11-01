@@ -1,6 +1,6 @@
 # Frontend — building geometry case study
 
-Vite + React with strict TypeScript, a typed configuration form, a backend massing
+Vite + React with TypeScript, a typed configuration form, a backend massing
 preview workspace with explicit immutable root saves and child branches, and a
 Saved Options explorer that opens and compares complete persisted snapshots.
 TanStack Query owns server results; React Hook Form owns configuration drafts.
@@ -27,7 +27,7 @@ composition and shared styles remain at the feature root; tests and CSS Modules 
 with their implementations.
 
 - `src/api/api.ts` — health, preview, root/branch save, option-detail, list, tree, and comparison clients.
-- `src/api/contracts.ts` — Zod contracts inferred as strict TypeScript types.
+- `src/api/contracts.ts` — Zod contracts inferred as TypeScript types.
 - `src/queryClient.ts` — reusable QueryClient factory and application instance.
 - `src/App.tsx` — application shell, section navigation, backend health, and explicit workspace-open requests.
 - `src/features/massing/configuration/configuration.ts` — typed draft parsing using existing Zod API contracts.
@@ -144,7 +144,7 @@ retain their data and accessibility attributes.
 
 ```bash
 npm run dev        # dev server
-npm run typecheck  # strict TypeScript validation
+npm run typecheck  # TypeScript validation
 npm run typecheck:renderer-test # typecheck the standalone browser harness
 npm run lint       # ESLint checks
 npm run test       # run automated tests once
@@ -809,7 +809,7 @@ Dependencies are pinned to `three@0.173.0`, `@types/three@0.173.0`,
 Fiber and Drei provide their own declarations. Orbit controls use Drei's focused
 module; its unused transitive `three-mesh-bvh@0.7.8` emits a deprecation warning and
 is not imported by this renderer. Dependency changes require checking the resolved
-React/Three peers, strict types, production build, and browser rendering together.
+React/Three peers, TypeScript checks, production build, and browser rendering together.
 
 ### Standalone browser verification
 

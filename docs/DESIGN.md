@@ -26,7 +26,7 @@ multiple buildings and production hosting are outside this delivery.
 ```mermaid
 flowchart LR
     User["User"]
-    subgraph Frontend["Frontend: React + strict TypeScript"]
+    subgraph Frontend["Frontend: React + TypeScript"]
         UI["Workspace / saved options<br/>Branching / comparison<br/>SVG 2D / React Three Fiber + Three.js 3D"]
     end
     subgraph Backend["Backend"]
@@ -360,7 +360,7 @@ migrations, immutable saves/branches, ordering, null statuses, unchanged parents
 subtree retrieval and read-only comparison. They skip without `TEST_DATABASE_URL`;
 a configured unreachable server fails. Browser reload never substitutes for DB evidence.
 
-Frontend verification covers strict types, lint, complete Vitest suite, production
+Frontend verification covers TypeScript checks, lint, complete Vitest suite, production
 and renderer-harness builds, form/state races, saved workflows, geometry layers,
 holes, budget boundaries, dimension guards and safe fallback. Real-browser checks
 establish 2D/3D interaction and WebGL cleanup; jsdom cannot establish GPU behavior.
