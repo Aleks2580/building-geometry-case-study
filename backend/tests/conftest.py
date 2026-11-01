@@ -5,8 +5,18 @@ from uuid import uuid4
 import pytest
 from psycopg import AsyncConnection, sql
 from psycopg.conninfo import make_conninfo
+from shapely.geometry import Polygon, box
 
 from app.migrations import run_migrations
+
+
+@pytest.fixture
+def cross_lobed_site() -> Polygon:
+    site = box(0, 0, 10, 10).union(box(30, 0, 40, 10)).union(box(0, 30, 10, 40)).union(box(30, 30, 40, 40))
+    site = site.union(Polygon([(7, 8), (8, 7), (33, 32), (32, 33)]))
+    site = site.union(Polygon([(7, 32), (32, 7), (33, 8), (8, 33)]))
+    assert isinstance(site, Polygon) and site.is_valid
+    return site
 
 
 @pytest.fixture

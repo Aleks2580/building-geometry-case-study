@@ -210,15 +210,14 @@ def test_clamped_preference_keeps_requested_effective_and_actual_values() -> Non
     assert result["feasibility"]["diagnostics"][0]["path"] == "preferences.preferred_footprint_area_m2"
 
 
-def test_approximated_preference_reports_target_beyond_generated_capacity() -> None:
-    site = box(0, 0, 20, 20).union(box(30, 0, 50, 20)).union(box(20, 9, 30, 11))
+def test_approximated_preference_reports_target_beyond_generated_capacity(cross_lobed_site: Polygon) -> None:
     result = _preview(
-        site=serialize_site_geometry(site),
+        site=serialize_site_geometry(cross_lobed_site),
         setback_m=0,
-        footprint_limits=FootprintLimits(max_footprint_area_m2=350),
+        footprint_limits=FootprintLimits(max_footprint_area_m2=150),
         floor_limits=FloorLimits(3.5, max_floors=2),
-        preferences=DesignPreferences(preferred_footprint_area_m2=350),
-        targets=DesignTargets(690),
+        preferences=DesignPreferences(preferred_footprint_area_m2=150),
+        targets=DesignTargets(260),
     )
 
     assert result["preference_results"]["footprint_area"]["status"] == "approximated"

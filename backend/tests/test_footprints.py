@@ -193,8 +193,13 @@ def test_rectangle_coverage_and_maximum_use_the_tighter_cap() -> None:
     assert result.generated_footprint_area_m2 == pytest.approx(500, abs=1e-8)
 
 
-def test_rectangle_reduction_matches_independent_offset_dimensions() -> None:
+def test_rectangle_reduction_matches_independent_offset_dimensions(monkeypatch: pytest.MonkeyPatch) -> None:
     setback = calculate_setback(_sample_site("rectangle"), 1)
+
+    def fail_intersection(*args: object, **kwargs: object) -> Polygon:
+        raise AssertionError("satisfactory buffer construction must not run clipping")
+
+    monkeypatch.setattr(Polygon, "intersection", fail_intersection)
     result = generate_footprint(setback, FootprintLimits(max_footprint_area_m2=500))
     geometry = result.generated_footprint_geometry
     assert geometry is not None
@@ -251,10 +256,12 @@ def _dumbbell_site() -> Polygon:
     return left.union(right).union(corridor)
 
 
-def test_secondary_split_metadata_is_deterministic() -> None:
-    setback = calculate_setback(_dumbbell_site(), 0)
-    first = generate_footprint(setback, FootprintLimits(max_footprint_area_m2=350))
-    second = generate_footprint(setback, FootprintLimits(max_footprint_area_m2=350))
+def test_secondary_split_metadata_is_deterministic(cross_lobed_site: Polygon) -> None:
+    setback = calculate_setback(cross_lobed_site, 0)
+    first = generate_footprint(setback, FootprintLimits(max_footprint_area_m2=150))
+    equivalent = replace(setback, selected_buildable_geometry=Polygon(list(cross_lobed_site.exterior.coords)[::-1]))
+    second = generate_footprint(equivalent, FootprintLimits(max_footprint_area_m2=150))
+    witness = box(0, 0, 10, 10).union(Polygon([(7, 8), (8, 7), (33, 32), (32, 33)]))
 
     assert first.outcome == second.outcome == "success"
     assert first.footprint_area_upper_bound_m2 == second.footprint_area_upper_bound_m2
@@ -264,12 +271,14 @@ def test_secondary_split_metadata_is_deterministic() -> None:
     assert first.undershoot_m2 == pytest.approx(second.undershoot_m2)
     assert first.secondary_discarded_area_m2 > 0
     assert first.secondary_discarded_area_m2 == pytest.approx(first.generated_footprint_area_m2)
+    assert isinstance(witness, Polygon) and witness.is_valid and cross_lobed_site.covers(witness)
+    assert first.generated_footprint_area_m2 < witness.area == 145.5 < 150
     assert serialize_site_geometry(first.generated_footprint_geometry) == serialize_site_geometry(
         second.generated_footprint_geometry
     )
 
 
-def test_dumbbell_heuristic_undershoot_has_an_independent_350_m2_witness() -> None:
+def test_dumbbell_fallback_reaches_its_independent_350_m2_witness() -> None:
     setback = calculate_setback(_dumbbell_site(), 0)
     limits = FootprintLimits(max_footprint_area_m2=350)
     result = generate_footprint(setback, limits)
@@ -288,9 +297,78 @@ def test_dumbbell_heuristic_undershoot_has_an_independent_350_m2_witness() -> No
     assert result.generated_footprint_area_m2 == pytest.approx(geometry.area, rel=1e-12, abs=0)
     assert result.generated_footprint_area_m2 <= 350
     assert result.undershoot_m2 == pytest.approx(350 - geometry.area, rel=1e-12, abs=0)
-    assert result.undershoot_m2 > tolerance
-    assert result.secondary_component_count == 2
-    assert result.secondary_discarded_area_m2 > 0
+    assert result.undershoot_m2 <= tolerance
+    assert result.secondary_component_count == 1
+    assert result.secondary_discarded_area_m2 == 0
+
+
+def test_notched_fallback_reaches_coverage_cap_with_bounded_intersections(monkeypatch: pytest.MonkeyPatch) -> None:
+    setback = calculate_setback(_sample_site("notched"), 0)
+    original_intersection = Polygon.intersection
+    calls = 0
+
+    def count_intersection(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original_intersection(*args, **kwargs)
+
+    monkeypatch.setattr(Polygon, "intersection", count_intersection)
+    result = generate_footprint(setback, FootprintLimits(site_coverage_ratio=0.45))
+    geometry = result.generated_footprint_geometry
+    witness = box(0, 0, 19.35, 20)
+
+    assert witness.area == result.footprint_area_upper_bound_m2 == 387
+    assert setback.selected_buildable_geometry.covers(witness)
+    assert geometry is not None and geometry.is_valid and geometry.area > 0
+    assert setback.selected_buildable_geometry.covers(geometry)
+    assert result.generated_footprint_area_m2 == geometry.area <= 387
+    assert result.undershoot_m2 <= area_tolerance_m2(setback.site_area_m2)
+    assert result.secondary_component_count == 1
+    assert result.secondary_discarded_area_m2 == 0
+    assert 0 < calls <= 4 * footprints._MAX_CLIP_SEARCH_ITERATIONS == 192
+
+
+def test_clipping_collection_counts_only_positive_polygon_components() -> None:
+    selected = _sample_site("notched")
+    intersection = selected.intersection(box(0, 6, 50, 20))
+    candidate = footprints._candidate_from_geometry(selected, intersection, area_tolerance_m2(selected.area))
+
+    assert intersection.geom_type == "GeometryCollection"
+    assert candidate is not None
+    assert candidate.area_m2 == candidate.geometry.area == 280
+    assert candidate.component_count == 2
+    assert candidate.discarded_area_m2 == 280
+    assert candidate.geometry.bounds == (0, 6, 20, 20)
+
+
+def test_clipping_uses_selected_setback_geometry_and_preserves_its_hole() -> None:
+    shell = _sample_site("notched")
+    site = Polygon(shell.exterior.coords, [box(5, 10, 7, 12).exterior.coords])
+    setback = calculate_setback(site, 1)
+    result = generate_footprint(setback, FootprintLimits(max_footprint_area_m2=200))
+    geometry = result.generated_footprint_geometry
+
+    assert geometry is not None and geometry.is_valid and geometry.area > 0
+    assert len(geometry.interiors) == 1
+    assert setback.selected_buildable_geometry.covers(geometry)
+    assert result.generated_footprint_area_m2 == geometry.area <= 200
+    assert geometry.area == pytest.approx(200)
+
+
+def test_clipping_retains_primary_without_material_improvement(monkeypatch: pytest.MonkeyPatch) -> None:
+    setback = calculate_setback(_dumbbell_site(), 0)
+    monkeypatch.setattr(footprints, "_MAX_CLIP_SEARCH_ITERATIONS", 0)
+    primary = generate_footprint(setback, FootprintLimits(max_footprint_area_m2=350))
+    assert primary.generated_footprint_geometry is not None
+    assert primary.generated_footprint_area_m2 is not None
+
+    def equivalent_clip(*args, **kwargs):
+        return footprints._Candidate(primary.generated_footprint_geometry, primary.generated_footprint_area_m2, 2, 324)
+
+    monkeypatch.setattr(footprints, "_best_clipped_candidate", equivalent_clip)
+    result = generate_footprint(setback, FootprintLimits(max_footprint_area_m2=350))
+
+    assert result == primary
 
 
 def test_positive_generated_footprint_can_be_below_area_tolerance() -> None:
@@ -357,7 +435,7 @@ def test_equivalent_reduction_inputs_have_identical_canonical_results() -> None:
     assert first.undershoot_m2 == second.undershoot_m2
 
 
-def test_retains_best_candidate_when_later_buffer_evaluations_are_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_retains_best_candidate_when_later_buffers_and_clips_are_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     setback = calculate_setback(box(0, 0, 10, 10), 0)
     # Control the search sequence while exercising the real candidate validator.
     candidates = iter([Polygon(), box(0, 0, 7, 7), box(0, 0, 6, 6)])
@@ -366,6 +444,7 @@ def test_retains_best_candidate_when_later_buffer_evaluations_are_empty(monkeypa
         return next(candidates, Polygon())
 
     monkeypatch.setattr(Polygon, "buffer", controlled_buffer)
+    monkeypatch.setattr(Polygon, "intersection", lambda *args, **kwargs: Polygon())
     result = generate_footprint(setback, FootprintLimits(max_footprint_area_m2=50))
     geometry = result.generated_footprint_geometry
 
