@@ -1,5 +1,16 @@
-import { errorResponseSchema, massingPreviewResponseSchema } from "./contracts";
-import type { ErrorBody, MassingPreviewRequest, MassingPreviewResponse } from "./contracts";
+import {
+  errorResponseSchema,
+  massingPreviewResponseSchema,
+  optionResponseSchema,
+  rootOptionRequestSchema,
+} from "./contracts";
+import type {
+  ErrorBody,
+  MassingPreviewRequest,
+  MassingPreviewResponse,
+  OptionResponse,
+  RootOptionRequest,
+} from "./contracts";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 
@@ -93,6 +104,51 @@ export async function previewMassing(
   const parsed = massingPreviewResponseSchema.safeParse(data);
   if (!parsed.success) {
     throw new ApiError("malformed_response", "Invalid massing preview response.", {
+      status: response.status,
+    });
+  }
+  return parsed.data;
+}
+
+export async function saveRootOption(request: RootOptionRequest): Promise<OptionResponse> {
+  const body = rootOptionRequestSchema.parse(request);
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/api/v1/options`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch (cause) {
+    throw new ApiError("network", "Unable to reach the options API.", { cause });
+  }
+
+  let data: unknown;
+  try {
+    data = await response.json();
+  } catch (cause) {
+    if (response.ok) {
+      throw new ApiError("malformed_response", "Invalid saved option response.", {
+        status: response.status, cause,
+      });
+    }
+    throw new ApiError("http", `Save option failed: HTTP ${response.status}`, {
+      status: response.status, cause,
+    });
+  }
+
+  if (!response.ok) {
+    const parsed = errorResponseSchema.safeParse(data);
+    throw new ApiError(
+      "http",
+      parsed.success ? parsed.data.error.message : `Save option failed: HTTP ${response.status}`,
+      { status: response.status, error: parsed.success ? parsed.data.error : undefined },
+    );
+  }
+
+  const parsed = optionResponseSchema.safeParse(data);
+  if (response.status !== 201 || !parsed.success || parsed.data.parent_id !== null) {
+    throw new ApiError("malformed_response", "Invalid saved option response.", {
       status: response.status,
     });
   }

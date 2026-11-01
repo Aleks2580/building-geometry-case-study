@@ -1,0 +1,131 @@
+.section {
+  margin-top: 1.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1rem;
+  min-width: 0;
+}
+
+.section h3,
+.section h4 {
+  margin: 0 0 0.6rem;
+}
+
+.hint,
+.notice {
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  margin-bottom: 0.8rem;
+}
+
+.field {
+  margin-bottom: 1rem;
+}
+
+.field label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+.field input {
+  width: 100%;
+  border: 1px solid #a9bbb5;
+  border-radius: 6px;
+  padding: 0.65rem 0.75rem;
+  color: var(--color-text);
+  background: #fcfdfc;
+}
+
+.field .hint,
+.fieldError {
+  margin: 0.4rem 0 0;
+}
+
+.field [aria-invalid="true"] {
+  border-color: #b12e30;
+}
+
+.fieldError {
+  color: #a51e29;
+  font-size: 0.85rem;
+}
+
+.saveButton {
+  border: 0;
+  border-radius: 6px;
+  padding: 0.75rem 1.2rem;
+  background: #1d6654;
+  color: white;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.saveButton:hover:enabled {
+  background: #144b3e;
+}
+
+.saveButton:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.notice {
+  margin: 0.8rem 0 0;
+}
+
+.success,
+.error {
+  margin-top: 1rem;
+  border: 1px solid #b6d5c5;
+  border-radius: 6px;
+  padding: 0.8rem;
+  background: #f0f9f3;
+  overflow-wrap: anywhere;
+  font-size: 0.85rem;
+}
+
+.success p,
+.error p {
+  margin: 0.6rem 0;
+}
+
+.success dl,
+.error p:last-child {
+  margin-bottom: 0;
+}
+
+.success dl > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
+  gap: 0.75rem;
+  margin-top: 0.4rem;
+}
+
+.success dt {
+  color: var(--color-text-secondary);
+}
+
+.success dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.error {
+  border-color: #e5b6b6;
+  color: #8d2028;
+  background: #fff2f1;
+}
+
+.error ul {
+  padding-left: 1.25rem;
+}
+
+@media (max-width: 520px) {
+  .success dl > div {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+    margin-top: 0.65rem;
+  }
+}
