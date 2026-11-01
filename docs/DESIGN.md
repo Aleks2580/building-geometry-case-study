@@ -25,28 +25,28 @@ multiple buildings and production hosting are outside this delivery.
 
 ```mermaid
 flowchart LR
+    User["User"]
     subgraph Frontend["Frontend: React + strict TypeScript"]
-        direction TB
-        UI["Configuration workspace<br/>Saved options, branching and comparison"]
-        Views["SVG 2D<br/>React Three Fiber / Three.js 3D"]
-        UI -->|Backend geometry and metrics| Views
+        UI["Workspace / saved options<br/>Branching / comparison<br/>SVG 2D / React Three Fiber + Three.js 3D"]
     end
     subgraph Backend["Backend"]
-        direction TB
-        HTTP["FastAPI HTTP contracts"]
-        Services["Application services and use cases"]
+        HTTP["FastAPI<br/>HTTP contracts"]
+        Services["Application services<br/>and use cases"]
         Domain["Pure geometry and massing<br/>Shapely / GEOS"]
         Repository["Persistence repository<br/>async psycopg / raw SQL"]
-        HTTP <-->|Validated requests / typed results| Services
-        Services <-->|Compute / calculated result| Domain
-        Services <-->|Save / read snapshots| Repository
     end
     subgraph Database["Database"]
         DB[("PostgreSQL<br/>Immutable JSONB snapshots<br/>Parent-child links")]
     end
-    Frontend -->|HTTP configuration / option requests| Backend
-    Backend -->|JSON results / stored snapshots| Frontend
-    Backend <-->|SQL through repository| Database
+    User --> UI
+    UI -->|HTTP request| HTTP
+    HTTP -->|Dispatch| Services
+    Services -->|Compute| Domain
+    Services -->|Save / read history| Repository
+    Repository <-->|SQL| DB
+    Domain -.->|Result| Services
+    Services -.->|Typed result| HTTP
+    HTTP -.->|JSON response| UI
 ```
 
 The scaffold's FastAPI, asynchronous psycopg pool, raw parameterized SQL,
