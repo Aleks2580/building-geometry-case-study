@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ApiError, previewMassing } from "../../api/api";
-import type { MassingPreviewResponse } from "../../api/contracts";
-import SaveRootOption from "../options/SaveRootOption";
+import type { MassingPreviewResponse, OptionResponse } from "../../api/contracts";
+import SaveOption from "../options/SaveOption";
 import SitePlan from "../visualization/SitePlan";
 import ConfigurationForm from "./ConfigurationForm";
 import DetailedMetrics from "./DetailedMetrics";
@@ -10,6 +10,7 @@ import Diagnostics from "./Diagnostics";
 import FeasibilitySummary from "./FeasibilitySummary";
 import PreferenceAssessments from "./PreferenceAssessments";
 import type { Configuration, ConfigurationDraft } from "./configuration";
+import { configurationDraftFromOption } from "./configuration";
 import shared from "./massing.module.css";
 import styles from "./MassingWorkspace.module.css";
 
@@ -55,14 +56,19 @@ function PreviewError({ error }: { error: Error }) {
   );
 }
 
-export default function MassingWorkspace() {
+function WorkspaceSession({ parent, focusOnMount, onCreateBranch, onStartRoot }: {
+  parent: OptionResponse | null;
+  focusOnMount: boolean;
+  onCreateBranch: (option: OptionResponse) => void;
+  onStartRoot: () => void;
+}) {
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [draftChanged, setDraftChanged] = useState(false);
   const preview = useQuery({
     // The identity remains unique across remounts so unchanged inputs still trigger
     // an explicit new attempt. Changing keys cancels the observer's consumed signal;
     // its late result can never populate the active preview, even if abort is ignored.
-    queryKey: ["massing-preview", submission?.configuration, submission?.id],
+    queryKey: ["massing-preview", parent?.id, submission?.configuration, submission?.id],
     queryFn: ({ signal }) => {
       if (submission === null) throw new Error("Submit a configuration before previewing.");
       return previewMassing(submission.configuration, signal);
@@ -76,16 +82,33 @@ export default function MassingWorkspace() {
 
   return (
     <div className={styles.workspace}>
-      <ConfigurationForm
-        submittedDraft={submission?.draft}
-        isGenerating={preview.isFetching}
-        onDraftChange={setDraftChanged}
-        onSubmit={(configuration, draft) => setSubmission({
-          configuration,
-          draft,
-          id: crypto.randomUUID(),
-        })}
-      />
+      <div className={styles.editor}>
+        <section className={styles.context} aria-label="Option creation context">
+          <h2>{parent ? "Branch from saved option" : "New root option"}</h2>
+          {parent ? <>
+            <p>Selected parent: <strong>{parent.name ?? "Unnamed option"}</strong></p>
+            <dl>
+              <div><dt>Parent ID</dt><dd>{parent.id}</dd></div>
+              <div><dt>Saved status</dt><dd>{parent.feasibility_status}</dd></div>
+            </dl>
+            <p>Edits create a new child. The saved parent stays unchanged.</p>
+            <button type="button" onClick={onStartRoot}>Start New Root</button>
+          </> : <p>Preview a site and configuration, then save a new root option.</p>}
+        </section>
+        <ConfigurationForm
+          initialDraft={parent ? configurationDraftFromOption(parent) : undefined}
+          inheritedSite={parent?.site_geometry}
+          focusOnMount={focusOnMount}
+          submittedDraft={submission?.draft}
+          isGenerating={preview.isFetching}
+          onDraftChange={setDraftChanged}
+          onSubmit={(configuration, draft) => setSubmission({
+            configuration,
+            draft,
+            id: crypto.randomUUID(),
+          })}
+        />
+      </div>
       <section className={`${shared.panel} ${styles.previewPanel}`} aria-labelledby="preview-title" aria-busy={preview.isFetching}>
         <div className={shared.panelHeading}>
           <p className={shared.eyebrow}>Backend result</p>
@@ -104,12 +127,14 @@ export default function MassingWorkspace() {
           <PreviewError error={preview.error} />
         ) : (
           <>
-            <SaveRootOption
+            <SaveOption
               // A receipt belongs to one preview attempt. A new submission detaches
               // any pending save without implying that the server rolled it back.
               key={submission.id}
               configuration={submission.configuration}
               draftChanged={draftChanged}
+              parent={parent ?? undefined}
+              onCreateBranch={onCreateBranch}
             />
             <PreviewSummary result={preview.data} />
           </>
@@ -117,4 +142,19 @@ export default function MassingWorkspace() {
       </section>
     </div>
   );
+}
+
+export default function MassingWorkspace() {
+  // Only an explicit receipt action selects a parent. Remounting the editor also
+  // isolates pending form validation and requests from the next parent/root session.
+  const [session, setSession] = useState<{ id: string; parent: OptionResponse | null }>({
+    id: "initial-root", parent: null,
+  });
+  return <WorkspaceSession
+    key={session.id}
+    parent={session.parent}
+    focusOnMount={session.id !== "initial-root"}
+    onCreateBranch={(parent) => setSession({ id: crypto.randomUUID(), parent })}
+    onStartRoot={() => setSession({ id: crypto.randomUUID(), parent: null })}
+  />;
 }

@@ -5,6 +5,19 @@ import DraftSitePreview from "./DraftSitePreview";
 import { createRectangleSite } from "./siteGeometry";
 
 describe("DraftSitePreview", () => {
+  it("identifies an inherited saved site as read-only rather than an unvalidated draft", () => {
+    const { rerender } = render(<DraftSitePreview geometry={createRectangleSite(40, 20)} inherited />);
+    const image = screen.getByRole("img", { name: "Inherited site preview" });
+    expect(image).toHaveAccessibleDescription(/Saved parent site in metres/);
+    expect(image).toHaveAccessibleDescription(/read-only and inherited by every child/);
+    expect(screen.queryByText("Live draft site")).not.toBeInTheDocument();
+
+    rerender(<DraftSitePreview geometry={null} inherited />);
+
+    expect(screen.getByText(/The saved site remains unchanged/)).toBeInTheDocument();
+    expect(screen.queryByText(/Enter valid site dimensions/)).not.toBeInTheDocument();
+  });
+
   it("fits the current site outline and labels it separately from a backend result", () => {
     render(<DraftSitePreview geometry={createRectangleSite(40, 20)} />);
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { configurationSchema, initialConfigurationDraft } from "./configuration";
+import { configurationDraftFromOption, configurationSchema, initialConfigurationDraft } from "./configuration";
 import type { ConfigurationDraft } from "./configuration";
+import { optionResponse } from "../../test/optionFixtures";
 
 function draft(): ConfigurationDraft {
   return structuredClone(initialConfigurationDraft);
@@ -11,6 +12,65 @@ function issuePaths(value: ConfigurationDraft): string[] {
   expect(result.success).toBe(false);
   return result.success ? [] : result.error.issues.map((issue) => issue.path.join("."));
 }
+
+describe("configurationDraftFromOption", () => {
+  it("uses the saved site's coordinates and complete saved configuration without changing the snapshot", () => {
+    const saved = optionResponse();
+    saved.site_geometry = {
+      type: "Polygon",
+      coordinates: [
+        [[0, 0], [50, 0], [50, 40], [0, 40], [0, 0]],
+        [[5, 5], [5, 10], [10, 10], [10, 5], [5, 5]],
+      ],
+    };
+    saved.hard_constraints = {
+      setback_m: 0, floor_to_floor_m: 3.25, max_height_m: null,
+      max_floors: 4, site_coverage_ratio: 0.6, max_footprint_m2: 400,
+    };
+    saved.preferences = { preferred_floor_count: 2, preferred_footprint_area_m2: 300 };
+    saved.targets = { gfa_target_m2: 0 };
+    const original = structuredClone(saved);
+
+    const value = configurationDraftFromOption(saved);
+
+    expect(value.site).toEqual({ kind: "custom", json: JSON.stringify(saved.site_geometry) });
+    expect(value.hard_constraints).toEqual({
+      setback_m: "0", floor_to_floor_m: "3.25", max_height_m: "",
+      max_floors: "4", site_coverage_ratio: "0.6", max_footprint_m2: "400",
+    });
+    expect(value.preferences).toEqual({ preferred_floor_count: "2", preferred_footprint_area_m2: "300" });
+    expect(value.targets).toEqual({ gfa_target_m2: "0" });
+    expect(configurationSchema.parse(value)).toEqual({
+      site: saved.site_geometry,
+      hard_constraints: saved.hard_constraints,
+      preferences: saved.preferences,
+      targets: saved.targets,
+    });
+    value.hard_constraints.max_floors = "1";
+    value.preferences.preferred_floor_count = "1";
+    value.targets.gfa_target_m2 = "100";
+    value.site = { kind: "rectangle", width: "1", length: "1" };
+    expect(saved).toEqual(original);
+  });
+
+  it("maps every absent optional number to an empty field", () => {
+    const saved = optionResponse();
+    saved.hard_constraints = {
+      setback_m: 3, floor_to_floor_m: 3.5, max_height_m: 21,
+      max_floors: null, site_coverage_ratio: null, max_footprint_m2: null,
+    };
+    saved.preferences = { preferred_floor_count: null, preferred_footprint_area_m2: null };
+    saved.targets = { gfa_target_m2: null };
+
+    const value = configurationDraftFromOption(saved);
+
+    expect(value.hard_constraints).toMatchObject({
+      max_height_m: "21", max_floors: "", site_coverage_ratio: "", max_footprint_m2: "",
+    });
+    expect(value.preferences).toEqual({ preferred_floor_count: "", preferred_footprint_area_m2: "" });
+    expect(value.targets.gfa_target_m2).toBe("");
+  });
+});
 
 describe("configurationSchema", () => {
   it("starts with a rectangular site and a valid default configuration", () => {

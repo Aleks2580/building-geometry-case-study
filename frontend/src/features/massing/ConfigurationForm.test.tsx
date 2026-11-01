@@ -1,8 +1,9 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import ConfigurationForm from "./ConfigurationForm";
-import { initialConfigurationDraft } from "./configuration";
+import { configurationDraftFromOption, initialConfigurationDraft } from "./configuration";
 import type { Configuration, ConfigurationDraft } from "./configuration";
+import { optionResponse } from "../../test/optionFixtures";
 
 function submit() {
   fireEvent.click(screen.getByRole("button", { name: "Generate Preview" }));
@@ -16,8 +17,8 @@ function selectShape(kind: "rectangle" | "l-shaped" | "notched" | "custom") {
   fireEvent.change(screen.getByRole("combobox", { name: "Site shape" }), { target: { value: kind } });
 }
 
-function draftOutline() {
-  return screen.getByRole("img", { name: "Draft site preview" }).querySelector("path")?.getAttribute("d") ?? "";
+function draftOutline(name = "Draft site preview") {
+  return screen.getByRole("img", { name }).querySelector("path")?.getAttribute("d") ?? "";
 }
 
 function renderForm(submittedDraft?: ConfigurationDraft) {
@@ -30,6 +31,102 @@ function renderForm(submittedDraft?: ConfigurationDraft) {
 }
 
 describe("ConfigurationForm", () => {
+  it("initializes branch fields from the saved snapshot and exposes its inherited site without editing controls", async () => {
+    const saved = optionResponse();
+    saved.hard_constraints = {
+      setback_m: 0, floor_to_floor_m: 3.25, max_height_m: 18,
+      max_floors: null, site_coverage_ratio: 0.5, max_footprint_m2: 400,
+    };
+    saved.preferences = { preferred_floor_count: 3, preferred_footprint_area_m2: 350 };
+    saved.targets = { gfa_target_m2: 0 };
+    const original = structuredClone(saved);
+    const initialDraft = configurationDraftFromOption(saved);
+    const onSubmit = vi.fn<(configuration: Configuration, draft: ConfigurationDraft) => void>();
+    const onDraftChange = vi.fn();
+    render(<ConfigurationForm
+      initialDraft={initialDraft}
+      inheritedSite={saved.site_geometry}
+      submittedDraft={structuredClone(initialDraft)}
+      onSubmit={onSubmit}
+      onDraftChange={onDraftChange}
+    />);
+
+    expect(screen.getByRole("heading", { name: "Shape your branch" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Inherited site (read-only)" })).toBeInTheDocument();
+    expect(screen.getByText(/site is inherited and cannot be changed/)).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Inherited site preview" })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Site shape" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Site Polygon JSON" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Width (m)" })).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Setback (m)" })).toHaveValue("0");
+    expect(screen.getByRole("textbox", { name: "Floor-to-floor height (m)" })).toHaveValue("3.25");
+    expect(screen.getByRole("textbox", { name: "Maximum height (m) (optional)" })).toHaveValue("18");
+    expect(screen.getByRole("textbox", { name: "Maximum floor count (optional)" })).toHaveValue("");
+    expect(screen.getByRole("textbox", { name: "Site coverage ratio (optional)" })).toHaveValue("0.5");
+    expect(screen.getByRole("textbox", { name: "Maximum footprint (m²) (optional)" })).toHaveValue("400");
+    expect(screen.getByRole("textbox", { name: "Preferred floor count (optional)" })).toHaveValue("3");
+    expect(screen.getByRole("textbox", { name: "Preferred footprint (m²) (optional)" })).toHaveValue("350");
+    expect(screen.getByRole("textbox", { name: "GFA target (m²) (optional)" })).toHaveValue("0");
+    expect(onDraftChange).toHaveBeenLastCalledWith(false);
+    expect(onSubmit).not.toHaveBeenCalled();
+    const siteOutline = draftOutline("Inherited site preview");
+    change("Maximum height (m) (optional)", "14");
+    change("Preferred floor count (optional)", "2");
+    change("GFA target (m²) (optional)", "600");
+    expect(onDraftChange).toHaveBeenLastCalledWith(true);
+
+    submit();
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(onSubmit.mock.calls[0][0]).toEqual({
+      site: saved.site_geometry,
+      hard_constraints: { ...saved.hard_constraints, max_height_m: 14 },
+      preferences: { ...saved.preferences, preferred_floor_count: 2 },
+      targets: { gfa_target_m2: 600 },
+    });
+    expect(draftOutline("Inherited site preview")).toBe(siteOutline);
+    expect(saved).toEqual(original);
+    expect(initialDraft.hard_constraints.max_height_m).toBe("18");
+  });
+
+  it("uses the inherited site for validation and submission even when the supplied draft site is unrelated or invalid", async () => {
+    const saved = optionResponse();
+    const initialDraft = configurationDraftFromOption(saved);
+    initialDraft.site = { kind: "custom", json: "invalid draft geometry" };
+    const onSubmit = vi.fn<(configuration: Configuration, draft: ConfigurationDraft) => void>();
+    render(<ConfigurationForm initialDraft={initialDraft} inheritedSite={saved.site_geometry} onSubmit={onSubmit} />);
+
+    submit();
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(onSubmit.mock.calls[0][0].site).toEqual(saved.site_geometry);
+    expect(onSubmit.mock.calls[0][1].site).toEqual({ kind: "custom", json: JSON.stringify(saved.site_geometry) });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(initialDraft.site).toEqual({ kind: "custom", json: "invalid draft geometry" });
+  });
+
+  it("focuses the first branch input on entry and focuses an accessible invalid field on form submission", async () => {
+    const saved = optionResponse();
+    const onSubmit = vi.fn();
+    render(<ConfigurationForm
+      initialDraft={configurationDraftFromOption(saved)}
+      inheritedSite={saved.site_geometry}
+      focusOnMount
+      onSubmit={onSubmit}
+    />);
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Setback (m)" })).toHaveFocus());
+    const invalid = screen.getByRole("textbox", { name: "Preferred floor count (optional)" });
+    change("Preferred floor count (optional)", "invalid");
+
+    fireEvent.submit(screen.getByRole("form", { name: "Massing configuration" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Enter a finite decimal number or leave blank.");
+    await waitFor(() => expect(invalid).toHaveFocus());
+    expect(invalid).toHaveAttribute("aria-invalid", "true");
+    expect(invalid).toHaveAccessibleDescription(/Enter a finite decimal number or leave blank/);
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
   it("shows a valid initial example without submitting automatically", () => {
     const { onSubmit } = renderForm();
 

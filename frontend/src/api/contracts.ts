@@ -163,6 +163,11 @@ export const rootOptionRequestSchema = massingPreviewRequestSchema.extend({
   name: optionNameSchema.nullable().optional(),
 });
 
+export const branchOptionRequestSchema = rootOptionRequestSchema.omit({ site: true }).extend({
+  preferences: designPreferencesSchema,
+  targets: designTargetsSchema,
+});
+
 export const optionResponseSchema = z.object({
   id: z.uuid(),
   parent_id: z.uuid().nullable(),
@@ -194,6 +199,7 @@ export type DesignTargets = z.input<typeof designTargetsSchema>;
 export type MassingPreviewRequest = z.input<typeof massingPreviewRequestSchema>;
 export type MassingPreviewResponse = z.infer<typeof massingPreviewResponseSchema>;
 export type RootOptionRequest = z.input<typeof rootOptionRequestSchema>;
+export type BranchOptionRequest = z.input<typeof branchOptionRequestSchema>;
 export type OptionResponse = z.infer<typeof optionResponseSchema>;
 export type MassingMetrics = z.infer<typeof massingMetricsSchema>;
 export type SetbackSummary = z.infer<typeof setbackSummarySchema>;

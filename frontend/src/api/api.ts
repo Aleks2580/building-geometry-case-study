@@ -1,10 +1,12 @@
 import {
+  branchOptionRequestSchema,
   errorResponseSchema,
   massingPreviewResponseSchema,
   optionResponseSchema,
   rootOptionRequestSchema,
 } from "./contracts";
 import type {
+  BranchOptionRequest,
   ErrorBody,
   MassingPreviewRequest,
   MassingPreviewResponse,
@@ -112,9 +114,30 @@ export async function previewMassing(
 
 export async function saveRootOption(request: RootOptionRequest): Promise<OptionResponse> {
   const body = rootOptionRequestSchema.parse(request);
+  const saved = await saveOption("/api/v1/options", body);
+  if (saved.parent_id !== null) {
+    throw new ApiError("malformed_response", "Invalid saved option response.", { status: 201 });
+  }
+  return saved;
+}
+
+export async function saveBranchOption(
+  parentId: string,
+  request: BranchOptionRequest,
+): Promise<OptionResponse> {
+  const validParentId = optionResponseSchema.shape.id.parse(parentId).toLowerCase();
+  const body = branchOptionRequestSchema.parse(request);
+  const saved = await saveOption(`/api/v1/options/${encodeURIComponent(validParentId)}/branches`, body);
+  if (saved.parent_id?.toLowerCase() !== validParentId || saved.id.toLowerCase() === validParentId) {
+    throw new ApiError("malformed_response", "Invalid saved option response.", { status: 201 });
+  }
+  return saved;
+}
+
+async function saveOption(path: string, body: unknown): Promise<OptionResponse> {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}/api/v1/options`, {
+    response = await fetch(`${API_BASE}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -147,7 +170,7 @@ export async function saveRootOption(request: RootOptionRequest): Promise<Option
   }
 
   const parsed = optionResponseSchema.safeParse(data);
-  if (response.status !== 201 || !parsed.success || parsed.data.parent_id !== null) {
+  if (response.status !== 201 || !parsed.success) {
     throw new ApiError("malformed_response", "Invalid saved option response.", {
       status: response.status,
     });
