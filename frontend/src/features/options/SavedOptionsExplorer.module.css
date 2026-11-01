@@ -1,0 +1,129 @@
+.explorer {
+  scroll-margin-top: 1.5rem;
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.header p,
+.prompt,
+.roots p {
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+}
+
+.header p {
+  max-width: 42rem;
+  margin-bottom: 0;
+}
+
+.explorer button {
+  border: 1px solid #a9bbb5;
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  background: #f6faf8;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.explorer button:hover:enabled {
+  background: #e8f3ee;
+}
+
+.explorer button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.header > button {
+  flex-shrink: 0;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
+  gap: 1.5rem;
+}
+
+.roots,
+.history {
+  min-width: 0;
+}
+
+.treeAndSummary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 1.25rem;
+}
+
+.rootList {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+}
+
+.rootList li + li {
+  margin-top: 0.5rem;
+}
+
+.rootButton {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  text-align: start;
+  gap: 0.3rem;
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
+}
+
+.rootButton[aria-pressed="true"] {
+  border-color: #326359;
+  background: #e2f0e9;
+  box-shadow: inset 3px 0 0 #326359;
+}
+
+.identifier {
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+}
+
+.error,
+.roots .error {
+  color: #8d2028;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1100px) {
+  .treeAndSummary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .header {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 520px) {
+  .explorer {
+    padding: 1rem;
+  }
+}

@@ -168,7 +168,7 @@ export const branchOptionRequestSchema = rootOptionRequestSchema.omit({ site: tr
   targets: designTargetsSchema,
 });
 
-export const optionResponseSchema = z.object({
+export const optionMetadataSchema = z.object({
   id: z.uuid(),
   parent_id: z.uuid().nullable(),
   name: z.string().nullable(),
@@ -176,6 +176,19 @@ export const optionResponseSchema = z.object({
   algorithm_version: z.string().min(1),
   feasibility_status: feasibilityStatusSchema,
   created_at: z.iso.datetime({ offset: true }),
+});
+
+export const optionSummarySchema = optionMetadataSchema.extend({
+  metrics: massingMetricsSchema,
+});
+
+export const optionTreeSchema = optionSummarySchema.extend({
+  get children(): z.ZodArray<typeof optionTreeSchema> {
+    return z.array(optionTreeSchema);
+  },
+});
+
+export const optionResponseSchema = optionMetadataSchema.extend({
   site_geometry: polygonGeometrySchema,
   hard_constraints: hardConstraintsSchema,
   preferences: designPreferencesSchema,
@@ -201,6 +214,8 @@ export type MassingPreviewResponse = z.infer<typeof massingPreviewResponseSchema
 export type RootOptionRequest = z.input<typeof rootOptionRequestSchema>;
 export type BranchOptionRequest = z.input<typeof branchOptionRequestSchema>;
 export type OptionResponse = z.infer<typeof optionResponseSchema>;
+export type OptionSummary = z.infer<typeof optionSummarySchema>;
+export type OptionTree = z.infer<typeof optionTreeSchema>;
 export type MassingMetrics = z.infer<typeof massingMetricsSchema>;
 export type SetbackSummary = z.infer<typeof setbackSummarySchema>;
 export type FootprintAreaPreferenceResult = z.infer<typeof footprintAreaPreferenceResultSchema>;
