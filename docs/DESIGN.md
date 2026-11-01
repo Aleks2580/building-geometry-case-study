@@ -170,10 +170,17 @@ never pass through float. For example, stored `36.0` and `3.6` permit nine floor
 ten exact copies of the stored spacing exceed the stored height. This numerical
 policy is an implementation choice; exact decimal semantics would need a new contract.
 
-A preferred floor count above `N` is a validation error. Preferred area searches for
-`min(requested, U)` using the same construction. Its assessment preserves requested,
-effective and actual area, signed difference and any approximation/clamping diagnostic.
-Failure to construct the preferred area does not silently substitute the default.
+Supplied floor preferences must be positive integers and area preferences finite
+positive numbers. Structurally invalid values return `422 INVALID_PREFERENCE` before
+generation. For structurally valid preferences, empty buildable geometry or zero
+permitted floors returns `200 infeasible`, even when the preferred floor count
+exceeds capacity. Only after those hard-infeasibility checks does a floor preference
+above `N` return `422 PREFERENCE_EXCEEDS_HARD_LIMIT`.
+
+Preferred area searches for `min(requested, U)` using the same construction. Its
+assessment preserves requested, effective and actual area, signed difference and
+any approximation/clamping diagnostic. Failure to construct the preferred area
+does not silently substitute the default.
 
 Without an explicit floor preference, an absent/zero target uses `N`; a positive
 target selects the minimum permitted count meeting it on the measured actual
@@ -292,12 +299,15 @@ hard upper bounds, generated capacity and actual results separate. Setback summa
 preference assessments, feasibility and structured diagnostics accompany geometry.
 All four domain statuses can be saved, including null-building diagnostic snapshots.
 
-Errors use `{error: {code, message, details: [{path, message}]}}` without submitted
-values or exception contexts. Invalid geometry, constraints, preferences, targets,
+Handled validation and option-not-found errors use
+`{error: {code, message, details: [{path, message}]}}` without submitted values or
+exception contexts. Invalid geometry, constraints, preferences, targets,
 excessive floor preferences and numerical range use section-specific `422` codes;
 malformed requests use `INVALID_REQUEST`. Missing saved IDs use `404 OPTION_NOT_FOUND`;
 missing branch parents use `PARENT_OPTION_NOT_FOUND`. Comparison validation uses
 `INVALID_COMPARISON`. Internal geometry failures are not mislabeled as validation.
+Compose and the sample environment disable FastAPI debug. Unhandled HTTP 500
+responses hide tracebacks but remain outside this structured JSON error contract.
 
 ## 2D/3D frontend architecture
 
@@ -364,8 +374,8 @@ Frontend verification covers TypeScript checks, lint, complete Vitest suite, pro
 and renderer-harness builds, form/state races, saved workflows, geometry layers,
 holes, budget boundaries, dimension guards and safe fallback. Real-browser checks
 establish 2D/3D interaction and WebGL cleanup; jsdom cannot establish GPU behavior.
-Compose smoke checks cover packaging, startup/migrations, HTTP routes, persistence,
-branching, comparison and restart survival. Exact commands/results belong in the
+The Compose CI smoke job checks startup, migrations, HTTP readiness, preview,
+persistence, branching, retrieval and comparison. Exact commands/results belong in the
 review report rather than a permanent assertion that every future build passes.
 
 ## Assumptions, trade-offs and known limitations

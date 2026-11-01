@@ -1,11 +1,13 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ComponentProps } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import ConfigurationForm from "./ConfigurationForm";
 import WorkspaceActionBar from "../WorkspaceActionBar";
 import { configurationDraftFromOption, initialConfigurationDraft } from "./configuration";
 import type { Configuration, ConfigurationDraft } from "./configuration";
 import { optionResponse } from "../../../test/optionFixtures";
+
+afterEach(() => vi.restoreAllMocks());
 
 function ConfigurationFormWithActions({ isGenerating = false, ...props }: ComponentProps<typeof ConfigurationForm> & { isGenerating?: boolean }) {
   return <>
@@ -125,7 +127,8 @@ describe("ConfigurationForm", () => {
     expect(initialDraft.site).toEqual({ kind: "custom", json: "invalid draft geometry" });
   });
 
-  it("focuses the first branch input on entry and focuses an accessible invalid field on form submission", async () => {
+  it("focuses branch entry without scrolling and still reveals invalid fields on submission", async () => {
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
     const saved = optionResponse();
     const onSubmit = vi.fn();
     render(<ConfigurationFormWithActions
@@ -135,6 +138,7 @@ describe("ConfigurationForm", () => {
       onSubmit={onSubmit}
     />);
     await waitFor(() => expect(screen.getByRole("textbox", { name: "Setback (m)" })).toHaveFocus());
+    expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
     revealOptional("Preferred floor count (optional)");
     const invalid = screen.getByRole("textbox", { name: "Preferred floor count (optional)" });
     change("Preferred floor count (optional)", "invalid");

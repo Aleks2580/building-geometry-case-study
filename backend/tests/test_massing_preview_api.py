@@ -79,7 +79,7 @@ async def test_preview_defaults_and_target_floor_selection(client, payload, targ
 
 
 @pytest.mark.parametrize("zero_floors", [False, True])
-async def test_infeasibility_returns_null_building_and_preserves_context(client, payload, zero_floors):
+async def test_hard_infeasibility_precedes_floor_preference_capacity_validation(client, payload, zero_floors):
     payload["targets"] = {"gfa_target_m2": 0}
     payload["preferences"] = {"preferred_floor_count": 100}
     if zero_floors:
@@ -100,6 +100,37 @@ async def test_infeasibility_returns_null_building_and_preserves_context(client,
     assert feasibility["hard_constraints_satisfied"] is False
     assert feasibility["reason"] == ("ZERO_PERMITTED_FLOORS" if zero_floors else "EMPTY_BUILDABLE_REGION")
     assert feasibility["target_assessment"]["status"] == "not_evaluated"
+
+
+async def test_positive_capacity_rejects_excessive_floor_preference(client, payload):
+    payload["preferences"] = {"preferred_floor_count": 100}
+
+    response = await client.post(PREVIEW_URL, json=payload)
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "PREFERENCE_EXCEEDS_HARD_LIMIT"
+    assert error["details"][0]["path"] == "preferences.preferred_floor_count"
+
+
+@pytest.mark.parametrize("value", [0, -1, True, 4.0, "4"])
+@pytest.mark.parametrize(
+    "constraints",
+    [{"setback_m": 13}, {"max_height_m": 3}],
+    ids=["empty-buildable-region", "zero-permitted-floors"],
+)
+async def test_structurally_invalid_floor_preference_is_rejected_before_hard_infeasibility(
+    client, payload, value, constraints
+):
+    payload["hard_constraints"].update(constraints)
+    payload["preferences"] = {"preferred_floor_count": value}
+
+    response = await client.post(PREVIEW_URL, json=payload)
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "INVALID_PREFERENCE"
+    assert error["details"][0]["path"] == "preferences.preferred_floor_count"
 
 
 async def test_generation_failure_is_a_200_outcome(client, payload, monkeypatch):
@@ -170,7 +201,6 @@ async def test_area_preference_keeps_requested_effective_and_actual_values(clien
         ("hard_constraints", "max_footprint_area_m2", 100, "INVALID_CONSTRAINTS"),
         ("hard_constraints", "site_coverage_ratio", 1.1, "INVALID_CONSTRAINTS"),
         ("preferences", "preferred_floor_count", 0, "INVALID_PREFERENCE"),
-        ("preferences", "preferred_floor_count", 7, "PREFERENCE_EXCEEDS_HARD_LIMIT"),
         ("preferences", "preferred_footprint_area_m2", -1, "INVALID_PREFERENCE"),
         ("targets", "gfa_target_m2", -1, "INVALID_TARGET"),
         ("targets", "gfa_target_m2", True, "INVALID_TARGET"),

@@ -20,7 +20,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      APP_DEBUG: "true"
+      APP_DEBUG: "false"
       APP_ALLOWED_ORIGINS: "http://localhost:5173"
       APP_DATABASE_URL: "postgresql://postgres:postgres@db:5432/casestudy"
     depends_on:

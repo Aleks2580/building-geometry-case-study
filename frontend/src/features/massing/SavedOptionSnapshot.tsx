@@ -14,8 +14,7 @@ export default function SavedOptionSnapshot({ option, onCreateBranch, onStartRoo
   const title = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     if (title.current?.closest("[hidden]")) return;
-    title.current?.focus();
-    title.current?.scrollIntoView?.({ block: "start" });
+    title.current?.focus({ preventScroll: true });
   }, []);
   const fields: [string, number | null][] = [
     ["Setback (m)", option.hard_constraints.setback_m],
