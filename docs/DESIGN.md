@@ -14,9 +14,10 @@
 > metrics, preference/target assessments, feasibility, diagnostics, and an integrated
 > SVG site plan. Site input supports rectangle dimensions, the supplied concave and
 > notched examples, advanced Polygon JSON with holes, and an immediate draft outline.
-> Successful previews can be explicitly saved as immutable root options, with optional
-> names and returned snapshot receipts. Branching, saved-option navigation/comparison,
-> alternatives, and 3D visualization remain planned in the frontend.
+> Successful previews can be explicitly saved as immutable roots or children of a
+> selected saved option, with optional names and returned snapshot receipts.
+> Saved-option retrieval/navigation, comparison, alternatives, and 3D visualization
+> remain planned in the frontend.
 
 ## Problem interpretation
 
@@ -788,7 +789,7 @@ The current UI preserves drafts, shows input errors inline and backend validatio
 paths in the request-error summary, and distinguishes domain failures from request
 failures. Read-only assessments show requested/effective/actual area differences directly
 from the response. Successful previews of all four statuses can be explicitly saved
-as root options, including diagnostic snapshots.
+as root or child options, including diagnostic snapshots.
 
 ## Visualization
 
@@ -830,10 +831,20 @@ snapshot owns the save receipt and never replaces the preview's plan or metrics.
 Starting a new preview detaches the previous save UI, preventing late receipts from
 appearing beside a different result without implying rollback of an accepted save.
 Pending duplicate events are blocked, but an explicit subsequent save creates
-another root. Transport failures can leave persistence uncertain; no save retries
+another snapshot. Transport failures can leave persistence uncertain; no save retries
 or reconnect replay occur. The [save workflow](../frontend/README.md#save-root-option)
-documents naming, error recovery, and reload behavior. Branching/navigation and
-the 3D view remain subsequent slices.
+documents naming, error recovery, and reload behavior.
+
+Branch editing selects an immutable snapshot from a successful save receipt and
+initializes the form from its stored configuration. The inherited site is read-only.
+Parent selection belongs to a separate session from preview attempts, so repeated
+previews retain the same parent while stale responses cannot affect a newly selected
+parent. Choosing a parent clears the preview and requires explicit generation before
+saving a child. Saving retains that parent for siblings; branching from the returned
+child requires an explicit selection. The
+[branch workflow](../frontend/README.md#branch-from-a-saved-option) is the operational
+reference. Saved-option navigation, reload restoration, comparison, and the 3D view
+remain subsequent slices.
 
 ### Types and state
 
@@ -848,15 +859,16 @@ The preview client in `frontend/src/api/api.ts` uses Zod schemas in
 Parsing retains nullable results and all four feasibility statuses, applies optional
 configuration defaults, and tolerates additive response fields. Geometry validity and
 massing calculations remain on the backend. Integer counts outside JavaScript's safe
-integer range are rejected rather than silently rounded. Root-save contracts reuse
-the configuration and result schemas and parse complete option metadata at runtime.
-The save client accepts only configuration/name fields and requires a root response
-with HTTP 201 and null `parent_id`. Other option methods remain deferred until their
-consuming workflows.
+integer range are rejected rather than silently rounded. Root and branch contracts
+reuse the configuration and result schemas and parse complete option metadata at
+runtime. Root saves require HTTP 201 and null `parent_id`; branch saves whitelist
+replacement building configuration/name fields and require the selected parent UUID
+in the HTTP 201 snapshot. Retrieval methods remain deferred until their consuming
+workflows.
 
 Massing configuration and workspace modules are grouped with their tests under
 `frontend/src/features/massing/`; API transport and contracts share `frontend/src/api/`.
-Root-save interaction and its CSS Module/tests live under `frontend/src/features/options/`.
+Save/branch interaction and its CSS Module/tests live under `frontend/src/features/options/`.
 Application setup stays at the source root. The [frontend README](../frontend/README.md)
 describes the file layout; modules use direct relative imports.
 
@@ -872,10 +884,11 @@ state directly. Mutation retries are explicitly disabled because repeated saves 
 distinct snapshots. The preview reads Query data directly using the submitted
 configuration and a unique attempt identity, including across remounts. Superseding
 or unmounting consumes cancellation, and distinct keys prevent late results replacing
-the active preview. The root-save component is keyed by the preview submission;
-its returned snapshot stays in mutation data, and the optional name/validation state
-stays local. No result is copied into form/local state. Client usage, display
-precision, errors, cancellation, and cache defaults are documented
+the active preview. Save interaction is keyed by the preview submission within its
+parent-selection session; returned snapshots stay in mutation data, and optional
+name/validation state stays local. Selecting a saved parent seeds an independent
+RHF draft from its saved configuration without editing or replacing stored results.
+Client usage, display precision, errors, cancellation, and cache defaults are documented
 in the [frontend README](../frontend/README.md).
 
 [React Hook Form](https://react-hook-form.com/get-started) owns editable drafts,

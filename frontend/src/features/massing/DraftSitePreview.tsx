@@ -3,7 +3,10 @@ import type { PolygonGeometry } from "../../api/contracts";
 import { createViewportTransform, geometryBounds, geometryPath } from "../visualization/svgGeometry";
 import styles from "./DraftSitePreview.module.css";
 
-export default function DraftSitePreview({ geometry }: { geometry: PolygonGeometry | null }) {
+export default function DraftSitePreview({ geometry, inherited = false }: {
+  geometry: PolygonGeometry | null;
+  inherited?: boolean;
+}) {
   const id = useId();
   const bounds = geometry && geometryBounds(geometry);
   const transform = bounds && createViewportTransform(bounds, { width: 320, height: 180, padding: 16 });
@@ -12,8 +15,10 @@ export default function DraftSitePreview({ geometry }: { geometry: PolygonGeomet
   return (
     <figure className={styles.preview}>
       <figcaption>
-        <p className={styles.heading}>Live draft site</p>
-        <p className={styles.hint}>Site outline only. Generate Preview to check geometry and calculate massing.</p>
+        <p className={styles.heading}>{inherited ? "Inherited site" : "Live draft site"}</p>
+        <p className={styles.hint}>{inherited
+          ? "Saved parent site. Generate Preview to calculate massing with your branch inputs."
+          : "Site outline only. Generate Preview to check geometry and calculate massing."}</p>
       </figcaption>
       {path ? (
         <svg
@@ -26,16 +31,19 @@ export default function DraftSitePreview({ geometry }: { geometry: PolygonGeomet
           aria-labelledby={`${id}-title`}
           aria-describedby={`${id}-description`}
         >
-          <title id={`${id}-title`}>Draft site preview</title>
+          <title id={`${id}-title`}>{inherited ? "Inherited site preview" : "Draft site preview"}</title>
           <desc id={`${id}-description`}>
-            Unvalidated site outline in metres, fitted to this view. The boundary and any holes are shown.
-            Geometry validity and massing are checked by the backend when you choose Generate Preview.
+            {inherited
+              ? "Saved parent site in metres, fitted to this view. The boundary and any holes are shown. The site is read-only and inherited by every child."
+              : "Unvalidated site outline in metres, fitted to this view. The boundary and any holes are shown. Geometry validity and massing are checked by the backend when you choose Generate Preview."}
           </desc>
           <path d={path} fillRule="evenodd" vectorEffect="non-scaling-stroke" />
         </svg>
       ) : (
         <p className={styles.unavailable}>
-          Draft site preview unavailable. Enter valid site dimensions or Polygon JSON.
+          {inherited
+            ? "Inherited site outline unavailable at this display scale. The saved site remains unchanged."
+            : "Draft site preview unavailable. Enter valid site dimensions or Polygon JSON."}
         </p>
       )}
     </figure>

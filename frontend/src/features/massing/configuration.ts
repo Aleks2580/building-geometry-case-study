@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { massingPreviewRequestSchema } from "../../api/contracts";
+import type { OptionResponse } from "../../api/contracts";
 import { createRectangleSite, exampleSite } from "./siteGeometry";
 
 const decimalNumber = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
@@ -105,6 +106,26 @@ export const configurationSchema = z.object({
 
 export type ConfigurationDraft = z.input<typeof configurationSchema>;
 export type Configuration = z.output<typeof configurationSchema>;
+
+export function configurationDraftFromOption(option: OptionResponse): ConfigurationDraft {
+  const numberDraft = (value: number | null) => value === null ? "" : String(value);
+  return {
+    site: { kind: "custom", json: JSON.stringify(option.site_geometry) },
+    hard_constraints: {
+      setback_m: numberDraft(option.hard_constraints.setback_m),
+      floor_to_floor_m: numberDraft(option.hard_constraints.floor_to_floor_m),
+      max_height_m: numberDraft(option.hard_constraints.max_height_m),
+      max_floors: numberDraft(option.hard_constraints.max_floors),
+      site_coverage_ratio: numberDraft(option.hard_constraints.site_coverage_ratio),
+      max_footprint_m2: numberDraft(option.hard_constraints.max_footprint_m2),
+    },
+    preferences: {
+      preferred_floor_count: numberDraft(option.preferences.preferred_floor_count),
+      preferred_footprint_area_m2: numberDraft(option.preferences.preferred_footprint_area_m2),
+    },
+    targets: { gfa_target_m2: numberDraft(option.targets.gfa_target_m2) },
+  };
+}
 
 export const initialConfigurationDraft: ConfigurationDraft = {
   site: { kind: "rectangle", width: "40", length: "25" },

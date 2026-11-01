@@ -5,6 +5,47 @@
   align-items: start;
 }
 
+.editor {
+  min-width: 0;
+}
+
+.context {
+  margin-bottom: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #f0f7f4;
+  padding: 1rem;
+  overflow-wrap: anywhere;
+  font-size: 0.85rem;
+}
+
+.context h2 {
+  font-size: 1.1rem;
+  margin: 0 0 0.6rem;
+}
+
+.context dl > div {
+  margin-top: 0.6rem;
+}
+
+.context dt {
+  color: var(--color-text-secondary);
+}
+
+.context dd {
+  margin: 0.2rem 0 0;
+  font-weight: 600;
+}
+
+.context button {
+  border: 1px solid #537b6e;
+  border-radius: 6px;
+  background: white;
+  color: var(--color-text);
+  padding: 0.65rem 0.85rem;
+  cursor: pointer;
+}
+
 .draftNotice {
   color: #745016;
   background: #fff5dc;

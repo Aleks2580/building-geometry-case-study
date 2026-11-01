@@ -18,6 +18,11 @@
   margin-bottom: 0.8rem;
 }
 
+.parent {
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
 .field {
   margin-bottom: 1rem;
 }
@@ -94,6 +99,10 @@
 .success dl,
 .error p:last-child {
   margin-bottom: 0;
+}
+
+.success button {
+  margin-top: 1rem;
 }
 
 .success dl > div {

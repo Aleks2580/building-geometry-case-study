@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import type { FieldPath } from "react-hook-form";
+import type { PolygonGeometry } from "../../api/contracts";
 import {
   configurationSchema,
   initialConfigurationDraft,
@@ -17,6 +18,9 @@ interface ConfigurationFormProps {
   submittedDraft?: ConfigurationDraft;
   isGenerating?: boolean;
   onDraftChange?: (changed: boolean) => void;
+  initialDraft?: ConfigurationDraft;
+  inheritedSite?: PolygonGeometry;
+  focusOnMount?: boolean;
 }
 
 export default function ConfigurationForm({
@@ -24,11 +28,19 @@ export default function ConfigurationForm({
   submittedDraft,
   isGenerating = false,
   onDraftChange,
+  initialDraft,
+  inheritedSite,
+  focusOnMount = false,
 }: ConfigurationFormProps) {
-  const { register, handleSubmit, getValues, setValue, clearErrors, control, getFieldState, formState } =
+  const { register, handleSubmit, getValues, setValue, setFocus, clearErrors, control, getFieldState, formState } =
     useForm<ConfigurationDraft, unknown, Configuration>({
       resolver: zodResolver(configurationSchema),
-      defaultValues: initialConfigurationDraft,
+      defaultValues: inheritedSite === undefined
+        ? initialDraft ?? initialConfigurationDraft
+        : {
+          ...(initialDraft ?? initialConfigurationDraft),
+          site: { kind: "custom", json: JSON.stringify(inheritedSite) },
+        },
       mode: "onBlur",
     });
   const draft = useWatch({ control });
@@ -38,6 +50,9 @@ export default function ConfigurationForm({
   const draftChanged = submittedDraft !== undefined &&
     JSON.stringify(draft) !== JSON.stringify(submittedDraft);
   useEffect(() => onDraftChange?.(draftChanged), [draftChanged, onDraftChange]);
+  useEffect(() => {
+    if (focusOnMount) setFocus("hard_constraints.setback_m");
+  }, [focusOnMount, setFocus]);
 
   function selectSite(kind: ConfigurationDraft["site"]["kind"]) {
     const current = getValues("site");
@@ -92,76 +107,91 @@ export default function ConfigurationForm({
       onSubmit={(event) => {
         // RHF exposes nested draft references; capture the submission before later edits.
         const submittedDraft = structuredClone(getValues());
-        void handleSubmit((configuration) => onSubmit(configuration, submittedDraft))(event);
+        void handleSubmit((configuration) => onSubmit({
+          ...configuration,
+          // Branch previews use the selected saved site's geometry even though the
+          // shared draft schema retains a site field for validation.
+          site: structuredClone(inheritedSite ?? configuration.site),
+        }, submittedDraft))(event);
       }}
     >
       <div className={shared.panelHeading}>
         <p className={shared.eyebrow}>Configuration</p>
-        <h2>Shape your massing</h2>
-        <p>Choose a site shape, then adjust the rules and preferences.</p>
+        <h2>{inheritedSite === undefined ? "Shape your massing" : "Shape your branch"}</h2>
+        <p>{inheritedSite === undefined
+          ? "Choose a site shape, then adjust the rules and preferences."
+          : "Adjust the rules and preferences for a new child option."}</p>
       </div>
 
       <fieldset>
-        <legend>Site geometry</legend>
-        <div className={styles.field}>
-          <label htmlFor="site-shape">Site shape</label>
-          <select
-            id="site-shape"
-            aria-describedby="site-shape-hint"
-            {...register("site.kind")}
-            value={siteKind}
-            onChange={(event) => selectSite(event.target.value as ConfigurationDraft["site"]["kind"])}
-          >
-            <option value="rectangle">Rectangle</option>
-            <option value="l-shaped">L-shaped example</option>
-            <option value="notched">Notched example</option>
-            <option value="custom">Custom Polygon (advanced)</option>
-          </select>
-          <p className={styles.fieldHint} id="site-shape-hint">
-            Changing shape replaces the site draft. Other inputs stay as entered.
-            Returning to Rectangle starts at 40 × 25 m.
+        <legend>{inheritedSite === undefined ? "Site geometry" : "Inherited site (read-only)"}</legend>
+        {inheritedSite === undefined ? (
+          <>
+            <div className={styles.field}>
+              <label htmlFor="site-shape">Site shape</label>
+              <select
+                id="site-shape"
+                aria-describedby="site-shape-hint"
+                {...register("site.kind")}
+                value={siteKind}
+                onChange={(event) => selectSite(event.target.value as ConfigurationDraft["site"]["kind"])}
+              >
+                <option value="rectangle">Rectangle</option>
+                <option value="l-shaped">L-shaped example</option>
+                <option value="notched">Notched example</option>
+                <option value="custom">Custom Polygon (advanced)</option>
+              </select>
+              <p className={styles.fieldHint} id="site-shape-hint">
+                Changing shape replaces the site draft. Other inputs stay as entered.
+                Returning to Rectangle starts at 40 × 25 m.
+              </p>
+            </div>
+            {siteKind === "rectangle" && (
+              <div className={`${styles.fieldGrid} ${styles.siteInputs}`}>
+                {numericField("site.width", "Width (m)", "Greater than zero. Local x direction.", true)}
+                {numericField("site.length", "Length (m)", "Greater than zero. Local y direction.", true)}
+              </div>
+            )}
+            {siteKind === "l-shaped" && (
+              <p className={styles.fieldHint}>
+                A concave L-shaped site demonstrates setbacks around an inward corner.
+                Choose Custom Polygon to edit its coordinates.
+              </p>
+            )}
+            {siteKind === "notched" && (
+              <p className={styles.fieldHint}>
+                A deep notch demonstrates how setbacks can split or collapse the buildable area.
+                Choose Custom Polygon to edit its coordinates.
+              </p>
+            )}
+            {siteKind === "custom" && <div className={`${styles.field} ${styles.siteInputs}`}>
+              <label htmlFor="site">Site Polygon JSON</label>
+              <textarea
+                id="site"
+                rows={12}
+                spellCheck={false}
+                aria-required="true"
+                aria-invalid={Boolean(customSiteError)}
+                aria-describedby={`site-hint${customSiteError ? " site-error" : ""}`}
+                {...register("site.json")}
+              />
+              <p className={styles.fieldHint} id="site-hint">
+                Local coordinates in metres. Use a GeoJSON Polygon with closed [x, y] rings:
+                the first ring is the boundary; subsequent rings are holes.
+                Geometry validity is checked by the backend.
+                Start from a valid selected shape, or enter Polygon JSON here.
+              </p>
+              {customSiteError && (
+                <p className={styles.fieldError} id="site-error" role="alert">{customSiteError.message}</p>
+              )}
+            </div>}
+          </>
+        ) : (
+          <p className={styles.fieldsetHint}>
+            The saved parent’s site is inherited and cannot be changed in this branch.
           </p>
-        </div>
-        {siteKind === "rectangle" && (
-          <div className={`${styles.fieldGrid} ${styles.siteInputs}`}>
-            {numericField("site.width", "Width (m)", "Greater than zero. Local x direction.", true)}
-            {numericField("site.length", "Length (m)", "Greater than zero. Local y direction.", true)}
-          </div>
         )}
-        {siteKind === "l-shaped" && (
-          <p className={styles.fieldHint}>
-            A concave L-shaped site demonstrates setbacks around an inward corner.
-            Choose Custom Polygon to edit its coordinates.
-          </p>
-        )}
-        {siteKind === "notched" && (
-          <p className={styles.fieldHint}>
-            A deep notch demonstrates how setbacks can split or collapse the buildable area.
-            Choose Custom Polygon to edit its coordinates.
-          </p>
-        )}
-        {siteKind === "custom" && <div className={`${styles.field} ${styles.siteInputs}`}>
-          <label htmlFor="site">Site Polygon JSON</label>
-          <textarea
-            id="site"
-            rows={12}
-            spellCheck={false}
-            aria-required="true"
-            aria-invalid={Boolean(customSiteError)}
-            aria-describedby={`site-hint${customSiteError ? " site-error" : ""}`}
-            {...register("site.json")}
-          />
-          <p className={styles.fieldHint} id="site-hint">
-            Local coordinates in metres. Use a GeoJSON Polygon with closed [x, y] rings:
-            the first ring is the boundary; subsequent rings are holes.
-            Geometry validity is checked by the backend.
-            Start from a valid selected shape, or enter Polygon JSON here.
-          </p>
-          {customSiteError && (
-            <p className={styles.fieldError} id="site-error" role="alert">{customSiteError.message}</p>
-          )}
-        </div>}
-        <DraftSitePreview geometry={parsedSite.success ? parsedSite.data : null} />
+        <DraftSitePreview geometry={inheritedSite ?? (parsedSite.success ? parsedSite.data : null)} inherited={inheritedSite !== undefined} />
       </fieldset>
 
       <fieldset>

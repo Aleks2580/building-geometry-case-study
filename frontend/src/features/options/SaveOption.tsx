@@ -1,16 +1,18 @@
 import { useId, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { ApiError, saveRootOption } from "../../api/api";
+import { ApiError, saveBranchOption, saveRootOption } from "../../api/api";
 import { optionNameSchema } from "../../api/contracts";
-import type { MassingPreviewRequest } from "../../api/contracts";
-import styles from "./SaveRootOption.module.css";
+import type { MassingPreviewRequest, OptionResponse, RootOptionRequest } from "../../api/contracts";
+import styles from "./SaveOption.module.css";
 
-interface SaveRootOptionProps {
+interface SaveOptionProps {
   configuration: MassingPreviewRequest;
   draftChanged: boolean;
+  parent?: OptionResponse;
+  onCreateBranch?: (option: OptionResponse) => void;
 }
 
-function SaveError({ error }: { error: Error }) {
+function SaveError({ error, branching }: { error: Error; branching: boolean }) {
   const details = error instanceof ApiError ? error.error?.details : undefined;
   const uncertain = !(error instanceof ApiError) || error.kind !== "http" ||
     error.status === null || error.status >= 500 || error.status === 408;
@@ -25,19 +27,28 @@ function SaveError({ error }: { error: Error }) {
         ))}</ul>
       )}
       <p>{uncertain
-        ? "The option may have been saved. Saving again creates a new root option and may create a duplicate."
-        : "Review the error before choosing Save Option again."}</p>
+        ? `The option may have been saved. Saving again creates a new ${branching ? "child of the selected parent" : "root option"} and may create a duplicate.`
+        : branching && error instanceof ApiError && error.status === 404
+          ? "The selected parent could not be found. Check the parent identifier or start a new root option."
+          : `Review the error before choosing ${branching ? "Save Branch" : "Save Option"} again.`}</p>
     </div>
   );
 }
 
-export default function SaveRootOption({ configuration, draftChanged }: SaveRootOptionProps) {
+export default function SaveOption({ configuration, draftChanged, parent, onCreateBranch }: SaveOptionProps) {
   const id = useId();
   const [name, setName] = useState("");
   const [nameError, setNameError] = useState<string | null>(null);
   const submissionPending = useRef(false);
   const save = useMutation({
-    mutationFn: saveRootOption,
+    mutationFn: (request: RootOptionRequest) => parent
+      ? saveBranchOption(parent.id, {
+        hard_constraints: request.hard_constraints,
+        preferences: request.preferences ?? {},
+        targets: request.targets ?? {},
+        name: request.name,
+      })
+      : saveRootOption(request),
     retry: false,
     networkMode: "always",
     onSettled: () => { submissionPending.current = false; },
@@ -57,12 +68,14 @@ export default function SaveRootOption({ configuration, draftChanged }: SaveRoot
 
   return (
     <section className={styles.section} aria-labelledby={`${id}-title`} aria-busy={save.isPending}>
-      <h3 id={`${id}-title`}>Save option</h3>
+      <h3 id={`${id}-title`}>{parent ? "Save branch" : "Save root option"}</h3>
       <p className={styles.hint}>
-        Save this generated configuration as an immutable root option, including any feasibility diagnostics.
-        The backend recomputes the saved snapshot. Each save creates a new option.
+        {parent
+          ? "Save this generated configuration as a new immutable child. Each save creates a sibling under the selected parent, including any feasibility diagnostics."
+          : "Save this generated configuration as an immutable root option, including any feasibility diagnostics. The backend recomputes the saved snapshot. Each save creates a new option."}
       </p>
-      <form aria-label="Save root option" noValidate onSubmit={(event) => {
+      {parent && <p className={styles.parent}>Selected parent: <strong>{parent.name ?? "Unnamed option"}</strong> ({parent.id})</p>}
+      <form aria-label={parent ? "Save branch option" : "Save root option"} noValidate onSubmit={(event) => {
         event.preventDefault();
         if (draftChanged || submissionPending.current || save.isPending) return;
         const parsed = validateName();
@@ -91,7 +104,9 @@ export default function SaveRootOption({ configuration, draftChanged }: SaveRoot
           {nameError !== null && <p className={styles.fieldError} id={`${id}-error`} role="alert">{nameError}</p>}
         </div>
         <button className={styles.saveButton} type="submit" disabled={draftChanged || save.isPending}>
-          {save.isPending ? "Saving…" : save.isSuccess ? "Save Another Root Option" : "Save Option"}
+          {save.isPending ? "Saving…" : parent
+            ? save.isSuccess ? "Save Another Branch" : "Save Branch"
+            : save.isSuccess ? "Save Another Root Option" : "Save Option"}
         </button>
       </form>
       {draftChanged && (
@@ -104,17 +119,20 @@ export default function SaveRootOption({ configuration, draftChanged }: SaveRoot
       )}
       {save.isSuccess && (
         <div className={styles.success} role="status">
-          <h4>Root option saved</h4>
+          <h4>{parent ? "Branch saved" : "Root option saved"}</h4>
           <p>This receipt belongs to the generated preview.</p>
           <dl>
             <div><dt>Name</dt><dd>{save.data.name ?? "Unnamed option"}</dd></div>
             <div><dt>Identifier</dt><dd>{save.data.id}</dd></div>
-            <div><dt>Parent</dt><dd>None (root option)</dd></div>
+            <div><dt>Parent</dt><dd>{save.data.parent_id ?? "None (root option)"}</dd></div>
             <div><dt>Saved status</dt><dd>{save.data.feasibility_status}</dd></div>
           </dl>
+          {onCreateBranch && <button className={styles.saveButton} type="button" onClick={() => onCreateBranch(save.data)}>
+            Create Branch
+          </button>}
         </div>
       )}
-      {save.isError && <SaveError error={save.error} />}
+      {save.isError && <SaveError error={save.error} branching={parent !== undefined} />}
     </section>
   );
 }
