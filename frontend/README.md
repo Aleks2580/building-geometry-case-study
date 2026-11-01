@@ -29,7 +29,7 @@ The backend base URL defaults to `http://localhost:8000`; override with
 - `src/features/massing/DraftSitePreview.tsx` — immediate outline of the active site draft, with its own CSS Module.
 - `src/features/massing/MassingWorkspace.tsx` — new-root, saved-option, and branch-draft sessions.
 - `src/features/massing/SavedOptionSnapshot.tsx` — read-only saved metadata, configuration, and result.
-- `src/features/massing/MassingResult.tsx` — shared SVG, feasibility, metrics, assessments, and diagnostics.
+- `src/features/massing/MassingResult.tsx` — shared visualization, feasibility, metrics, assessments, and diagnostics.
 - `src/features/options/SaveOption.tsx` — optional naming, explicit root/branch saves, and saved-snapshot receipts.
 - `src/features/options/SavedOptionsExplorer.tsx` — paginated root discovery, nested branches, and explicit workspace navigation.
 - `src/features/options/optionQueries.ts` — shared option-detail, list, tree, and comparison query keys.
@@ -42,6 +42,7 @@ The backend base URL defaults to `http://localhost:8000`; override with
 - `src/features/massing/metricFormatting.ts` — display-only numeric formatting.
 - `src/features/visualization/svgGeometry.ts` — pure display bounds, viewport fitting, and SVG paths.
 - `src/features/visualization/SitePlan.tsx` — independent read-only SVG geometry layers and legend.
+- `src/features/visualization/MassingVisualization.tsx` — local 2D/3D selection, lazy loading, and error isolation for backend results.
 - `src/features/visualization/massing3DGeometry.ts` — pure display conversion, floor placement, and camera fitting.
 - `src/features/visualization/Massing3D.tsx` — standalone interactive viewer, display states, and SVG fallback.
 - `src/features/visualization/Massing3DScene.tsx` — Three.js context outlines, instanced floors, and orbit controls.
@@ -53,9 +54,9 @@ transport tests live beside the client in `src/api/`. Shared fixtures and test s
 stay in `src/test/`. Application entry points, global styles, and QueryClient setup remain
 at the root. Imports use direct relative paths.
 
-The standalone 3D renderer is available independently of the workspace. Preview and
-saved-option view switching, followed by comparison reuse, remain separate deliveries;
-see the [3D renderer contract](#interactive-3d-renderer).
+Previews and opened saved snapshots share [2D/3D view switching](#workspace-2d3d-views).
+Comparison retains its stored SVG plan; 3D comparison reuse remains planned, and
+the standalone [3D renderer contract](#interactive-3d-renderer) remains unchanged.
 
 ## Styling
 
@@ -179,7 +180,7 @@ metrics, and diagnostics while loading. Failed requests show a summary and backe
 field paths/messages when available; correcting the inputs and submitting again
 retries explicitly.
 
-Successful responses show feasibility, an SVG site plan above the detailed metrics,
+Successful responses show feasibility, a 2D/3D visualization above the detailed metrics,
 and grouped site/setback, capacity, actual massing, preference, and target measurements.
 The prominent footprint area, floor count, height, and GFA summarize the selected
 building. Theoretical hard upper
@@ -391,8 +392,8 @@ request, so late responses cannot replace the current content.
 
 The opened **Saved Option** is read-only and identifies its name, UUID, parent,
 versions, and creation time. It shows the stored site, hard constraints, preferences,
-and target alongside the saved feasibility, SVG plan, metrics, assessments, and
-diagnostics. The same result components present saved values and generated previews,
+and target alongside the saved feasibility, 2D/3D visualization, metrics,
+assessments, and diagnostics. The same result components present saved values and generated previews,
 with a clear saved-snapshot label. Null configuration fields display **Not set**;
 null result metrics display **Not available**, and zero values remain zero. Opening
 sends no POST request, recalculates no massing, and writes nothing. Successful
@@ -486,6 +487,32 @@ or a preferred footprint of `1e-30` to check generation failure with available
 default capacity. A backend validation failure must remove the previous backend plan and
 diagnostics; an unsubmitted edit must retain them with the changed-draft notice.
 
+## Workspace 2D/3D views
+
+Generated root and branch previews and opened root/child snapshots use
+`MassingVisualization` through the shared `MassingResult` presentation. **2D** is
+the default; choose **3D** to inspect the same complete `MassingPreviewResponse`
+interactively. Native buttons expose the active view with `aria-pressed`, work with
+Tab and Enter/Space, retain visible focus, and never submit a configuration form.
+The view choice is local React interaction state and sends no API request.
+
+Only selecting 3D loads its module. An accessible status describes loading; an
+import or render failure shows an explicit message and the matching SVG plan while
+leaving the workspace and its 2D control available. A failed module import requires
+a page reload to attempt loading again; save active work before reloading. Returning
+to 2D unmounts the renderer and its WebGL canvas. The existing renderer handles
+WebGL2 initialization failure, context loss, invalid display input, and resource or
+precision limits as described below. Metrics, feasibility, diagnostics, assessments,
+and save/branch controls remain outside the visualization and keep their existing
+behavior in either view.
+
+The viewer reads the successful Query response directly. Unsubmitted and invalid
+drafts never replace submitted geometry; a new pending or failed preview removes
+the prior result and viewer. Opened snapshots use their exact stored result without
+regeneration. Workspace session boundaries isolate different saved options and
+new root/branch sessions, including renderer state. Comparison currently retains
+its existing SVG inspection controls.
+
 ## Interactive 3D renderer
 
 `Massing3D` consumes a complete existing backend response without an API request,
@@ -497,9 +524,9 @@ import Massing3D from "./features/visualization/Massing3D";
 <Massing3D result={result} />
 ```
 
-The component is standalone. The preview and saved-option workspace still display
-SVG; adding their 2D/3D switch is the next integration slice. Comparison reuse follows
-that integration. The renderer never previews, saves, branches, or modifies a result.
+The component also remains independently usable. Production workspace views load
+it through `MassingVisualization`; the renderer never previews, saves, branches,
+or modifies a result.
 
 ### Input and geometry
 
@@ -589,9 +616,10 @@ npm run dev
 Open `http://localhost:5173/renderer-test/`. This separate Vite entry is a browser
 verification harness, not a workspace route or production entry. It loads captured
 backend responses with a matching SVG crosscheck; no running service is required.
-The harness has a separate TypeScript configuration and build because the normal
-production entry does not import the standalone renderer yet. CI checks both entry
-points; the separate bundle goes to ignored `dist/renderer-test/`. To regenerate
+The harness has a separate TypeScript configuration and build so its fixtures and
+resource instrumentation do not enter the production bundle. The production app
+loads the renderer as a separate dynamic chunk. CI checks both entry points;
+the separate harness bundle goes to ignored `dist/renderer-test/`. To regenerate
 the additional fixtures through the backend preview mapping, run
 `uv run --project ../backend python renderer-test/capture_fixtures.py` after backend
 dependencies are installed.
@@ -730,7 +758,10 @@ With the frontend and backend running:
 
 1. Check backend health and the default Rectangle's **Live draft site** outline
    before submitting. Generate Preview and expect a separate backend plan with
-   646 m² footprint, six floors, 21 m height, and 3,876 m² GFA.
+   646 m² footprint, six floors, 21 m height, and 3,876 m² GFA. Switch to 3D,
+   orbit/zoom/reset, then return to 2D; metrics must remain unchanged and no preview
+   request should be sent by view switching. Repeat switching and inspect canvas
+   removal and delayed WebGL resource cleanup.
 2. Edit Width and Length, including decimals, without submitting: the draft outline
    updates while the backend plan and metrics stay unchanged and the draft notice
    appears. Empty, zero, negative, and non-numeric dimensions must replace the
@@ -780,6 +811,9 @@ With the frontend and backend running:
 9. After reload, select and open a persisted root, then a deeply nested child. Check
    that Open in Workspace sends only a detail GET, focuses the workspace, and shows
    the exact stored configuration, site geometry, metrics, status, and diagnostics.
+   Switch each opened root/child to 3D without regeneration; verify its own footprint,
+   holes, floor count, and height. Exercise WebGL2 fallback and context loss/retry
+   within the workspace as well as the standalone harness.
    Check holes, nullable results, and all four feasibility statuses. Create Branch
    from the child, generate explicitly, and save a grandchild. Retrieve all snapshots:
    expect its selected parent UUID, the inherited site, distinct child identity, and
