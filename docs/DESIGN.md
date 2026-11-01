@@ -13,7 +13,8 @@
 > a typed editable configuration workspace and explicit backend preview with detailed
 > metrics, preference/target assessments, feasibility, diagnostics, and an integrated
 > SVG site plan. Site input supports rectangle dimensions, the supplied concave and
-> notched examples, advanced Polygon JSON with holes, and an immediate draft outline.
+> notched examples, visual exterior-ring drawing, advanced Polygon JSON with holes,
+> and an immediate draft outline.
 > Successful previews can be explicitly saved as immutable roots or children of a
 > selected saved option, with optional names and returned snapshot receipts.
 > A Saved Options explorer discovers persisted roots, browses nested branches,
@@ -937,12 +938,24 @@ in the [frontend README](../frontend/README.md).
 [React Hook Form](https://react-hook-form.com/get-started) owns editable drafts,
 dirty state, errors, and submission; [Zod](https://zod.dev/) provides typed parsing
 and cross-field checks. A single active site draft contains either rectangle
-dimensions, a supplied example selection, or advanced Polygon JSON with holes.
+dimensions, a supplied example selection, or custom Polygon JSON with holes.
 Zod constructs the existing `site` request Polygon and excludes UI-only fields;
 invalid dimensions cannot leave a previous valid Polygon available for submission.
 Preset changes intentionally replace the site while retaining other configuration
-fields, and Custom starts from the current valid Polygon. These input helpers do
-not compute setbacks, massing, or feasibility. `DraftSitePreview` derives its outline
+fields, and Custom starts from the current valid Polygon. `CustomSiteEditor` uses
+that same JSON field for visual exterior drawing and advanced text input. Unfinished
+points, selection, gestures, view controls, and bounded Undo snapshots remain local:
+starting a replacement clears the RHF field immediately, so incomplete drawing
+cannot submit or save an older polygon. Finishing writes a closed exterior ring;
+finished exterior edits write directly to RHF and preserve every hole ring. One
+drag is one undoable operation; cancellation restores its starting draft. Manual
+JSON edits reset visual history. Mode switching preserves geometry and holes;
+an explicit replacement drawing clears them. `SiteDrawingCanvas` handles pointer
+cleanup, point gestures, and keyboard completion over the shared reversible SVG
+mapping. View presets and fitting change only the frame, without snapping,
+coordinate clamping, topology repair, or another live geometry store. Branch sites
+remain read-only. These input helpers do not compute
+setbacks, massing, or feasibility. `DraftSitePreview` derives its outline
 directly from the watched RHF site through the existing site schema, without another
 geometry state. It reuses the SVG display utilities and even-odd hole filling;
 invalid structure or unsafe display bounds show an unavailable state instead of

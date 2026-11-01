@@ -26,6 +26,9 @@ The backend base URL defaults to `http://localhost:8000`; override with
 - `src/features/massing/configuration.ts` — typed draft parsing using existing Zod API contracts.
 - `src/features/massing/siteGeometry.ts` — deterministic rectangle and supplied-example input coordinates.
 - `src/features/massing/ConfigurationForm.tsx` — accessible site, constraint, preference, and target inputs.
+- `src/features/massing/CustomSiteEditor.tsx` — visual exterior drawing and advanced Polygon JSON over the same form field.
+- `src/features/massing/SiteDrawingCanvas.tsx` — SVG drawing, point selection/dragging, pointer cleanup, and keyboard completion.
+- `src/features/massing/siteDrawing.ts` — pure ring editing, fitting, and adaptive metric-grid helpers.
 - `src/features/massing/DraftSitePreview.tsx` — immediate outline of the active site draft, with its own CSS Module.
 - `src/features/massing/MassingWorkspace.tsx` — new-root, saved-option, and branch-draft sessions.
 - `src/features/massing/SavedOptionSnapshot.tsx` — read-only saved metadata, configuration, and result.
@@ -40,7 +43,7 @@ The backend base URL defaults to `http://localhost:8000`; override with
 - `src/features/massing/FeasibilitySummary.tsx` — feasibility, reason, and hard-constraint satisfaction.
 - `src/features/massing/Diagnostics.tsx` — backend diagnostics and accessible detail disclosures.
 - `src/features/massing/metricFormatting.ts` — display-only numeric formatting.
-- `src/features/visualization/svgGeometry.ts` — pure display bounds, viewport fitting, and SVG paths.
+- `src/features/visualization/svgGeometry.ts` — shared display bounds, reversible viewport mapping, pointer-coordinate conversion, and SVG paths.
 - `src/features/visualization/SitePlan.tsx` — independent read-only SVG geometry layers and legend.
 - `src/features/visualization/MassingVisualization.tsx` — local 2D/3D selection, lazy loading, and error isolation for backend results.
 - `src/features/visualization/massing3DGeometry.ts` — pure display conversion, floor placement, and camera fitting.
@@ -132,9 +135,10 @@ numeric bounds. The **Site shape** selector offers:
   reflex corner.
 - **Notched example**: the supplied deep-notch site, whose setback can split or
   collapse the buildable region.
-- **Custom Polygon (advanced)**: an editable GeoJSON Polygon with a closed exterior
-  ring and optional closed hole rings. It starts from the current valid Polygon.
-  If rectangle dimensions are invalid, it starts empty and asks for valid JSON.
+- **Custom Polygon**: visual exterior drawing with an **Advanced JSON** alternative
+  for a GeoJSON Polygon with a closed exterior ring and optional closed hole rings.
+  It starts from the current valid Polygon, shown in **Draw polygon** mode. If
+  rectangle dimensions are invalid, it starts empty.
 
 The example vertices match `data/sites/` exactly, with only the first position
 appended to close each ring. Small frontend coordinate constants keep the existing
@@ -142,6 +146,57 @@ Docker build context unchanged; tests compare them with the source files.
 Choosing another preset intentionally replaces the active site draft; returning to
 Rectangle restores 40 × 25 m. Switching shapes preserves constraints, preferences,
 and the target, and never submits a preview automatically.
+
+In **Draw polygon**, choose **Replace polygon and draw** or **Start drawing**, then
+click or tap the grid to place points in order. The temporary next segment appears
+only while a mouse or pen is inside the active drawing area; leaving, scrolling,
+cancelling, finishing, or switching input methods clears it. Finish using the
+highlighted **Finish Polygon** button beside the canvas, tap near the marked
+starting point, or focus the drawing surface and press Enter. At least three
+distinct finite points are required. Finishing closes the ring exactly once and
+shows **Polygon ready**; it does not submit a preview. Concave outlines are
+supported; self-intersections and other topology errors remain backend validation
+concerns. **Segment lengths** lists exterior measurements for input guidance only.
+
+The initial square view spans X/Y 0–60 m with 10 m grid cells, coordinate labels,
+and positive Y pointing up. The visible dimensions describe the view, not a maximum
+site size. **View scale** offers 50, 60, 100, 200, and 500 m square ranges;
+**Custom view range** accepts another span and minimum X/Y coordinates.
+**Fit Drawing** frames all existing points, including unfinished outlines, points
+entered outside the visible range, and holes in a finished polygon. Grid spacing
+adapts to the selected range. These controls change only the view and never zoom
+automatically during placement. Shared SVG mapping preserves uniform X/Y scale.
+For large coordinate offsets, grid labels show distances from an explicitly stated
+origin so adjacent ticks remain distinguishable.
+
+Select a point on the canvas or with **Selected point**, then drag it or use the
+exact **X (m)** / **Y (m)** inputs and **Update point**. **Delete point** removes
+the selection; a finished polygon must retain at least three distinct points.
+**Continue drawing** returns an unfinished outline to placement. When no point is
+selected, **Add point** or Enter in either coordinate input adds a point; Enter
+inside those inputs never finishes the polygon. Coordinates are not snapped,
+rounded, or clamped to the view. Touch gestures on empty canvas retain vertical
+scrolling; drag a point deliberately to move it.
+
+**Undo** restores up to 50 prior visual operations, including a whole drag,
+point placement/edit/deletion, finishing, and clearing. A cancelled drag restores
+its starting coordinates. **Clear and restart** empties an unfinished drawing;
+starting a replacement clears a finished outline and its holes. Undo can restore
+the previous site. Redo, inserting points into finished edges, and interactive hole
+editing are outside scope.
+
+An unfinished ring stays local to the editor
+while the form's custom JSON field is empty, blocking submission of an older valid
+polygon. Finishing writes one closed exterior ring into that same RHF field.
+Editing a finished exterior writes directly to the form, preserves all hole rings,
+and updates the existing changed-draft/save guards without changing the submitted
+backend result.
+Switching **Draw polygon** / **Advanced JSON** alone preserves valid coordinates
+and holes; viewing a polygon never rewrites it. An unfinished drawing survives a
+mode switch, but editing JSON explicitly replaces it and resets visual Undo
+history. Text editing retains the browser's native undo. Use Advanced JSON to edit
+interior rings.
+Branches retain the parent's read-only site and expose neither input method.
 
 **Live draft site** shows a compact outline inside the site inputs, before any
 submission. Its SVG is named **Draft site preview** for assistive technology. It
@@ -779,16 +834,28 @@ With the frontend and backend running:
 3. Select L-shaped example and Notched example, checking that each selection alone
    updates only the draft outline and sends no preview request. Submit each and
    check the generated backend plan matches the selected site. Enter Custom Polygon
-   and verify the current coordinates are available for editing. Switch presets
-   again and check unrelated constraints and preferences remain intact.
+   and check its seeded outline. Draw a concave polygon with pointer placement and
+   exact X/Y entry; inspect next-segment cleanup on leave, scroll, and input-method
+   changes. Finish with the button, starting point, and Enter on the surface;
+   check that coordinate-input Enter only adds or edits a point. Select, drag,
+   update, and delete points, then Undo each operation and a clear/restart.
+   Exercise 120 × 80 m, 250 × 150 m irregular, and small sites using view presets,
+   custom ranges, and Fit Drawing, checking that coordinates stay unchanged.
+   An unfinished replacement must block preview and saving without changing the
+   submitted result. Finish and submit it, then inspect 2D/3D,
+   save/reopen, and branch with the inherited site read-only. Switch presets again
+   and check unrelated constraints and preferences remain intact.
 4. Try a GFA target of 1,000,000 (target unmet, hard constraints satisfied), a preferred
    footprint of 300 m² (requested/effective/actual assessment), and a setback of 100
    (infeasible, actual metrics unavailable). Inspect diagnostic codes and details.
    A preferred floor count above the cap remains a backend validation error.
-5. In Custom Polygon, enter malformed JSON to check inline errors and an unavailable
-   draft outline. Remove both height/floor caps to check constraint errors; a valid
-   site outline must remain visible. Try zero setback/target and a valid Polygon
+5. In Custom Polygon's Advanced JSON, enter malformed JSON to check inline errors
+   and an unavailable draft outline. Remove both height/floor caps to check
+   constraint errors; a valid site outline must remain visible. Try zero
+   setback/target and a valid Polygon
    with a hole, checking its opening in both views after submission.
+   Switch between Draw polygon and Advanced JSON without changing coordinates and
+   verify holes remain intact. Only an explicit replacement drawing clears them.
    Enter Custom from an invalid rectangle and verify no previous Polygon or outline
    is reused. A structurally valid outline still needs backend topology validation.
 6. Generate the default preview, enter an optional name, and save. Check the receipt's

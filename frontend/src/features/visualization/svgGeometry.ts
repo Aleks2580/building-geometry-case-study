@@ -18,6 +18,12 @@ export type Viewport = {
 
 export type CoordinateTransform = (position: Position) => Position;
 
+export type ViewportMapping = {
+  toViewport: CoordinateTransform;
+  toModel: CoordinateTransform;
+  scale: number;
+};
+
 export function geometryBounds(geometry: DisplayGeometry): Bounds | null {
   const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
   let minX = Infinity;
@@ -43,8 +49,15 @@ export function geometryBounds(geometry: DisplayGeometry): Bounds | null {
 
 export function createViewportTransform(
   bounds: Bounds,
-  { width, height, padding }: Viewport,
+  viewport: Viewport,
 ): CoordinateTransform | null {
+  return createViewportMapping(bounds, viewport)?.toViewport ?? null;
+}
+
+export function createViewportMapping(
+  bounds: Bounds,
+  { width, height, padding }: Viewport,
+): ViewportMapping | null {
   const innerWidth = width - 2 * padding;
   const innerHeight = height - 2 * padding;
   if (
@@ -70,10 +83,41 @@ export function createViewportTransform(
 
   // Every layer must reuse the original site's frame; fitting each layer separately
   // would misrepresent setbacks and move the building relative to its site.
-  return ([x, y]) => [
-    offsetX + (x - bounds.minX) * scale,
-    offsetY + (bounds.maxY - y) * scale,
-  ];
+  return {
+    toViewport: ([x, y]) => [
+      offsetX + (x - bounds.minX) * scale,
+      offsetY + (bounds.maxY - y) * scale,
+    ],
+    toModel: ([x, y]) => [
+      bounds.minX + (x - offsetX) / scale,
+      bounds.maxY - (y - offsetY) / scale,
+    ],
+    scale,
+  };
+}
+
+export function clientToViewportPosition(
+  [clientX, clientY]: Position,
+  rect: { left: number; top: number; width: number; height: number },
+  viewport: Pick<Viewport, "width" | "height">,
+): Position | null {
+  if (
+    ![clientX, clientY, rect.left, rect.top, rect.width, rect.height, viewport.width, viewport.height]
+      .every(Number.isFinite)
+    || rect.width <= 0 || rect.height <= 0 || viewport.width <= 0 || viewport.height <= 0
+  ) return null;
+
+  // Match SVG's xMidYMid meet fit. A stretched client rectangle can contain
+  // letterboxing; clicks there must not create off-canvas model coordinates.
+  const scale = Math.min(rect.width / viewport.width, rect.height / viewport.height);
+  if (!Number.isFinite(scale) || scale <= 0) return null;
+  const left = rect.left + (rect.width - viewport.width * scale) / 2;
+  const top = rect.top + (rect.height - viewport.height * scale) / 2;
+  const x = (clientX - left) / scale;
+  const y = (clientY - top) / scale;
+  if (!Number.isFinite(x) || !Number.isFinite(y)
+    || x < 0 || y < 0 || x > viewport.width || y > viewport.height) return null;
+  return [x, y];
 }
 
 export function geometryPath(geometry: DisplayGeometry, transform: CoordinateTransform): string {
