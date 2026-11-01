@@ -2,6 +2,8 @@ import {
   branchOptionRequestSchema,
   errorResponseSchema,
   massingPreviewResponseSchema,
+  optionComparisonRequestSchema,
+  optionComparisonResponseSchema,
   optionMetadataSchema,
   optionResponseSchema,
   optionSummarySchema,
@@ -13,6 +15,8 @@ import type {
   ErrorBody,
   MassingPreviewRequest,
   MassingPreviewResponse,
+  OptionComparisonRequest,
+  OptionComparisonResponse,
   OptionResponse,
   OptionSummary,
   OptionTree,
@@ -163,11 +167,36 @@ export async function getOption(optionId: string, signal?: AbortSignal): Promise
   return parsed.data;
 }
 
-async function readOptions(path: string, invalidMessage: string, signal?: AbortSignal): Promise<unknown> {
+export async function compareOptions(
+  request: OptionComparisonRequest,
+  signal?: AbortSignal,
+): Promise<OptionComparisonResponse> {
+  const body = optionComparisonRequestSchema.parse(request);
+  const message = "Invalid saved option comparison response.";
+  const data = await readOptions("/api/v1/options/compare", message, signal, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const parsed = optionComparisonResponseSchema.safeParse(data);
+  if (!parsed.success || parsed.data.options.some(
+    (option, index) => option.id.toLowerCase() !== body.option_ids[index],
+  )) {
+    throw new ApiError("malformed_response", message, { status: 200 });
+  }
+  return parsed.data;
+}
+
+async function readOptions(
+  path: string,
+  invalidMessage: string,
+  signal?: AbortSignal,
+  init: RequestInit = {},
+): Promise<unknown> {
   signal?.throwIfAborted();
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`, { signal });
+    response = await fetch(`${API_BASE}${path}`, { ...init, signal });
   } catch (cause) {
     rethrowCancellation(cause, signal);
     throw new ApiError("network", "Unable to reach the options API.", { cause });
