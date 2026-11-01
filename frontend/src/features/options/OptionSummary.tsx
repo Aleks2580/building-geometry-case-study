@@ -1,6 +1,6 @@
 import { useId } from "react";
 import type { OptionSummary as SavedSummary } from "../../api/contracts";
-import { formatCount, formatMetric, formatRatio } from "../massing/metricFormatting";
+import { formatCount, formatMetric, formatRatio } from "../massing/results/metricFormatting";
 import styles from "./OptionSummary.module.css";
 
 export default function OptionSummary({ option }: { option: SavedSummary }) {

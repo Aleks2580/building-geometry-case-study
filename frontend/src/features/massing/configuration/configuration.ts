@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { massingPreviewRequestSchema } from "../../api/contracts";
-import type { OptionResponse } from "../../api/contracts";
-import { createRectangleSite, exampleSite } from "./siteGeometry";
+import { massingPreviewRequestSchema } from "../../../api/contracts";
+import type { OptionResponse } from "../../../api/contracts";
+import { createRectangleSite, exampleSite } from "../site/siteGeometry";
 
 const decimalNumber = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 

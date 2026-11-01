@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { UseFormRegisterReturn } from "react-hook-form";
-import { createViewportMapping } from "../visualization/svgGeometry";
-import { requiredNumberDraft, siteInputSchema } from "./configuration";
+import { createViewportMapping } from "../../visualization/svgGeometry";
+import { requiredNumberDraft, siteInputSchema } from "../configuration/configuration";
 import {
   closeExteriorRing, defaultDrawingExtent, drawingGrid, drawingViewport as viewport,
   fitDrawingPoints, replaceExteriorRing, type DrawingExtent, type SitePosition,

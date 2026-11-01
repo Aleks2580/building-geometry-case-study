@@ -1,5 +1,5 @@
-import type { PolygonGeometry } from "../../api/contracts";
-import { createViewportMapping } from "../visualization/svgGeometry";
+import type { PolygonGeometry } from "../../../api/contracts";
+import { createViewportMapping } from "../../visualization/svgGeometry";
 
 export type SitePosition = PolygonGeometry["coordinates"][number][number];
 export type DrawingExtent = { minX: number; minY: number; size: number };

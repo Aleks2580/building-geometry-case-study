@@ -1,4 +1,4 @@
-import type { PolygonGeometry } from "../../api/contracts";
+import type { PolygonGeometry } from "../../../api/contracts";
 
 type Position = PolygonGeometry["coordinates"][number][number];
 export type SiteExampleKind = "l-shaped" | "notched";

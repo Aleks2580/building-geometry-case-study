@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { PolygonGeometry } from "../../api/contracts";
+import type { PolygonGeometry } from "../../../api/contracts";
 import {
   closeExteriorRing, defaultDrawingExtent, drawingGrid, fitDrawingExtent,
   fitDrawingPoints, replaceExteriorRing, type SitePosition,

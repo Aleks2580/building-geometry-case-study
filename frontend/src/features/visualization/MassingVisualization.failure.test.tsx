@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { backendPreviewResponse } from "../../test/backendPreviewFixtures";
-import MassingResult from "../massing/MassingResult";
+import MassingResult from "../massing/results/MassingResult";
 
 vi.mock("./Massing3D", () => { throw new Error("3D module download failed"); });
 

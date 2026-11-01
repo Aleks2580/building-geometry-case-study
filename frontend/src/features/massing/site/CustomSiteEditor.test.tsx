@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { PolygonGeometry } from "../../api/contracts";
+import type { PolygonGeometry } from "../../../api/contracts";
 import CustomSiteEditor from "./CustomSiteEditor";
 import type { SitePosition } from "./siteDrawing";
 

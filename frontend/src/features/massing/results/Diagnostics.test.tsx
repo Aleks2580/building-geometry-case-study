@@ -1,8 +1,8 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import type { Diagnostic } from "../../api/contracts";
-import { massingPreviewResponseSchema } from "../../api/contracts";
-import { previewResponse } from "../../test/massingFixtures";
+import type { Diagnostic } from "../../../api/contracts";
+import { massingPreviewResponseSchema } from "../../../api/contracts";
+import { previewResponse } from "../../../test/massingFixtures";
 import Diagnostics from "./Diagnostics";
 
 function renderDiagnostics(diagnostics: Diagnostic[]) {

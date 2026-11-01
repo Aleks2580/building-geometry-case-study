@@ -2,10 +2,10 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 import ConfigurationForm from "./ConfigurationForm";
-import WorkspaceActionBar from "./WorkspaceActionBar";
+import WorkspaceActionBar from "../WorkspaceActionBar";
 import type { Configuration, ConfigurationDraft } from "./configuration";
 import { configurationDraftFromOption } from "./configuration";
-import { optionResponse } from "../../test/optionFixtures";
+import { optionResponse } from "../../../test/optionFixtures";
 
 function ConfigurationFormWithActions(props: ComponentProps<typeof ConfigurationForm>) {
   return <>

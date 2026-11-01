@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import type { MassingPreviewResponse } from "../../api/contracts";
-import MassingVisualization from "../visualization/MassingVisualization";
+import type { MassingPreviewResponse } from "../../../api/contracts";
+import MassingVisualization from "../../visualization/MassingVisualization";
 import DetailedMetrics from "./DetailedMetrics";
 import Diagnostics from "./Diagnostics";
 import FeasibilitySummary from "./FeasibilitySummary";

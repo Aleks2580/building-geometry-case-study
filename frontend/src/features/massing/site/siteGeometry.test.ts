@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import type { PolygonGeometry } from "../../api/contracts";
+import type { PolygonGeometry } from "../../../api/contracts";
 import { createRectangleSite, exampleSite } from "./siteGeometry";
 import type { SiteExampleKind } from "./siteGeometry";
 
@@ -10,7 +10,7 @@ type Position = PolygonGeometry["coordinates"][number][number];
 
 function sourceVertices(name: "rectangle" | SiteExampleKind): Position[] {
   const source = JSON.parse(readFileSync(
-    resolve(dirname(fileURLToPath(import.meta.url)), `../../../../data/sites/${name}.json`), "utf8",
+    resolve(dirname(fileURLToPath(import.meta.url)), `../../../../../data/sites/${name}.json`), "utf8",
   )) as { polygon: Position[] };
   return source.polygon;
 }

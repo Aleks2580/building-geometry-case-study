@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { massingPreviewResponseSchema, type FootprintAreaPreferenceResult, type MassingPreviewResponse } from "../../api/contracts";
-import { previewResponse } from "../../test/massingFixtures";
+import { massingPreviewResponseSchema, type FootprintAreaPreferenceResult, type MassingPreviewResponse } from "../../../api/contracts";
+import { previewResponse } from "../../../test/massingFixtures";
 import PreferenceAssessments from "./PreferenceAssessments";
 
 function assessment(section: string, label: string) {

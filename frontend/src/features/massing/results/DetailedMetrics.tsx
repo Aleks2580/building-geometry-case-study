@@ -1,7 +1,7 @@
 import { useId } from "react";
-import type { MassingPreviewResponse } from "../../api/contracts";
+import type { MassingPreviewResponse } from "../../../api/contracts";
 import { formatCount, formatMetric, formatRatio } from "./metricFormatting";
-import shared from "./massing.module.css";
+import shared from "../massing.module.css";
 import styles from "./DetailedMetrics.module.css";
 
 export default function DetailedMetrics({ result, includeActual = true }: { result: MassingPreviewResponse; includeActual?: boolean }) {

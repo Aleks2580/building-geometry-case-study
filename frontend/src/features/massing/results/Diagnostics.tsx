@@ -1,6 +1,6 @@
 import { useId } from "react";
-import type { Diagnostic } from "../../api/contracts";
-import shared from "./massing.module.css";
+import type { Diagnostic } from "../../../api/contracts";
+import shared from "../massing.module.css";
 import styles from "./Diagnostics.module.css";
 
 const severityLabels: Record<Diagnostic["severity"], string> = {

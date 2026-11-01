@@ -2,10 +2,10 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 import ConfigurationForm from "./ConfigurationForm";
-import WorkspaceActionBar from "./WorkspaceActionBar";
+import WorkspaceActionBar from "../WorkspaceActionBar";
 import { configurationDraftFromOption, initialConfigurationDraft } from "./configuration";
 import type { Configuration, ConfigurationDraft } from "./configuration";
-import { optionResponse } from "../../test/optionFixtures";
+import { optionResponse } from "../../../test/optionFixtures";
 
 function ConfigurationFormWithActions({ isGenerating = false, ...props }: ComponentProps<typeof ConfigurationForm> & { isGenerating?: boolean }) {
   return <>

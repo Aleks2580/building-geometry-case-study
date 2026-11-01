@@ -1,7 +1,7 @@
 import { useId } from "react";
-import type { FootprintAreaPreferenceResult, GfaTargetAssessment, MassingPreviewResponse } from "../../api/contracts";
+import type { FootprintAreaPreferenceResult, GfaTargetAssessment, MassingPreviewResponse } from "../../../api/contracts";
 import { formatCount, formatMetric } from "./metricFormatting";
-import shared from "./massing.module.css";
+import shared from "../massing.module.css";
 
 const footprintStatus: Record<FootprintAreaPreferenceResult["status"], string> = {
   met: "Met",

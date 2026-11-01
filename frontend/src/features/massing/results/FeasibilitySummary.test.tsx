@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import type { FeasibilityStatus, MassingFeasibility } from "../../api/contracts";
-import { previewResponse } from "../../test/massingFixtures";
+import type { FeasibilityStatus, MassingFeasibility } from "../../../api/contracts";
+import { previewResponse } from "../../../test/massingFixtures";
 import FeasibilitySummary from "./FeasibilitySummary";
 
 function feasibility(

@@ -949,8 +949,11 @@ The comparison client reuses these contracts to validate two distinct UUIDs, a
 complete HTTP 200 comparison, and matching Left/Right identities in request order.
 It renders the backend's comparison flags and differences without calculating them.
 
-Massing configuration and workspace modules are grouped with their tests under
-`frontend/src/features/massing/`; API transport and contracts share `frontend/src/api/`.
+Massing modules and their tests live under `frontend/src/features/massing/`, grouped
+by site editing, configuration, and result presentation as described in the
+[frontend structure reference](../frontend/README.md#frontend-structure). Workspace
+composition remains at the feature root. API transport and contracts share
+`frontend/src/api/`.
 Save/branch interaction and its CSS Module/tests live under `frontend/src/features/options/`.
 The read-only explorer and its components, CSS Modules, and tests share that feature.
 Comparison components, tests, and scoped styles live under
