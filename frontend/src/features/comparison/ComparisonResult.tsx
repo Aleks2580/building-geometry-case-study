@@ -2,7 +2,7 @@ import { useId, useState } from "react";
 import type { OptionComparisonResponse } from "../../api/contracts";
 import Diagnostics from "../massing/Diagnostics";
 import { formatCount, formatMetric, formatRatio } from "../massing/metricFormatting";
-import SitePlan from "../visualization/SitePlan";
+import MassingVisualization from "../visualization/MassingVisualization";
 import styles from "./comparison.module.css";
 
 type NumericComparison = OptionComparisonResponse["metrics"]["gfa_m2"];
@@ -53,7 +53,6 @@ export default function ComparisonResult({ comparison }: { comparison: OptionCom
   const [displayed, setDisplayed] = useState<0 | 1>(0);
   const { options, inputs, metrics, feasibility, diagnostics } = comparison;
   const active = options[displayed];
-  const activeResult = active.result;
   const hard = inputs.hard_constraints;
   const preferences = inputs.preferences;
   const targets = inputs.targets;
@@ -162,9 +161,8 @@ export default function ComparisonResult({ comparison }: { comparison: OptionCom
           {index === 0 ? "Left plan" : "Right plan"}
         </label>)}
       </fieldset>
-      <p className={styles.planIdentity} role="status">Displaying {displayed === 0 ? "Left" : "Right"}: <strong>{active.name ?? "Unnamed option"}</strong> ({active.id}). Each plan is fitted to its own saved site.</p>
-      <SitePlan siteGeometry={activeResult.site_geometry} buildableGeometry={activeResult.buildable_geometry}
-        selectedBuildableGeometry={activeResult.selected_buildable_geometry} footprintGeometry={activeResult.footprint_geometry} />
+      <p className={styles.planIdentity} role="status">Displaying {displayed === 0 ? "Left" : "Right"}: <strong>{active.name ?? "Unnamed option"}</strong> ({active.id}). Each view is fitted to its own saved site.</p>
+      <MassingVisualization result={active.result} resultKey={active.id} />
     </section>
   </section>;
 }

@@ -18,7 +18,7 @@ class VisualizationBoundary extends Component<{ children: ReactNode; fallback: R
   }
 }
 
-export default function MassingVisualization({ result }: { result: MassingPreviewResponse }) {
+export default function MassingVisualization({ result, resultKey }: { result: MassingPreviewResponse; resultKey?: string }) {
   const [view, setView] = useState<"2d" | "3d">("2d");
   const plan = <SitePlan
     siteGeometry={result.site_geometry}
@@ -32,7 +32,8 @@ export default function MassingVisualization({ result }: { result: MassingPrevie
       <button type="button" aria-pressed={view === "2d"} onClick={() => setView("2d")}>2D</button>
       <button type="button" aria-pressed={view === "3d"} onClick={() => setView("3d")}>3D</button>
     </div>
-    {view === "2d" ? plan : <VisualizationBoundary fallback={<>
+    {/* Snapshot changes retain the view choice but reset renderer failures, camera, and GPU ownership. */}
+    {view === "2d" ? plan : <VisualizationBoundary key={resultKey} fallback={<>
       <p role="status">3D could not be displayed. Showing the 2D plan. You can continue working in 2D.</p>
       {plan}
     </>}>

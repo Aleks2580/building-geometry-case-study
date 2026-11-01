@@ -21,9 +21,9 @@
 > results remain distinct from editable roots and branch drafts; an opened root or
 > child can supply the parent for a new branch after reload. Independent Left/Right
 > selection compares complete saved inputs and outcomes and switches between their
-> stored SVG plans. Generated previews and opened saved snapshots offer 2D/3D
-> switching over the same backend result. Comparison integration and alternatives
-> remain planned.
+> stored massing results. Generated previews, opened saved snapshots, and comparison
+> inspection offer 2D/3D switching over the same backend result. Alternatives remain
+> planned.
 
 ## Problem interpretation
 
@@ -807,8 +807,8 @@ previews a configuration, saves it, changes floor or footprint preferences in a
 draft, previews the change, and saves a child option. Saved options can be reopened
 after reload without recomputation, keeping unsaved previews separate from saved
 history. Saved options can also be compared independently of that editing session.
-Generated previews and opened saved snapshots support SVG 2D and interactive 3D;
-comparison continues to show stored SVG plans pending its integration.
+Generated previews, opened saved snapshots, and saved-option comparison support
+SVG 2D and interactive 3D.
 
 The implemented workspace provides the form, a live draft site outline, and a
 generated plan/massing visualization with detailed backend metrics. The compact
@@ -1012,13 +1012,17 @@ Both views consume one backend-generated result to keep plan, volume, and report
 metrics aligned; neither calculates authoritative geometry, height, area, GFA, floor
 count, or feasibility. `MassingVisualization` owns only local display selection and
 is reused through `MassingResult` by root/branch previews and read-only saved
-snapshots. It defaults to SVG, lazy-loads `Massing3D` only after explicit selection,
+snapshots, and directly by comparison for its selected immutable result.
+It defaults to SVG, lazy-loads `Massing3D` only after explicit selection,
 and unmounts 3D when returning to 2D. Loading and rendering failures remain inside
 the visualization so metrics, diagnostics, saving, and branching stay available.
-The [workspace view-switching contract](../frontend/README.md#workspace-2d3d-views)
+The [result view-switching contract](../frontend/README.md#result-2d3d-views)
 defines accessibility, import failure recovery, and result identity behavior.
 Query/request state remains with its existing owners; unsent drafts never supply
-result geometry. Comparison reuse remains planned.
+result geometry. Comparison retains the chosen representation when switching
+Left/Right, while its snapshot UUID resets only the renderer/error subtree so camera,
+fallback, and GPU resources cannot belong to the previous option. A new comparison
+pair starts with the default view through the existing selection-session boundary.
 
 ### Option Decision Tree & Navigation
 
@@ -1057,7 +1061,9 @@ any discovered root or nested child through the get endpoint and branch from it.
 Saved configuration/results are displayed without recomputation and remain distinct
 from new draft previews. Independent Left/Right selection supports comparisons
 within a tree or across roots. The backend comparison supplies complete snapshots
-and all side-by-side values; one reused `SitePlan` switches between those snapshots.
+and all side-by-side values; one reused `MassingVisualization` switches between
+those snapshots in either 2D or 3D. Side/view changes make no API requests and do
+not recalculate geometry, metrics, differences, or feasibility.
 Comparison cannot alter an editing session or saved history. The
 [comparison workflow](../frontend/README.md#compare-saved-options) defines selection,
 result visibility, error recovery, and plan inspection.
@@ -1114,15 +1120,15 @@ cover identity validation, cancellation, request/session races, protected drafts
 read-only results, inherited holes, and branch parent identity after reload.
 Frontend comparison cases cover ordered identities, duplicate selection, cross-root
 and nested pairs, complete values/diagnostics, signed and null differences, independent
-workspace state, stored-plan switching, cancellation, and superseded responses.
+workspace state, 2D/3D snapshot switching, cancellation, and superseded responses.
 Browser checks cover keyboard interaction, focus after navigation, and narrow layouts.
 Standalone 3D tests cover pure conversion, floor placement, holes, camera fitting,
 and display/fallback states. A separate browser harness pairs captured backend
 responses with SVG and native WebGL resource inspection. Workspace integration
 tests cover display switching alongside draft/submission and saved-snapshot
-boundaries. Real-browser checks establish WebGL interaction and resource cleanup;
-jsdom tests cannot establish GPU behavior. Comparison view switching remains
-planned.
+boundaries. Comparison tests preserve selected 3D through Left/Right changes while
+isolating each snapshot's renderer state. Real-browser checks establish WebGL
+interaction and resource cleanup; jsdom tests cannot establish GPU behavior.
 
 The Docker Compose milestone exercises site → preview → manual changes → save →
 branch → reload → compare, including both views and invalid, split, infeasible, and

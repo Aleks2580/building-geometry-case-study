@@ -34,7 +34,7 @@ The backend base URL defaults to `http://localhost:8000`; override with
 - `src/features/options/SavedOptionsExplorer.tsx` — paginated root discovery, nested branches, and explicit workspace navigation.
 - `src/features/options/optionQueries.ts` — shared option-detail, list, tree, and comparison query keys.
 - `src/features/comparison/OptionComparison.tsx` — explicit comparison queries, independent selection slots, and saved-result inspection.
-- `src/features/comparison/ComparisonResult.tsx` — complete side-by-side comparison values and stored-plan switching.
+- `src/features/comparison/ComparisonResult.tsx` — complete side-by-side comparison values and stored-result 2D/3D inspection.
 - `src/features/massing/DetailedMetrics.tsx` — site/setback, hard bounds, generated capacity, and actual metrics.
 - `src/features/massing/PreferenceAssessments.tsx` — backend footprint preference and GFA target assessments.
 - `src/features/massing/FeasibilitySummary.tsx` — feasibility, reason, and hard-constraint satisfaction.
@@ -54,9 +54,9 @@ transport tests live beside the client in `src/api/`. Shared fixtures and test s
 stay in `src/test/`. Application entry points, global styles, and QueryClient setup remain
 at the root. Imports use direct relative paths.
 
-Previews and opened saved snapshots share [2D/3D view switching](#workspace-2d3d-views).
-Comparison retains its stored SVG plan; 3D comparison reuse remains planned, and
-the standalone [3D renderer contract](#interactive-3d-renderer) remains unchanged.
+Previews, opened saved snapshots, and comparison share
+[2D/3D view switching](#result-2d3d-views) and the same
+[3D renderer contract](#interactive-3d-renderer).
 
 ## Styling
 
@@ -373,10 +373,14 @@ bounds, demonstrated generated capacity, and actual massing use separate section
 Site comparison reports structural stored-coordinate changes rather than claiming
 spatial equivalence. Each side's complete site JSON remains available for inspection.
 
-Select **Left plan** or **Right plan** to inspect one stored SVG plan at a time. Its label
-identifies the displayed option, and the same snapshot supplies its site, complete
-setbacks, selected component, and actual footprint. Holes and MultiPolygon setbacks
-are preserved; a missing building remains unavailable. The comparison never calls
+Select **Left plan** or **Right plan**, then **2D** or **3D**, to inspect one saved
+result at a time. Switching sides retains the chosen representation; a new comparison
+pair starts in 2D. The label identifies the displayed option, and its complete
+immutable comparison snapshot supplies the site, setbacks, selected component,
+actual footprint, and reported floors/height. The shared
+[result viewer](#result-2d3d-views) handles loading, fallbacks, accessibility, and
+renderer cleanup. Holes and MultiPolygon setbacks are preserved; a missing building
+remains unavailable. Side/view changes send no API requests. The comparison never calls
 preview or save, recomputes geometry or differences, changes historical snapshots,
 or replaces an active draft, preview, or branch parent. Reload clears comparison
 interaction state while persisted snapshots remain available for a new comparison.
@@ -487,11 +491,12 @@ or a preferred footprint of `1e-30` to check generation failure with available
 default capacity. A backend validation failure must remove the previous backend plan and
 diagnostics; an unsubmitted edit must retain them with the changed-draft notice.
 
-## Workspace 2D/3D views
+## Result 2D/3D views
 
 Generated root and branch previews and opened root/child snapshots use
-`MassingVisualization` through the shared `MassingResult` presentation. **2D** is
-the default; choose **3D** to inspect the same complete `MassingPreviewResponse`
+`MassingVisualization` through the shared `MassingResult` presentation. Comparison
+reuses it directly for one selected saved snapshot. **2D** is the default; choose
+**3D** to inspect the same complete `MassingPreviewResponse`
 interactively. Native buttons expose the active view with `aria-pressed`, work with
 Tab and Enter/Space, retain visible focus, and never submit a configuration form.
 The view choice is local React interaction state and sends no API request.
@@ -510,8 +515,12 @@ The viewer reads the successful Query response directly. Unsubmitted and invalid
 drafts never replace submitted geometry; a new pending or failed preview removes
 the prior result and viewer. Opened snapshots use their exact stored result without
 regeneration. Workspace session boundaries isolate different saved options and
-new root/branch sessions, including renderer state. Comparison currently retains
-its existing SVG inspection controls.
+new root/branch sessions, including renderer state. Comparison keeps display choice
+outside the subtree keyed by the active option UUID: switching Left/Right retains
+3D selection while disposing the previous renderer and resetting its camera and
+error/fallback state. It never mounts both comparison canvases together. Existing
+selection-session and Query boundaries remove old results when the comparison pair
+changes, including pending, failed, cancelled, and superseded reads.
 
 ## Interactive 3D renderer
 
@@ -524,8 +533,8 @@ import Massing3D from "./features/visualization/Massing3D";
 <Massing3D result={result} />
 ```
 
-The component also remains independently usable. Production workspace views load
-it through `MassingVisualization`; the renderer never previews, saves, branches,
+The component also remains independently usable. Production workspace and comparison
+views load it through `MassingVisualization`; the renderer never previews, saves, branches,
 or modifies a result.
 
 ### Input and geometry
@@ -825,7 +834,12 @@ With the frontend and backend running:
    survives root switching and replacing/clearing a slot hides previous results until
    Compare is chosen. Check every input/metric, changed and unchanged fields,
    Right − Left differences, nulls, all four statuses, and complete diagnostics.
-   Switch both stored plans, including holes, split setbacks, and missing buildings.
+   Inspect both saved options in 2D and 3D, including holes, split setbacks, different
+   sites/floor counts, and missing buildings. Keep 3D selected while switching sides;
+   check the displayed identity and matching geometry, reset framing, one canvas,
+   and cleanup of the prior renderer. Change pairs and verify the old result clears
+   and the new pair starts in 2D. Exercise unavailable WebGL2, context loss/retry,
+   and repeated side/view changes without requests from those controls.
    Keep an unsaved or invalid workspace draft and a branch parent while comparing;
    the fields, preview, and parent must remain intact. Retrieve snapshots before and
    after comparison and verify their full contents and database row count are unchanged.
@@ -834,7 +848,7 @@ With the frontend and backend running:
    inherited site, parent identifiers, receipts, expanded diagnostic details, inline
    errors, Saved Options lists/tree/summary, comparison selections/results/plans,
    saved configuration, replacement prompt, keyboard focus, and form submission.
-   Reach selection, Compare, clear, plan-switching, Open in Workspace, Keep Editing,
+   Reach selection, Compare, clear, plan/view switching, Open in Workspace, Keep Editing,
    discard, Create Branch, and Save Branch with Tab and activate them with the keyboard.
    Request races, cancellation, network/malformed-response failures, and
    generation-failure rendering have focused automated coverage, as do duplicate
