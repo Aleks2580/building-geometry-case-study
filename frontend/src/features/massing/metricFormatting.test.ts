@@ -38,4 +38,13 @@ describe("metric formatting", () => {
     expect(formatRatio(0.00001)).toBe("<0.0001");
     expect(formatRatio(null)).toBe("Not available");
   });
+
+  it.each([
+    [0.01, "+0.01"], [-0.01, "-0.01"], [0, "0"], [-0, "0"],
+    [0.00001, "+1.00e-5"], [-0.00001, "-1.00e-5"],
+    [Number.MIN_VALUE, "+4.94e-324"], [-Number.MIN_VALUE, "-4.94e-324"],
+    [null, "Not available"],
+  ])("preserves signed ratio difference %s", (value, expected) => {
+    expect(formatRatio(value, true)).toBe(expected);
+  });
 });

@@ -1,7 +1,9 @@
 import { useId, useState } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getOptionTree, listOptions } from "../../api/api";
-import type { OptionTree } from "../../api/contracts";
+import type { OptionSummary as SavedSummary, OptionTree } from "../../api/contracts";
+import OptionComparison from "../comparison/OptionComparison";
+import type { ComparisonSelection, ComparisonSide } from "../comparison/OptionComparison";
 import OptionSummary from "./OptionSummary";
 import OptionTreeList from "./OptionTreeList";
 import { optionKeys, refreshOptionQueries } from "./optionQueries";
@@ -21,7 +23,10 @@ function findNode(tree: OptionTree, id: string): OptionTree | undefined {
   }
 }
 
-function TreePanel({ rootId, onOpenOption }: SavedOptionsExplorerProps & { rootId: string }) {
+function TreePanel({ rootId, onOpenOption, onAssignComparison }: SavedOptionsExplorerProps & {
+  rootId: string;
+  onAssignComparison: (side: ComparisonSide, option: SavedSummary) => void;
+}) {
   const titleId = useId();
   const [selectedId, setSelectedId] = useState(rootId);
   const tree = useQuery({
@@ -48,6 +53,10 @@ function TreePanel({ rootId, onOpenOption }: SavedOptionsExplorerProps & { rootI
             {onOpenOption && <button type="button" className={styles.openButton} onClick={() => onOpenOption(selected.id)}>
               Open in Workspace
             </button>}
+            <div className={styles.comparisonActions}>
+              <button type="button" onClick={() => onAssignComparison("left", selected)}>Assign to Left</button>
+              <button type="button" onClick={() => onAssignComparison("right", selected)}>Assign to Right</button>
+            </div>
           </div> : <p>Select a node to inspect its saved summary.</p>}
         </div>
       </>}
@@ -60,6 +69,8 @@ export default function SavedOptionsExplorer({ onOpenOption }: SavedOptionsExplo
   const rootsId = useId();
   const queryClient = useQueryClient();
   const [rootId, setRootId] = useState<string | null>(null);
+  const [comparison, setComparison] = useState<Record<ComparisonSide, ComparisonSelection | null>>({ left: null, right: null });
+  const [selectionError, setSelectionError] = useState<string | null>(null);
   const options = useInfiniteQuery({
     queryKey: optionKeys.list(),
     queryFn: ({ pageParam, signal }) => listOptions({ limit: pageSize, offset: pageParam }, signal),
@@ -77,12 +88,24 @@ export default function SavedOptionsExplorer({ onOpenOption }: SavedOptionsExplo
     void refreshOptionQueries(queryClient, true);
   }
 
+  function assignComparison(side: ComparisonSide, option: SavedSummary) {
+    const other = comparison[side === "left" ? "right" : "left"];
+    if (other?.id.toLowerCase() === option.id.toLowerCase()) {
+      setSelectionError("Select two distinct saved options. This option is already assigned to the other side.");
+      return;
+    }
+    setSelectionError(null);
+    setComparison((current) => ({ ...current, [side]: {
+      id: option.id, name: option.name, parent_id: option.parent_id, feasibility_status: option.feasibility_status,
+    } }));
+  }
+
   return (
     <section id="saved-options" className={styles.explorer} aria-labelledby={titleId}>
       <div className={styles.header}>
         <div>
           <h2 id={titleId}>Saved options</h2>
-          <p>Browse persisted decision histories, then open a selected snapshot in the workspace. Browsing keeps your current draft.</p>
+          <p>Browse persisted decision histories, then open a snapshot or assign options to compare. Browsing and comparison keep your current draft.</p>
         </div>
         <button type="button" onClick={refresh} disabled={options.isFetching}>Refresh saved options</button>
       </div>
@@ -116,8 +139,20 @@ export default function SavedOptionsExplorer({ onOpenOption }: SavedOptionsExplo
           {options.isError && !options.data && <button type="button" disabled={options.isFetching} onClick={() => { void options.refetch(); }}>Retry saved options</button>}
         </section>
         {rootId === null ? <p className={styles.prompt}>Select a root option to browse its decision tree.</p>
-          : <TreePanel key={rootId} rootId={rootId} onOpenOption={onOpenOption} />}
+          : <TreePanel key={rootId} rootId={rootId} onOpenOption={onOpenOption} onAssignComparison={assignComparison} />}
       </div>
+      {selectionError && <p className={styles.error} role="alert">{selectionError}</p>}
+      <OptionComparison
+        // Changing a slot detaches its submitted query immediately. Keeping this
+        // outside the root-keyed tree preserves cross-history choices while browsing.
+        key={`${comparison.left?.id.toLowerCase() ?? ""}:${comparison.right?.id.toLowerCase() ?? ""}`}
+        left={comparison.left}
+        right={comparison.right}
+        onClear={(side) => {
+          setSelectionError(null);
+          setComparison((current) => ({ ...current, [side]: null }));
+        }}
+      />
     </section>
   );
 }

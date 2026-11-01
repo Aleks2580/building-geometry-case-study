@@ -196,6 +196,72 @@ export const optionResponseSchema = optionMetadataSchema.extend({
   result: massingPreviewResponseSchema,
 }).refine((value) => value.feasibility_status === value.result.feasibility.status);
 
+const comparisonOptionIdSchema = optionMetadataSchema.shape.id.transform((value) => value.toLowerCase());
+
+export const optionComparisonRequestSchema = z.strictObject({
+  option_ids: z.tuple([comparisonOptionIdSchema, comparisonOptionIdSchema]),
+}).refine((value) => value.option_ids[0] !== value.option_ids[1], {
+  message: "Select two distinct saved options.",
+  path: ["option_ids"],
+});
+
+function valueComparisonSchema<T extends z.ZodType>(valueSchema: T) {
+  return z.object({ left: valueSchema, right: valueSchema, changed: z.boolean() });
+}
+
+const numericComparisonSchema = valueComparisonSchema(z.number().nullable()).extend({
+  difference: z.number().nullable(),
+});
+
+// Count comparisons share the snapshot's safe-integer boundary. Accepting an unsafe
+// delta would silently present rounded historical counts as an exact comparison.
+const countComparisonSchema = valueComparisonSchema(z.int().nullable()).extend({
+  difference: z.int().nullable(),
+});
+
+export const optionComparisonResponseSchema = z.object({
+  options: z.tuple([optionResponseSchema, optionResponseSchema]),
+  inputs: z.object({
+    site_geometry: valueComparisonSchema(polygonGeometrySchema),
+    hard_constraints: z.object({
+      setback_m: numericComparisonSchema,
+      floor_to_floor_m: numericComparisonSchema,
+      max_height_m: numericComparisonSchema,
+      max_floors: countComparisonSchema,
+      site_coverage_ratio: numericComparisonSchema,
+      max_footprint_m2: numericComparisonSchema,
+    }),
+    preferences: z.object({
+      preferred_floor_count: countComparisonSchema,
+      preferred_footprint_area_m2: numericComparisonSchema,
+    }),
+    targets: z.object({ gfa_target_m2: numericComparisonSchema }),
+  }),
+  metrics: z.object({
+    site_area_m2: numericComparisonSchema,
+    buildable_area_m2: numericComparisonSchema,
+    selected_buildable_area_m2: numericComparisonSchema,
+    footprint_area_upper_bound_m2: numericComparisonSchema,
+    gfa_upper_bound_m2: numericComparisonSchema,
+    generated_footprint_area_m2: numericComparisonSchema,
+    generated_gfa_capacity_m2: numericComparisonSchema,
+    maximum_permitted_floor_count: countComparisonSchema,
+    footprint_area_m2: numericComparisonSchema,
+    floor_count: countComparisonSchema,
+    height_m: numericComparisonSchema,
+    gfa_m2: numericComparisonSchema,
+    site_coverage_ratio: numericComparisonSchema,
+    floor_to_floor_m: numericComparisonSchema,
+  }),
+  feasibility: z.object({
+    status: valueComparisonSchema(feasibilityStatusSchema),
+    reason: valueComparisonSchema(massingFeasibilitySchema.shape.reason),
+    hard_constraints_satisfied: valueComparisonSchema(z.boolean().nullable()),
+    target_assessment: valueComparisonSchema(gfaTargetAssessmentSchema),
+  }),
+  diagnostics: valueComparisonSchema(z.array(diagnosticSchema)),
+});
+
 export const errorResponseSchema = z.object({
   error: z.object({
     code: z.string(),
@@ -214,6 +280,8 @@ export type MassingPreviewResponse = z.infer<typeof massingPreviewResponseSchema
 export type RootOptionRequest = z.input<typeof rootOptionRequestSchema>;
 export type BranchOptionRequest = z.input<typeof branchOptionRequestSchema>;
 export type OptionResponse = z.infer<typeof optionResponseSchema>;
+export type OptionComparisonRequest = z.input<typeof optionComparisonRequestSchema>;
+export type OptionComparisonResponse = z.infer<typeof optionComparisonResponseSchema>;
 export type OptionSummary = z.infer<typeof optionSummarySchema>;
 export type OptionTree = z.infer<typeof optionTreeSchema>;
 export type MassingMetrics = z.infer<typeof massingMetricsSchema>;

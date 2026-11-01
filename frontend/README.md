@@ -2,8 +2,8 @@
 
 Vite + React with strict TypeScript, a typed configuration form, a backend massing
 preview workspace with explicit immutable root saves and child branches, and a
-Saved Options explorer that opens complete persisted snapshots. TanStack Query
-owns server results; React Hook Form owns configuration drafts.
+Saved Options explorer that opens and compares complete persisted snapshots.
+TanStack Query owns server results; React Hook Form owns configuration drafts.
 
 ## Getting started
 
@@ -19,7 +19,7 @@ The backend base URL defaults to `http://localhost:8000`; override with
 
 ## Frontend structure
 
-- `src/api/api.ts` — health, preview, root/branch save, option-detail, list, and tree clients.
+- `src/api/api.ts` — health, preview, root/branch save, option-detail, list, tree, and comparison clients.
 - `src/api/contracts.ts` — Zod contracts inferred as strict TypeScript types.
 - `src/queryClient.ts` — reusable QueryClient factory and application instance.
 - `src/App.tsx` — backend health, the configuration workspace, and Saved Options.
@@ -32,7 +32,9 @@ The backend base URL defaults to `http://localhost:8000`; override with
 - `src/features/massing/MassingResult.tsx` — shared SVG, feasibility, metrics, assessments, and diagnostics.
 - `src/features/options/SaveOption.tsx` — optional naming, explicit root/branch saves, and saved-snapshot receipts.
 - `src/features/options/SavedOptionsExplorer.tsx` — paginated root discovery, nested branches, and explicit workspace navigation.
-- `src/features/options/optionQueries.ts` — shared option-detail, list, and tree query keys.
+- `src/features/options/optionQueries.ts` — shared option-detail, list, tree, and comparison query keys.
+- `src/features/comparison/OptionComparison.tsx` — explicit comparison queries, independent selection slots, and saved-result inspection.
+- `src/features/comparison/ComparisonResult.tsx` — complete side-by-side comparison values and stored-plan switching.
 - `src/features/massing/DetailedMetrics.tsx` — site/setback, hard bounds, generated capacity, and actual metrics.
 - `src/features/massing/PreferenceAssessments.tsx` — backend footprint preference and GFA target assessments.
 - `src/features/massing/FeasibilitySummary.tsx` — feasibility, reason, and hard-constraint satisfaction.
@@ -48,7 +50,7 @@ transport tests live beside the client in `src/api/`. Shared fixtures and test s
 stay in `src/test/`. Application entry points, global styles, and QueryClient setup remain
 at the root. Imports use direct relative paths.
 
-Comparison and 3D views are planned separately; see
+The interactive 3D view remains a separate delivery; see
 [the design note](../docs/DESIGN.md).
 
 ## Styling
@@ -57,6 +59,7 @@ Component styles live beside their owners in `.module.css` files and are importe
 explicitly through scoped class names. `App.module.css` owns the page container and
 header; the massing components own their form, workspace, metrics, feasibility,
 and diagnostic styles. `PreferenceAssessments` uses the shared result styles directly.
+The comparison feature owns its selection/result layout in `comparison.module.css`.
 
 `src/features/massing/massing.module.css` contains the feature's common panels,
 panel headings, eyebrows, result sections, and metric rows. Reuse these classes
@@ -89,7 +92,8 @@ failures, draft/result separation, parent immutability, duplicate-save protectio
 save/preview races, cancellation, cache remounts, saved summaries and recursive trees,
 complete snapshot reads/identity validation, saved-workspace navigation, protected
 replacement, restored branching, root pagination, explorer selection/expansion,
-refresh, and existing health behavior.
+comparison contracts and selection, ordered results and request races, stored-plan
+switching, refresh, and existing health behavior.
 Tests use jsdom and stub the fetch boundary; no running backend is required.
 Test sources are type checked.
 
@@ -327,7 +331,45 @@ requests and leave the current draft, preview, and branch parent unchanged. Use 
 selected node's explicit **Open in Workspace** action to retrieve its complete
 snapshot. Complete subtree responses and a native nested list suit small decision
 histories; large-history search, server-side root filtering, and subtree pagination
-remain future improvements. Comparison follows in PR 5.6.
+remain future improvements.
+
+### Compare saved options
+
+Select a saved node and choose **Assign to Left** or **Assign to Right**, then browse
+another root or branch to choose the other side. Comparison selections survive tree
+navigation and show each option's name, UUID, and status. Either slot can be replaced or cleared.
+The selections must contain two distinct UUIDs; equivalent UUID casing does not
+make an option distinct. Assigning a slot does not open the option in the workspace.
+
+Choose **Compare** to read both complete snapshots through
+`POST /api/v1/options/compare`. Roots, parent/child pairs, siblings, nested children,
+and options from different roots use the same flow. Selecting or browsing alone
+does not request a comparison. Editing a slot hides the submitted result until
+Compare explicitly submits the current pair, so a previous pair cannot appear as
+the current selection. Loading, empty selection, failed requests, missing options,
+and invalid responses have explicit states. Request cancellation and ordered Query
+keys isolate superseded comparisons.
+**Cancel comparison** stops a pending read without changing either selection.
+Failed reads expose **Retry comparison**; Compare also retries a failed submitted pair.
+
+Results identify the Left and Right names, UUIDs, statuses, and parents. Side-by-side
+sections show the stored site, all hard constraints, preferences, targets, metrics,
+feasibility fields, complete target assessments, and diagnostics. Changed/unchanged
+labels and numeric differences come from the backend using the
+[comparison contract](../docs/DESIGN.md#stored-versus-derived). Differences are
+**Right − Left** and retain their sign and units. Missing values display
+**Not available**; missing input settings remain distinct from zero. Hard upper
+bounds, demonstrated generated capacity, and actual massing use separate sections.
+Site comparison reports structural stored-coordinate changes rather than claiming
+spatial equivalence. Each side's complete site JSON remains available for inspection.
+
+Select **Left plan** or **Right plan** to inspect one stored SVG plan at a time. Its label
+identifies the displayed option, and the same snapshot supplies its site, complete
+setbacks, selected component, and actual footprint. Holes and MultiPolygon setbacks
+are preserved; a missing building remains unavailable. The comparison never calls
+preview or save, recomputes geometry or differences, changes historical snapshots,
+or replaces an active draft, preview, or branch parent. Reload clears comparison
+interaction state while persisted snapshots remain available for a new comparison.
 
 ### Open a saved option
 
@@ -481,6 +523,15 @@ requested option. It preserves stored configuration/result fields and uses the s
 missing option returns `404 OPTION_NOT_FOUND`. Reading a snapshot never invokes
 preview or save endpoints.
 
+`compareOptions` validates exactly two distinct UUIDs, posts their ordered IDs to
+`/api/v1/options/compare`, and requires HTTP 200 with the same complete snapshots
+in that order. Its Zod response contracts reuse saved-option, geometry, metrics,
+feasibility, target, and diagnostic schemas. Nullable comparison values and
+differences are preserved; the client does not recalculate equality or deltas.
+The existing `ApiError` and AbortSignal behavior also applies to structured
+`404 OPTION_NOT_FOUND`, `422 INVALID_COMPARISON`, malformed responses, and network
+failures. This POST reads saved data and performs no persistence mutation.
+
 ## Server state
 
 `main.tsx` mounts `QueryClientProvider` with the stable application `queryClient`.
@@ -523,6 +574,18 @@ option-list queries even when its receipt is no longer mounted. Child saves also
 invalidate tree queries. Saving does not change the preview query or select the
 saved node automatically. The [explorer workflow](#saved-options) describes discovery,
 refresh, and selection behavior.
+
+Comparison server data uses `['options', 'comparison', leftId, rightId]` with an
+ordered, lowercase UUID pair. The reverse pair has a separate key because its labels
+and differences differ.
+Local comparison state retains selection and submission identity, independently of
+the root-keyed tree and workspace session. Only an explicitly submitted current
+pair can display its Query response. Changing a slot detaches the previous result;
+cancellation and separate keys prevent late responses from replacing newer work.
+The complete returned snapshots also supply geometry without detail/preview calls
+or a duplicate local result store. Immutable comparison responses remain fresh
+indefinitely, with mount/reconnect refetch disabled and the standard inactive-cache
+retention. Re-submitting a cached pair can display that response without a new read.
 
 ## Browser smoke test
 
@@ -586,11 +649,21 @@ With the frontend and backend running:
    unchanged historical values. Try failed/missing reads and rapidly switch options;
    no failure or older response may replace the current session. Repeat replacement
    cancellation with pre-preview/invalid edits, a name draft, and a pending save.
-10. Check desktop layout and narrow viewports at 390 px and 320 px, including the
+10. After reload, assign persisted nodes to Left and Right and compare a parent with
+   a child, siblings, a nested child, and nodes from different roots. Verify selection
+   survives root switching and replacing/clearing a slot hides previous results until
+   Compare is chosen. Check every input/metric, changed and unchanged fields,
+   Right − Left differences, nulls, all four statuses, and complete diagnostics.
+   Switch both stored plans, including holes, split setbacks, and missing buildings.
+   Keep an unsaved or invalid workspace draft and a branch parent while comparing;
+   the fields, preview, and parent must remain intact. Retrieve snapshots before and
+   after comparison and verify their full contents and database row count are unchanged.
+11. Check desktop layout and narrow viewports at 390 px and 320 px, including the
    selector, dimension fields, draft outline and unavailable state, backend plan,
    inherited site, parent identifiers, receipts, expanded diagnostic details, inline
-   errors, Saved Options lists/tree/summary, saved configuration, replacement prompt,
-   keyboard focus, and form submission. Reach Open in Workspace, Keep Editing,
+   errors, Saved Options lists/tree/summary, comparison selections/results/plans,
+   saved configuration, replacement prompt, keyboard focus, and form submission.
+   Reach selection, Compare, clear, plan-switching, Open in Workspace, Keep Editing,
    discard, Create Branch, and Save Branch with Tab and activate them with the keyboard.
    Request races, cancellation, network/malformed-response failures, and
    generation-failure rendering have focused automated coverage, as do duplicate

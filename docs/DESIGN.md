@@ -19,8 +19,9 @@
 > A Saved Options explorer discovers persisted roots, browses nested branches,
 > and opens complete immutable snapshots in the workspace. Saved configuration and
 > results remain distinct from editable roots and branch drafts; an opened root or
-> child can supply the parent for a new branch after reload. Comparison,
-> alternatives, and 3D visualization remain planned in the frontend.
+> child can supply the parent for a new branch after reload. Independent Left/Right
+> selection compares complete saved inputs and outcomes and switches between their
+> stored SVG plans. Alternatives and 3D visualization remain planned in the frontend.
 
 ## Problem interpretation
 
@@ -803,7 +804,8 @@ views, metrics and diagnostics, and option-tree navigation with comparison. A us
 previews a configuration, saves it, changes floor or footprint preferences in a
 draft, previews the change, and saves a child option. Saved options can be reopened
 after reload without recomputation, keeping unsaved previews separate from saved
-history. Comparison and the 3D view remain subsequent slices.
+history. Saved options can also be compared independently of that editing session;
+the interactive 3D view remains a subsequent slice.
 
 The implemented workspace provides the form, a live draft site outline, and a
 generated SVG site plan with detailed backend metrics. The compact outline updates
@@ -881,11 +883,16 @@ metrics, and feasibility schemas, preserving nullable values, UUIDs, and timesta
 The detail client reuses `OptionResponse`, requires HTTP 200, and verifies the
 requested UUID before exposing a complete snapshot. It preserves existing API
 errors and consumes cancellation without recomputing or normalizing saved results.
+The comparison client reuses these contracts to validate two distinct UUIDs, a
+complete HTTP 200 comparison, and matching Left/Right identities in request order.
+It renders the backend's comparison flags and differences without calculating them.
 
 Massing configuration and workspace modules are grouped with their tests under
 `frontend/src/features/massing/`; API transport and contracts share `frontend/src/api/`.
 Save/branch interaction and its CSS Module/tests live under `frontend/src/features/options/`.
 The read-only explorer and its components, CSS Modules, and tests share that feature.
+Comparison components, tests, and scoped styles live under
+`frontend/src/features/comparison/`, reusing existing diagnostics and SVG presentation.
 Application setup stays at the source root. The [frontend README](../frontend/README.md)
 describes the file layout; modules use direct relative imports.
 
@@ -914,6 +921,13 @@ seeds a separate editable branch draft. RHF dirty state and preview/save activit
 protect session replacement, including fields with invalid unsent values. Successful
 saves invalidate option queries without replacing preview data or coupling explorer
 selection to editing sessions.
+Comparison selection belongs to a local owner outside the root-keyed history, so
+changing roots cannot discard the chosen Left/Right IDs. The submitted ordered pair
+has its own Query key, with case-normalized UUIDs and consumed cancellation despite
+the read-only endpoint using POST. Selection changes hide the prior result until an
+explicit submission; late responses stay associated with their original pair.
+Complete comparison snapshots supply plan geometry without preview, persistence,
+workspace transitions, or copied server-result state.
 Client usage, display precision, errors, cancellation, and cache defaults are documented
 in the [frontend README](../frontend/README.md).
 
@@ -1018,8 +1032,12 @@ PostgreSQL history survives independently of browser state. Reload requests save
 summaries again; the previous browser selection is not restored. Users can reopen
 any discovered root or nested child through the get endpoint and branch from it.
 Saved configuration/results are displayed without recomputation and remain distinct
-from new draft previews. PR 5.6 will add independent comparison selection and
-side-by-side saved inputs, metrics, and diagnostics.
+from new draft previews. Independent Left/Right selection supports comparisons
+within a tree or across roots. The backend comparison supplies complete snapshots
+and all side-by-side values; one reused `SitePlan` switches between those snapshots.
+Comparison cannot alter an editing session or saved history. The
+[comparison workflow](../frontend/README.md#compare-saved-options) defines selection,
+result visibility, error recovery, and plan inspection.
 
 ## Open implementation decisions
 
@@ -1072,9 +1090,12 @@ pagination, native branch expansion and selection, null-state rendering, request
 failures, refresh after saves, and saved-workspace navigation. Restoration cases
 cover identity validation, cancellation, request/session races, protected drafts,
 read-only results, inherited holes, and branch parent identity after reload.
+Frontend comparison cases cover ordered identities, duplicate selection, cross-root
+and nested pairs, complete values/diagnostics, signed and null differences, independent
+workspace state, stored-plan switching, cancellation, and superseded responses.
 Browser checks cover keyboard interaction, focus after navigation, and narrow layouts.
-Comparison and matching SVG/3D geometry, floors, holes, and resource lifecycle require
-coverage in their respective later slices.
+Matching SVG/3D geometry, floors, holes, and resource lifecycle require coverage in
+the 3D slice.
 
 The Docker Compose milestone exercises site → preview → manual changes → save →
 branch → reload → compare, including both views and invalid, split, infeasible, and

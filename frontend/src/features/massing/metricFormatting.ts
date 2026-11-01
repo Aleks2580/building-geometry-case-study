@@ -23,7 +23,11 @@ export function formatCount(value: number | null): string {
   return value === null ? "Not available" : countFormat.format(value === 0 ? 0 : value);
 }
 
-export function formatRatio(value: number | null): string {
+export function formatRatio(value: number | null, signed = false): string {
   if (value === null) return "Not available";
-  return value > 0 && value < 0.0001 ? "<0.0001" : ratioFormat.format(value === 0 ? 0 : value);
+  if (value !== 0 && Math.abs(value) < 0.0001) {
+    return signed ? `${value > 0 ? "+" : ""}${value.toExponential(2)}`
+      : value > 0 ? "<0.0001" : ">-0.0001";
+  }
+  return `${signed && value > 0 ? "+" : ""}${ratioFormat.format(value === 0 ? 0 : value)}`;
 }
