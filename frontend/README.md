@@ -19,31 +19,36 @@ The backend base URL defaults to `http://localhost:8000`; override with
 
 ## Frontend structure
 
+The massing feature groups site editing and geometry helpers in `site/`, form schemas
+and validation in `configuration/`, and result presentation in `results/`. Workspace
+composition and shared styles remain at the feature root; tests and CSS Modules stay
+with their implementations.
+
 - `src/api/api.ts` — health, preview, root/branch save, option-detail, list, tree, and comparison clients.
 - `src/api/contracts.ts` — Zod contracts inferred as strict TypeScript types.
 - `src/queryClient.ts` — reusable QueryClient factory and application instance.
 - `src/App.tsx` — application shell, section navigation, backend health, and explicit workspace-open requests.
-- `src/features/massing/configuration.ts` — typed draft parsing using existing Zod API contracts.
-- `src/features/massing/siteGeometry.ts` — deterministic rectangle and supplied-example input coordinates.
-- `src/features/massing/ConfigurationForm.tsx` — accessible site, constraint, preference, and target inputs.
-- `src/features/massing/CustomSiteEditor.tsx` — visual exterior drawing and advanced Polygon JSON over the same form field.
-- `src/features/massing/SiteDrawingCanvas.tsx` — SVG drawing, point selection/dragging, pointer cleanup, and keyboard completion.
-- `src/features/massing/siteDrawing.ts` — pure ring editing, fitting, and adaptive metric-grid helpers.
-- `src/features/massing/DraftSitePreview.tsx` — immediate outline of the active site draft, with its own CSS Module.
+- `src/features/massing/configuration/configuration.ts` — typed draft parsing using existing Zod API contracts.
+- `src/features/massing/site/siteGeometry.ts` — deterministic rectangle and supplied-example input coordinates.
+- `src/features/massing/configuration/ConfigurationForm.tsx` — accessible site, constraint, preference, and target inputs.
+- `src/features/massing/site/CustomSiteEditor.tsx` — visual exterior drawing and advanced Polygon JSON over the same form field.
+- `src/features/massing/site/SiteDrawingCanvas.tsx` — SVG drawing, point selection/dragging, pointer cleanup, and keyboard completion.
+- `src/features/massing/site/siteDrawing.ts` — pure ring editing, fitting, and adaptive metric-grid helpers.
+- `src/features/massing/site/DraftSitePreview.tsx` — immediate outline of the active site draft, with its own CSS Module.
 - `src/features/massing/MassingWorkspace.tsx` — new-root, saved-option, and branch-draft sessions.
 - `src/features/massing/WorkspaceActionBar.tsx` — persistent preview, new-design, and saved-snapshot branch actions.
 - `src/features/massing/SavedOptionSnapshot.tsx` — read-only saved metadata, configuration, and result.
-- `src/features/massing/MassingResult.tsx` — result dashboard with KPI cards, feasibility, visualization, action slot, and advanced result disclosures.
+- `src/features/massing/results/MassingResult.tsx` — result dashboard with KPI cards, feasibility, visualization, action slot, and advanced result disclosures.
 - `src/features/options/SaveOption.tsx` — optional naming, explicit root/branch saves, and saved-snapshot receipts.
 - `src/features/options/SavedOptionsExplorer.tsx` — paginated root discovery, nested branches, and explicit workspace navigation.
 - `src/features/options/optionQueries.ts` — shared option-detail, list, tree, and comparison query keys.
 - `src/features/comparison/OptionComparison.tsx` — explicit comparison queries, independent selection slots, and saved-result inspection.
 - `src/features/comparison/ComparisonResult.tsx` — complete side-by-side comparison values and stored-result 2D/3D inspection.
-- `src/features/massing/DetailedMetrics.tsx` — site/setback, hard bounds, generated capacity, and actual metrics.
-- `src/features/massing/PreferenceAssessments.tsx` — backend footprint preference and GFA target assessments.
-- `src/features/massing/FeasibilitySummary.tsx` — feasibility, reason, and hard-constraint satisfaction.
-- `src/features/massing/Diagnostics.tsx` — backend diagnostics and accessible detail disclosures.
-- `src/features/massing/metricFormatting.ts` — display-only numeric formatting.
+- `src/features/massing/results/DetailedMetrics.tsx` — site/setback, hard bounds, generated capacity, and actual metrics.
+- `src/features/massing/results/PreferenceAssessments.tsx` — backend footprint preference and GFA target assessments.
+- `src/features/massing/results/FeasibilitySummary.tsx` — feasibility, reason, and hard-constraint satisfaction.
+- `src/features/massing/results/Diagnostics.tsx` — backend diagnostics and accessible detail disclosures.
+- `src/features/massing/results/metricFormatting.ts` — display-only numeric formatting.
 - `src/features/visualization/svgGeometry.ts` — shared display bounds, reversible viewport mapping, pointer-coordinate conversion, and SVG paths.
 - `src/features/visualization/SitePlan.tsx` — read-only SVG geometry layers, legend, and optional edge measurements.
 - `src/features/visualization/dimensionAnnotations.ts` — pure edge measurement, formatting, and selected-dimension layout.
@@ -177,7 +182,7 @@ development-tooling security fixes. Jest DOM stays on 6.9 to retain Node 20 supp
 ## Configuration inputs
 
 `ConfigurationForm` uses React Hook Form with the Zod resolver. Its typed draft is
-parsed by `src/features/massing/configuration.ts`, reusing the API contracts for
+parsed by `src/features/massing/configuration/configuration.ts`, reusing the API contracts for
 numeric bounds. The **Site outline** section's preset buttons offer:
 
 - **Rectangle / Square**: editable Width and Length in metres, initially 40 × 25 m. Equal dimensions make a square. Positive

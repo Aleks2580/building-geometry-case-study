@@ -1,7 +1,7 @@
 import { useId, useState } from "react";
 import type { OptionComparisonResponse } from "../../api/contracts";
-import Diagnostics from "../massing/Diagnostics";
-import { formatCount, formatMetric, formatRatio } from "../massing/metricFormatting";
+import Diagnostics from "../massing/results/Diagnostics";
+import { formatCount, formatMetric, formatRatio } from "../massing/results/metricFormatting";
 import MassingVisualization from "../visualization/MassingVisualization";
 import styles from "./comparison.module.css";
 

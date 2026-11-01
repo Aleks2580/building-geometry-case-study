@@ -2,16 +2,16 @@ import { useEffect, useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import type { FieldPath } from "react-hook-form";
-import type { PolygonGeometry } from "../../api/contracts";
+import type { PolygonGeometry } from "../../../api/contracts";
 import {
   configurationSchema,
   initialConfigurationDraft,
   siteInputSchema,
 } from "./configuration";
 import type { Configuration, ConfigurationDraft } from "./configuration";
-import DraftSitePreview from "./DraftSitePreview";
-import CustomSiteEditor from "./CustomSiteEditor";
-import shared from "./massing.module.css";
+import DraftSitePreview from "../site/DraftSitePreview";
+import CustomSiteEditor from "../site/CustomSiteEditor";
+import shared from "../massing.module.css";
 import styles from "./ConfigurationForm.module.css";
 
 interface ConfigurationFormProps {

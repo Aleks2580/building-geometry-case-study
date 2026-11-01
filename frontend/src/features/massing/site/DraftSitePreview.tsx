@@ -1,6 +1,6 @@
 import { useId } from "react";
-import type { PolygonGeometry } from "../../api/contracts";
-import { createViewportTransform, geometryBounds, geometryPath } from "../visualization/svgGeometry";
+import type { PolygonGeometry } from "../../../api/contracts";
+import { createViewportTransform, geometryBounds, geometryPath } from "../../visualization/svgGeometry";
 import styles from "./DraftSitePreview.module.css";
 
 export default function DraftSitePreview({ geometry, inherited = false }: {

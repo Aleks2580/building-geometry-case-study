@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import type { OptionResponse } from "../../api/contracts";
-import MassingResult from "./MassingResult";
+import MassingResult from "./results/MassingResult";
 import WorkspaceActionBar from "./WorkspaceActionBar";
 import styles from "./MassingWorkspace.module.css";
 

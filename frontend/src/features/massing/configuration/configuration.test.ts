@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { configurationDraftFromOption, configurationSchema, initialConfigurationDraft } from "./configuration";
 import type { ConfigurationDraft } from "./configuration";
-import { optionResponse } from "../../test/optionFixtures";
+import { optionResponse } from "../../../test/optionFixtures";
 
 function draft(): ConfigurationDraft {
   return structuredClone(initialConfigurationDraft);

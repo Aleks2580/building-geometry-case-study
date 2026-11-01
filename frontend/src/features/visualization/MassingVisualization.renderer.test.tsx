@@ -6,7 +6,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { massingPreviewResponseSchema, type FeasibilityStatus } from "../../api/contracts";
 import { backendPreviewResponse } from "../../test/backendPreviewFixtures";
-import MassingResult from "../massing/MassingResult";
+import MassingResult from "../massing/results/MassingResult";
 import "./Massing3D";
 import type Massing3DScene from "./Massing3DScene";
 

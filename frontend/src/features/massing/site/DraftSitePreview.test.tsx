@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import type { PolygonGeometry } from "../../api/contracts";
+import type { PolygonGeometry } from "../../../api/contracts";
 import DraftSitePreview from "./DraftSitePreview";
 import { createRectangleSite } from "./siteGeometry";
 

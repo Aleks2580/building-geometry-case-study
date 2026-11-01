@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { massingPreviewResponseSchema, type MassingPreviewResponse, type PolygonGeometry } from "../../api/contracts";
-import { previewResponse } from "../../test/massingFixtures";
+import { massingPreviewResponseSchema, type MassingPreviewResponse, type PolygonGeometry } from "../../../api/contracts";
+import { previewResponse } from "../../../test/massingFixtures";
 import DetailedMetrics from "./DetailedMetrics";
 
 function measurement(section: string, label: string) {

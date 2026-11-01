@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState, type PointerEvent } from "react";
-import type { PolygonGeometry } from "../../api/contracts";
-import { clientToViewportPosition, createViewportMapping, geometryPath } from "../visualization/svgGeometry";
+import type { PolygonGeometry } from "../../../api/contracts";
+import { clientToViewportPosition, createViewportMapping, geometryPath } from "../../visualization/svgGeometry";
 import { closeExteriorRing, drawingGrid, drawingViewport as viewport, type DrawingExtent, type SitePosition } from "./siteDrawing";
 import styles from "./CustomSiteEditor.module.css";
 

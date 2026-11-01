@@ -4,12 +4,12 @@ import { ApiError, getOption, previewMassing } from "../../api/api";
 import type { OptionResponse } from "../../api/contracts";
 import SaveOption from "../options/SaveOption";
 import { optionKeys } from "../options/optionQueries";
-import ConfigurationForm from "./ConfigurationForm";
-import MassingResult from "./MassingResult";
+import ConfigurationForm from "./configuration/ConfigurationForm";
+import MassingResult from "./results/MassingResult";
 import SavedOptionSnapshot from "./SavedOptionSnapshot";
 import WorkspaceActionBar from "./WorkspaceActionBar";
-import type { Configuration, ConfigurationDraft } from "./configuration";
-import { configurationDraftFromOption } from "./configuration";
+import type { Configuration, ConfigurationDraft } from "./configuration/configuration";
+import { configurationDraftFromOption } from "./configuration/configuration";
 import styles from "./MassingWorkspace.module.css";
 
 interface Submission {

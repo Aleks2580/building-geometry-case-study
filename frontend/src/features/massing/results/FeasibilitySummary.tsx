@@ -1,6 +1,6 @@
 import { useId } from "react";
-import type { FeasibilityStatus, MassingFeasibility } from "../../api/contracts";
-import shared from "./massing.module.css";
+import type { FeasibilityStatus, MassingFeasibility } from "../../../api/contracts";
+import shared from "../massing.module.css";
 import styles from "./FeasibilitySummary.module.css";
 
 const statusContent: Record<FeasibilityStatus, { title: string; description: string; summary: string }> = {
