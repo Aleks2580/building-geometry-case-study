@@ -125,6 +125,42 @@ beforeEach(() => {
 });
 
 describe("ComparisonResult visualization", () => {
+  it("measures only the active Left or Right snapshot without changing comparison values or requesting data", () => {
+    const response = crossRootComparison();
+    const original = structuredClone(response);
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    render(<ComparisonResult comparison={response} />);
+    const initialPaths = planPaths();
+    const initialValues = comparisonValues();
+    const readout = () => screen.getByRole("img", { name: "Site plan" }).closest("figure")?.querySelector("figcaption [aria-live='polite']");
+    fireEvent.click(screen.getByRole("checkbox", { name: "Show dimensions" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Measure edge" }), { target: { value: "footprint-0-0" } });
+    expect(readout()).toHaveTextContent("Building footprint · edge 1: 14 m");
+    fireEvent.click(screen.getByRole("button", { name: "Show all" }));
+    expect(screen.getByRole("img", { name: "Site plan" }).querySelectorAll("[data-overview-dimension]")).toHaveLength(12);
+    expect(screen.getByRole("img", { name: "Site plan" }).querySelector("[data-overview-dimension='footprint-0-0'] text")).toHaveTextContent("14 m");
+    fireEvent.click(screen.getByRole("radio", { name: "Right plan" }));
+    expect(screen.getByRole("checkbox", { name: "Show dimensions" })).toBeChecked();
+    expect(readout()).toHaveTextContent("Building footprint · edge 1: 20 m");
+    expect(screen.getByRole("button", { name: "Show all" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("img", { name: "Site plan" }).querySelectorAll("[data-overview-dimension]")).toHaveLength(16);
+    expect(screen.getByRole("img", { name: "Site plan" }).querySelector("[data-overview-dimension='footprint-0-0'] text")).toHaveTextContent("20 m");
+    expect(screen.getByRole("combobox", { name: "Measure edge" })).toHaveValue("footprint-0-0");
+    fireEvent.change(screen.getByRole("combobox", { name: "Measure edge" }), { target: { value: "footprint-1-0" } });
+    expect(readout()).toHaveTextContent("Footprint hole 1 · edge 1: 5 m");
+    fireEvent.click(screen.getByRole("radio", { name: "Left plan" }));
+    expect(readout()).toHaveTextContent("Site boundary · edge 1: 50 m");
+    expect(screen.getByRole("img", { name: "Site plan" }).querySelectorAll("[data-overview-dimension]")).toHaveLength(12);
+    expect(screen.getByRole("img", { name: "Site plan" }).querySelector("[data-overview-dimension='footprint-1-0']")).toBeNull();
+    expect(screen.getByRole("combobox", { name: "Measure edge" })).toHaveValue("site-0-0");
+    expect(planPaths()).toEqual(initialPaths);
+    expect(comparisonValues()).toEqual(initialValues);
+    expect(response).toEqual(original);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(mocks.mount).not.toHaveBeenCalled();
+  });
+
   it("defaults to the Left 2D plan and keeps 3D selected while switching exact cross-root snapshots", async () => {
     const response = crossRootComparison();
     const original = structuredClone(response);

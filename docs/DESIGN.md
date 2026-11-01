@@ -988,9 +988,18 @@ styles for the backend-selected component and actual footprint. No component is
 selected or constructed in the renderer, and default-generation geometry never
 substitutes for an absent actual footprint. Holes use even-odd fills regardless of
 ring winding. A visible legend and SVG title/description identify available context.
+Optional edge measurements use pure display helpers over the original backend
+coordinates, with selected-edge inspection and an all-edge overview for site,
+actual-footprint, and hole rings. Deterministic label placement reports crowding
+and unavailable labels instead of silently limiting the edge count. An enlarged,
+scrollable display preserves the original logical frame and model coordinates;
+selected-edge inspection remains available when an overview is crowded. Local
+controls preserve authoritative metrics, send no requests, and resolve selection
+against the current snapshot rather than retaining copied geometry.
 The [renderer usage contract](../frontend/README.md#svg-plan-renderer) documents fitting,
-empty layers, and the display-only boundary. The workspace consumes this component
-without copying results into local state or substituting generated default geometry.
+empty layers, dimension controls, and the display-only boundary. The workspace
+consumes this component without copying results into local state or substituting
+generated default geometry.
 
 The 3D view helps architects read volume, floor count, and height that overlap in a
 plan, making footprint/height trade-offs easier to judge. It complements precise plan

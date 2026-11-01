@@ -44,7 +44,8 @@ The backend base URL defaults to `http://localhost:8000`; override with
 - `src/features/massing/Diagnostics.tsx` — backend diagnostics and accessible detail disclosures.
 - `src/features/massing/metricFormatting.ts` — display-only numeric formatting.
 - `src/features/visualization/svgGeometry.ts` — shared display bounds, reversible viewport mapping, pointer-coordinate conversion, and SVG paths.
-- `src/features/visualization/SitePlan.tsx` — independent read-only SVG geometry layers and legend.
+- `src/features/visualization/SitePlan.tsx` — read-only SVG geometry layers, legend, and optional edge measurements.
+- `src/features/visualization/dimensionAnnotations.ts` — pure edge measurement, formatting, and selected-dimension layout.
 - `src/features/visualization/MassingVisualization.tsx` — local 2D/3D selection, lazy loading, and error isolation for backend results.
 - `src/features/visualization/massing3DGeometry.ts` — pure display conversion, floor placement, and camera fitting.
 - `src/features/visualization/Massing3D.tsx` — standalone interactive viewer, display states, and SVG fallback.
@@ -495,7 +496,7 @@ reflects the current site inputs. Opening another saved option leaves the curren
 workspace visible until retrieval and any replacement confirmation succeed.
 
 `SitePlan` also works independently. It needs no Query provider, API request, or
-application state:
+external application state:
 
 ```tsx
 <SitePlan
@@ -528,12 +529,46 @@ with the viewport; strokes retain their screen width. Fills, solid/dashed stroke
 and a visible legend distinguish the four layers. An instance-specific SVG title
 and description identify displayed context and missing building geometry.
 
+**Show dimensions** is a keyboard-accessible checkbox, initially off. Enable it
+and use **Measure edge** to inspect any edge of the site boundary, actual building
+footprint, or their interior holes. The grouped selector identifies the layer,
+hole, and edge number. **Selected edge** is the initial display mode;
+**Show all** displays the available site, footprint, and hole measurements together.
+
+The selected edge is highlighted and measured with an offset dimension line,
+extension lines, end ticks, and a horizontal metre label. A leader identifies
+short edges or labels moved to stay within the viewport. The same measurement
+appears in an accessible text readout below the plan. Selected-edge labels target
+a 12 px screen font size using the rendered SVG width, updated through
+`ResizeObserver`; if a label cannot fit safely, the text readout remains available.
+
+Show all uses compact 10 px labels with deterministic placement and leader lines.
+Site measurements are grey, footprint measurements are green, and the selected
+edge is amber. Click a label or use Measure edge to highlight it. The readout
+reports how many edge dimensions are shown and identifies crowding or labels that
+cannot fit; there is no silent label-count cap. **Enlarge plan** is available
+throughout Show all and provides more space inside a scrollable plan without changing
+its original SVG viewBox, layers, or model coordinates. **Fit plan** returns to the
+fitted view. Complex geometry can still produce close labels; Selected edge remains
+available for a clear individual measurement rather than shrinking text below 10 px.
+
+`dimensionAnnotations` calculates Euclidean lengths with `Math.hypot` from the
+original backend coordinates. Formatting uses up to two decimal places for
+ordinary lengths and scientific notation for nonzero lengths below 0.01 m or at
+least 1,000,000 m. It never rounds a small nonzero measurement to zero. These are
+display annotations: toggling or selecting edges changes no geometry, logical
+framing, backend metrics, constraints, requests, or saved snapshots. Missing actual
+footprints produce no footprint measurements, even when default-generation
+geometry exists. Preview, restored root/child snapshots, and the active Left/Right
+comparison use the same controls; selection always resolves against the currently
+displayed geometry.
+
 Omitted, null, or empty optional layers draw no paths. Available site/setback context
 remains visible when the footprint is missing, with an explicit unavailable message.
 An empty or unprojectable site frame displays an unavailable message and no paths;
 it never fits an optional layer instead. These display guards do not validate
-topology or determine feasibility. Pan/zoom, editing, and 3D
-remain outside this component.
+topology or determine feasibility. General pan/zoom, geometry editing, and 3D
+remain outside this component; the enlarged overview only changes display size.
 
 For browser smoke checks, run the app with its backend and select Rectangle,
 L-shaped example, and Notched example in turn, submitting each explicitly.
@@ -541,6 +576,12 @@ The default rectangle and L-shaped site use a 3 m setback; the notched site at 3
 shows two setback components. Select Custom Polygon to try the holed-site case in
 `backend/tests/test_massing_preview_api.py`, using a zero setback. Check the legend,
 hole openings, and selected component at desktop, tablet, 390 px, and 320 px widths.
+Toggle dimensions with the keyboard and inspect exterior, hole, diagonal, and
+short edges in Selected edge and Show all. Check label counts and colours, label
+selection, crowding feedback, Enlarge plan scrolling, and Fit plan. Verify that
+labels remain readable and paths and metrics stay unchanged. Save and reopen a
+drawn site, then inspect both comparison sides and a missing-footprint result
+without new requests from the measurement controls.
 Use a maximum height of 3 m with the floor cap blank to check infeasible context,
 or a preferred footprint of `1e-30` to check generation failure with available
 default capacity. A backend validation failure must remove the previous backend plan and

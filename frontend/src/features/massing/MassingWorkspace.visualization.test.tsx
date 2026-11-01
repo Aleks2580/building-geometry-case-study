@@ -78,6 +78,40 @@ beforeEach(() => {
 afterEach(() => client.clear());
 
 describe("MassingWorkspace integrated visualization", () => {
+  it("measures the submitted preview and its holes without requests or applying unsent draft geometry", async () => {
+    const result = backendPreviewResponse("holed");
+    const original = structuredClone(result);
+    fetchMock.mockResolvedValueOnce(Response.json(result));
+    mount();
+    setSite(result);
+    generate();
+    await screen.findByRole("heading", { name: "Feasible" });
+    const svg = screen.getByRole("img", { name: "Site plan" });
+    const beforePaths = [...svg.querySelectorAll("path")].map((path) => path.getAttribute("d"));
+    const beforeMetrics = screen.getByRole("region", { name: "Actual massing" }).textContent;
+    expect(screen.getByRole("checkbox", { name: "Show dimensions" })).not.toBeChecked();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Show dimensions" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Measure edge" }), { target: { value: "footprint-1-0" } });
+    expect(svg.closest("figure")?.querySelector("figcaption [aria-live='polite']")).toHaveTextContent("Footprint hole 1 · edge 1: 5 m");
+    fireEvent.click(screen.getByRole("button", { name: "Show all" }));
+    expect(svg.querySelectorAll("[data-overview-dimension]")).toHaveLength(16);
+    expect(svg.querySelector("[data-overview-dimension='footprint-1-0'] text")).toHaveTextContent("5 m");
+    change(/Site Polygon JSON/, "{");
+    expect(screen.getByRole("button", { name: "Save Option" })).toBeDisabled();
+    expect(screen.getByText(/Draft inputs have changed/)).toBeInTheDocument();
+    generate();
+    expect(await screen.findByText("Enter valid Polygon JSON.")).toBeInTheDocument();
+    expect(svg.closest("figure")?.querySelector("figcaption [aria-live='polite']")).toHaveTextContent("Footprint hole 1 · edge 1: 5 m");
+    expect(svg.querySelectorAll("[data-overview-dimension]")).toHaveLength(16);
+    expect(screen.getByRole("button", { name: "Show all" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("checkbox", { name: "Show dimensions" }));
+    expect(svg.querySelectorAll("[data-overview-dimension]")).toHaveLength(0);
+    expect([...svg.querySelectorAll("path")].map((path) => path.getAttribute("d"))).toEqual(beforePaths);
+    expect(screen.getByRole("region", { name: "Actual massing" }).textContent).toBe(beforeMetrics);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(result).toEqual(original);
+  });
+
   it("isolates finished-point edits from the submitted result and restores its save eligibility on Undo", async () => {
     const result = previewResponse();
     fetchMock.mockResolvedValueOnce(Response.json(result));
