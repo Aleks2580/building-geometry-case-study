@@ -9,6 +9,7 @@ import {
   type FeasibilityStatus, type MassingPreviewResponse, type OptionComparisonResponse, type OptionResponse,
 } from "../../api/contracts";
 import { backendPreviewResponse } from "../../test/backendPreviewFixtures";
+import { polygonWithPositionCount } from "../../test/displayGeometryFixtures";
 import { optionResponse } from "../../test/optionFixtures";
 import "../visualization/Massing3D";
 import type Massing3DScene from "../visualization/Massing3DScene";
@@ -133,6 +134,22 @@ function renderComparison(response: OptionComparisonResponse) {
 }
 
 describe("ComparisonResult visualization", () => {
+  it("keeps comparison values and snapshot switching when one saved plan is over budget", () => {
+    const response = crossRootComparison();
+    response.options[0].result.site_geometry = polygonWithPositionCount(10_001);
+    const original = structuredClone(response);
+    renderComparison(response);
+    const values = comparisonValues();
+    expect(screen.getByText(/2D plan exceeds the 10,000-vertex display limit/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: "Option 2 plan" }));
+    expect(screen.getByRole("img", { name: "Site plan" })).toBeInTheDocument();
+    expect(comparisonValues()).toEqual(values);
+    fireEvent.click(screen.getByRole("radio", { name: "Option 1 plan" }));
+    expect(screen.getByText(/2D plan exceeds the 10,000-vertex display limit/)).toBeInTheDocument();
+    expect(comparisonValues()).toEqual(values);
+    expect(response).toEqual(original);
+  });
+
   it("measures only the active Option 1 or Option 2 snapshot without changing comparison values or requesting data", () => {
     const response = crossRootComparison();
     const original = structuredClone(response);

@@ -15,7 +15,7 @@ from app.persistence.options import OptionRepository, OptionSnapshot, OptionSumm
 SCHEMA_VERSION = 1
 # Bump the policy version when massing behavior changes. Engine versions preserve
 # the numerical context of historical snapshots without promising recomputation.
-ALGORITHM_VERSION = f"massing-v2;shapely={shapely.__version__};geos={shapely.geos_version_string}"
+ALGORITHM_VERSION = f"massing-v3;shapely={shapely.__version__};geos={shapely.geos_version_string}"
 
 
 class ParentOptionNotFound(LookupError):

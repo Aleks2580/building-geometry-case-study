@@ -4,6 +4,16 @@ import type { CoordinateTransform } from "./svgGeometry";
 type Position = PolygonGeometry["coordinates"][number][number];
 type Segment = [Position, Position];
 
+// All-edge label placement evaluates many candidates per edge; gate the complete
+// measurement set before allocating edges instead of silently dropping labels.
+export const MAX_DIMENSION_EDGES = 250;
+
+export function countDimensionEdges(...geometries: (PolygonGeometry | null | undefined)[]): number {
+  return geometries.reduce((count, geometry) => count + (geometry?.coordinates.reduce(
+    (sum, ring) => sum + Math.max(0, ring.length - 1), 0,
+  ) ?? 0), 0);
+}
+
 export interface DimensionEdge {
   id: string;
   layer: "site" | "footprint";

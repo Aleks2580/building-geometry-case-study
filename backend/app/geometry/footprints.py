@@ -197,7 +197,13 @@ def _best_clipped_candidate(selected: Polygon, upper_bound: float, tolerance: fl
             bounds = list(original_bounds)
             bounds[axis + 2 if keep_lower else axis] = minimum + midpoint if keep_lower else maximum - midpoint
             clip = box(bounds[0], bounds[1], bounds[2], bounds[3])
-            candidate = _candidate_from_geometry(selected, selected.intersection(clip), tolerance)
+            intersection = selected.intersection(clip)
+            # Overlay rounding can put a slanted boundary outside selected.
+            # Abandon this optional direction without relaxing containment or
+            # treating an unreliable sample as an empty bisection result.
+            if not selected.covers(intersection):
+                break
+            candidate = _candidate_from_geometry(selected, intersection, tolerance)
             fits = candidate is None or candidate.area_m2 <= upper_bound
             if candidate is not None and fits and (best is None or candidate.area_m2 > best.area_m2):
                 best = candidate

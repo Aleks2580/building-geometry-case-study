@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { MassingPreviewResponse } from "../../api/contracts";
-import { createViewportTransform, geometryBounds, geometryPath } from "./svgGeometry";
-import { dimensionEdgeLabel, dimensionRingLabel, formatDimensionLength, layoutAllDimensions, layoutDimension, measureGeometryEdges } from "./dimensionAnnotations";
+import { countSvgVertices, createViewportTransform, geometryBounds, geometryPath, MAX_SVG_VERTICES } from "./svgGeometry";
+import { countDimensionEdges, dimensionEdgeLabel, dimensionRingLabel, formatDimensionLength, layoutAllDimensions, layoutDimension, MAX_DIMENSION_EDGES, measureGeometryEdges } from "./dimensionAnnotations";
 import styles from "./SitePlan.module.css";
 
 export interface SitePlanProps {
@@ -15,7 +15,17 @@ export interface SitePlanProps {
   alignControlsWithViewTabs?: boolean;
 }
 
-export default function SitePlan({
+export default function SitePlan(props: SitePlanProps) {
+  if (countSvgVertices(props.siteGeometry, props.buildableGeometry, props.selectedBuildableGeometry,
+    props.footprintGeometry) > MAX_SVG_VERTICES) {
+    return <figure className={styles.plan}>
+      <p className={styles.notice} role="status">2D plan exceeds the 10,000-vertex display limit. Results and option actions remain available.</p>
+    </figure>;
+  }
+  return <SupportedSitePlan {...props} />;
+}
+
+function SupportedSitePlan({
   siteGeometry,
   buildableGeometry = null,
   selectedBuildableGeometry = null,
@@ -28,7 +38,7 @@ export default function SitePlan({
   const id = useId();
   const svg = useRef<SVGSVGElement>(null);
   const planViewport = useRef<HTMLDivElement>(null);
-  const [showDimensions, setShowDimensions] = useState(false);
+  const [dimensionsEnabled, setDimensionsEnabled] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [expandedWidth, setExpandedWidth] = useState<number | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState("");
@@ -57,6 +67,8 @@ export default function SitePlan({
     !visibleLayers.slice(index + 1).some((later) => later.path === layer.path));
   const hasSite = visibleLayers.some((layer) => layer.key === "site");
   const hasFootprint = visibleLayers.some((layer) => layer.key === "footprint");
+  const dimensionsAvailable = countDimensionEdges(siteGeometry, hasFootprint ? footprintGeometry : null) <= MAX_DIMENSION_EDGES;
+  const showDimensions = dimensionsEnabled && dimensionsAvailable;
   const edges = showDimensions && hasSite ? measureGeometryEdges(siteGeometry, hasFootprint ? footprintGeometry : null) : [];
   // Comparison switches reuse this component. Resolve against current props so a
   // missing footprint/hole can never leave a prior snapshot's measurement visible.
@@ -108,15 +120,19 @@ export default function SitePlan({
     <figure className={`${styles.plan}${alignControlsWithViewTabs ? ` ${styles.withViewTabs}` : ""}`}>
       <div className={styles.dimensionControls}>
         <label className={styles.dimensionToggle}>
-          <input type="checkbox" checked={showDimensions} disabled={!hasSite}
+          <input type="checkbox" checked={showDimensions} disabled={!hasSite || !dimensionsAvailable}
+            aria-describedby={!dimensionsAvailable ? `${id}-dimension-budget` : undefined}
             onChange={(event) => {
               const measured = svg.current?.getBoundingClientRect().width;
               if (measured && measured > 0) setDisplayWidth(measured);
               if (!event.target.checked) fitPlan();
-              setShowDimensions(event.target.checked);
+              setDimensionsEnabled(event.target.checked);
             }} />
           Show dimensions
         </label>
+        {!dimensionsAvailable && <p id={`${id}-dimension-budget`} className={styles.dimensionHelp} role="status">
+          Dimensions are unavailable above the 250-edge display limit. The complete plan and calculated results are unchanged.
+        </p>}
         {showDimensions && edges.length > 0 && <>
           <div className={styles.dimensionModes} role="group" aria-label="Dimension display">
             <button type="button" aria-pressed={!showAll} onClick={() => { setShowAll(false); fitPlan(); }}>Selected edge</button>

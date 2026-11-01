@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { ComponentProps, ReactNode } from "react";
 import { backendPreviewResponse } from "../../test/backendPreviewFixtures";
+import { polygonWithPositionCount } from "../../test/displayGeometryFixtures";
 import { previewResponse } from "../../test/massingFixtures";
 import Massing3D from "./Massing3D";
 import type Massing3DScene from "./Massing3DScene";
@@ -21,6 +22,19 @@ vi.mock("./Massing3DScene", () => ({
 }));
 
 describe("Massing3D presentation", () => {
+  it("keeps fallback bounded when the 3D floor limit and SVG vertex limit are exceeded", () => {
+    const result = previewResponse();
+    result.site_geometry = polygonWithPositionCount(10_001);
+    result.metrics.floor_count = 513;
+    const original = structuredClone(result);
+    render(<Massing3D result={result} />);
+    expect(screen.getByText(/exceeds the supported 3D display/)).toBeInTheDocument();
+    expect(screen.getByText(/2D plan exceeds the 10,000-vertex display limit/)).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "Site plan" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("canvas")).not.toBeInTheDocument();
+    expect(result).toEqual(original);
+  });
+
   it("renders a standalone actual building, legend, and backend dimensions", () => {
     render(<Massing3D result={previewResponse()} />);
     const dimensions = screen.getByRole("group", { name: "Building dimensions" });
