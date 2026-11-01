@@ -21,7 +21,9 @@
 > results remain distinct from editable roots and branch drafts; an opened root or
 > child can supply the parent for a new branch after reload. Independent Left/Right
 > selection compares complete saved inputs and outcomes and switches between their
-> stored SVG plans. Alternatives and 3D visualization remain planned in the frontend.
+> stored SVG plans. A standalone interactive 3D renderer consumes the same backend
+> response; workspace switching and comparison integration remain planned, alongside
+> alternatives.
 
 ## Problem interpretation
 
@@ -804,8 +806,9 @@ views, metrics and diagnostics, and option-tree navigation with comparison. A us
 previews a configuration, saves it, changes floor or footprint preferences in a
 draft, previews the change, and saves a child option. Saved options can be reopened
 after reload without recomputation, keeping unsaved previews separate from saved
-history. Saved options can also be compared independently of that editing session;
-the interactive 3D view remains a subsequent slice.
+history. Saved options can also be compared independently of that editing session.
+The standalone interactive 3D renderer is implemented; integrating it into preview,
+saved-option, and comparison views remains subsequent work.
 
 The implemented workspace provides the form, a live draft site outline, and a
 generated SVG site plan with detailed backend metrics. The compact outline updates
@@ -982,20 +985,34 @@ inspection; basic interactive 3D is part of this design's delivery scope, with v
 polish deferred.
 
 [React Three Fiber](https://r3f.docs.pmnd.rs/getting-started/introduction) integrates
-Three.js with React's result/selection lifecycle; direct Three.js requires imperative
-scene synchronization and teardown. Fiber still requires compatible React versions,
-correct hole conversion, and explicit resource ownership.
+Three.js with React's component lifecycle, avoiding an independent imperative scene
+synchronization layer. The standalone `Massing3D` consumes a complete backend result
+without Query, requests, or workspace state. Its pinned Fiber 8/Drei 9 dependencies
+retain React 18; runtime and Three.js declarations use matching revisions.
 
-The viewer renders individually addressable extruded floors using returned heights
-and vertical positions, with orbit/zoom controls, fitted camera, floor separation,
-and site/footprint context. Polygon holes become shape holes; complete setback
-MultiPolygons appear as outlines, with no buildings on discarded components. Loading,
-empty, invalid, and unsupported geometry have explicit states. Resource disposal and
-reuse of unchanged meshes limit rendering overhead.
+Pure display conversion maps backend XY onto the XZ ground plane with positive Y
+up, using one centred, uniformly normalized frame for the original site and actual
+height. Polygon holes become shape holes. One instanced extrusion represents all
+actual repeated floor plates at the reported spacing; alternating colours distinguish
+floors without gaps or height changes. Complete setback MultiPolygons remain outlines,
+with separate selected-component and actual-footprint context. Generated default
+geometry never replaces an absent actual building.
+
+The renderer supplies orbit/zoom, responsive fitting, reset, a visible legend, and
+explicit context-only, invalid, and unsupported states. WebGL2 failure or context
+loss retains the SVG plan and allows retry. Bounded valid source rings can also
+supply SVG when a 3D-only precision or resource limit is exceeded. Display guards
+do not repair or revalidate topology. Demand rendering, instancing, and explicit
+outline/control cleanup limit idle work and resource retention. The
+[3D renderer usage contract](../frontend/README.md#interactive-3d-renderer) is the
+reference for source fields, mapping, limits, lifecycle, fallback, and the standalone
+browser harness.
 
 Both views consume one backend-generated result to keep plan, volume, and reported
-metrics aligned. The frontend transforms geometry for
-display; it does not recalculate authoritative polygons, height, footprint area, or GFA.
+metrics aligned; neither calculates authoritative geometry, height, area, GFA, floor
+count, or feasibility. The workspace continues to use SVG. Preview/saved-option
+switching and then comparison reuse remain separate integration slices; loading and
+request state remain with their existing owners.
 
 ### Option Decision Tree & Navigation
 
@@ -1041,10 +1058,9 @@ result visibility, error recovery, and plan inspection.
 
 ## Open implementation decisions
 
-Validate the selected Shapely/GEOS versions against setback fixtures; establish
-narrow-geometry tolerance behavior; choose explicit migration CLI versus an additional
-guarded startup check; verify Three.js holes and camera framing against the selected
-versions. These are implementation validations, not additional product scope.
+Verify integrated 2D/3D correspondence and camera behavior through the complete
+workflow. Browser and device coverage should establish practical performance limits
+before extending the standalone renderer's supported complexity.
 
 ## Assumptions & trade-offs
 
@@ -1094,8 +1110,10 @@ Frontend comparison cases cover ordered identities, duplicate selection, cross-r
 and nested pairs, complete values/diagnostics, signed and null differences, independent
 workspace state, stored-plan switching, cancellation, and superseded responses.
 Browser checks cover keyboard interaction, focus after navigation, and narrow layouts.
-Matching SVG/3D geometry, floors, holes, and resource lifecycle require coverage in
-the 3D slice.
+Standalone 3D tests cover pure conversion, floor placement, holes, camera fitting,
+and display/fallback states. A separate browser harness pairs captured backend
+responses with SVG and native WebGL resource inspection. Integrated view switching
+and complete-workflow correspondence require the subsequent integration slices.
 
 The Docker Compose milestone exercises site → preview → manual changes → save →
 branch → reload → compare, including both views and invalid, split, infeasible, and

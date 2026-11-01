@@ -63,6 +63,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run typecheck
+      - run: npm run typecheck:renderer-test
       - run: npm run lint
       - run: npm run test
       - run: npm run build
+      - run: npm run build:renderer-test

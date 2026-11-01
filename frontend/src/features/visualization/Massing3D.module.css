@@ -1,0 +1,71 @@
+.viewer {
+  margin: 0;
+  min-width: 0;
+}
+
+.caption {
+  font-weight: 650;
+  margin-bottom: 0.5rem;
+}
+
+.viewport {
+  width: 100%;
+  height: clamp(280px, 48vw, 460px);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  background: #f8faf9;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin-top: 0.75rem;
+}
+
+.controls p,
+.notice {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.viewer button {
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.35rem;
+  background: var(--color-surface);
+  color: var(--color-accent);
+  cursor: pointer;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  padding: 0;
+  margin: 0.75rem 0;
+  list-style: none;
+  font-size: 0.85rem;
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.legend span {
+  width: 1.2rem;
+  border-top: 3px solid;
+}
+
+.site { color: #50636a; }
+.legend .buildable { color: #71639d; border-top-style: dashed; }
+.selected { color: #297d91; }
+.building { color: #326359; }
+
+.fallback > p { margin-bottom: 0.5rem; }
+.fallback > button { margin-bottom: 0.75rem; }
