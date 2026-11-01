@@ -1003,8 +1003,7 @@ generated default geometry.
 
 The 3D view helps architects read volume, floor count, and height that overlap in a
 plan, making footprint/height trade-offs easier to judge. It complements precise plan
-inspection; basic interactive 3D is part of this design's delivery scope, with visual
-polish deferred.
+inspection with restrained materials, directional lighting, and clear floor outlines.
 
 [React Three Fiber](https://r3f.docs.pmnd.rs/getting-started/introduction) integrates
 Three.js with React's component lifecycle, avoiding an independent imperative scene
@@ -1015,9 +1014,12 @@ retain React 18; runtime and Three.js declarations use matching revisions.
 Pure display conversion maps backend XY onto the XZ ground plane with positive Y
 up, using one centred, uniformly normalized frame for the original site and actual
 height. Polygon holes become shape holes. One instanced extrusion represents all
-actual repeated floor plates at the reported spacing; alternating colours distinguish
-floors without gaps or height changes. Complete setback MultiPolygons remain outlines,
-with separate selected-component and actual-footprint context. Generated default
+actual repeated floor plates at the reported spacing; shared floor/roof outlines and
+subtle alternating colours distinguish floors without gaps or height changes.
+A camera-facing ground-to-roof marker and adjacent accessible dimension readout use
+the backend's actual height and floor metrics; missing buildings have neither.
+Complete setback MultiPolygons remain outlines, with separate selected-component
+and actual-footprint context. Generated default
 geometry never replaces an absent actual building.
 
 The renderer supplies orbit/zoom, responsive fitting, reset, a visible legend, and

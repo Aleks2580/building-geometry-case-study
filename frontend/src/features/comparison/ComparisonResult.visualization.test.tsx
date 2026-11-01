@@ -215,7 +215,9 @@ describe("ComparisonResult visualization", () => {
       fireEvent.click(screen.getByRole("radio", { name: "Right plan" }));
       expectScene(right.result);
       expect(mocks.scene.mock.lastCall?.[0].scene.building.floorCount).toBe(1);
-      expect(screen.getByText("1 floors · 3.5 m per floor · 3.5 m total height.")).toBeInTheDocument();
+      const dimensions = screen.getByRole("group", { name: "Building dimensions" });
+      expect(dimensions).toHaveTextContent("3.5 m total height");
+      expect(dimensions).toHaveTextContent("1 floor · 3.5 m per floor");
       expect(comparisonValues()).toEqual(values);
       expect(response).toEqual(original);
     },

@@ -663,9 +663,10 @@ Conversion copies closed rings, removes their repeated closing position, and
 normalizes winding for Three.js `Shape`/`Path` holes. Three.js supplies triangulation
 and extrusion, with bevels disabled. One instanced extrusion represents the repeated
 floor plate: floor `i` occupies elevations `i * floor_to_floor_m` through
-`(i + 1) * floor_to_floor_m`. Alternating floor colours distinguish storeys without
-adding gaps or changing total height. No building is added to an unselected setback
-component. Original site, complete setback, selected component, and actual footprint
+`(i + 1) * floor_to_floor_m`. Soft sage materials, directional lighting, and shared
+floor/roof outlines distinguish storeys without adding gaps or changing total
+height. No building is added to an unselected setback component. Original site,
+complete setback, selected component, and actual footprint
 use separate outline styles and a visible legend.
 
 ### Interaction, limits, and ownership
@@ -676,6 +677,13 @@ shadows, animation, textures, advanced materials, editing, and floor selection a
 outside this component. Responsive canvas sizing uses React Three Fiber's container
 measurement, demand rendering avoids an idle animation loop, and pixel ratio is
 capped at 1.5.
+
+An actual building has one ground-to-roof height marker that stays beside it while
+orbiting, with a fixed-size screen label. The adjacent **Building dimensions**
+readout provides accessible backend height, floor count, and floor spacing, including
+when WebGL falls back to SVG. The decorative marker does not intercept pointer
+input. Missing buildings have no height marker or building-dimension readout.
+Reset to fit restores the full marker after a close zoom.
 
 Display guards check finite closed rings, distinct positions, triangulation,
 consistent repeated-floor geometry and height fields, and representability in
