@@ -7,6 +7,7 @@ import { backendPreviewResponse } from "../../test/backendPreviewFixtures";
 import { previewRequest, previewResponse } from "../../test/massingFixtures";
 import { optionResponse } from "../../test/optionFixtures";
 import SaveOption from "./SaveOption";
+import { optionKeys } from "./optionQueries";
 
 const fetchMock = vi.fn<typeof fetch>();
 let client = createQueryClient();
@@ -89,7 +90,8 @@ describe("SaveOption", () => {
     expect(receipt).toHaveTextContent("Saved by backend");
     expect(receipt).toHaveTextContent(saved.id);
     expect(configuration).toEqual(original);
-    expect(client.getQueryCache().getAll()).toHaveLength(0);
+    expect(client.getQueryCache().getAll().map((query) => query.queryKey)).toEqual([optionKeys.detail(saved.id)]);
+    expect(client.getQueryData(optionKeys.detail(saved.id))).toEqual(saved);
     name("A later name draft");
     expect(receipt).toHaveTextContent("Saved by backend");
   });
@@ -362,7 +364,8 @@ describe("SaveOption branch saves", () => {
     expect(receipt).toHaveTextContent("feasible");
     expect(parent).toEqual(originalParent);
     expect(configuration).toEqual(originalConfiguration);
-    expect(client.getQueryCache().getAll()).toHaveLength(0);
+    expect(client.getQueryCache().getAll().map((query) => query.queryKey)).toEqual([optionKeys.detail(child.id)]);
+    expect(client.getQueryData(optionKeys.detail(child.id))).toEqual(child);
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 

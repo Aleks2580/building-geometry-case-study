@@ -4,6 +4,8 @@ export const optionKeys = {
   list: () => ["options", "list", "paginated"] as const,
   trees: () => ["options", "tree"] as const,
   tree: (rootId: string | null) => ["options", "tree", rootId] as const,
+  details: () => ["options", "detail"] as const,
+  detail: (optionId: string | null) => ["options", "detail", optionId?.toLowerCase() ?? null] as const,
 };
 import type { QueryClient } from "@tanstack/react-query";
 

@@ -69,8 +69,12 @@ function submit(branching = false) {
   fireEvent.submit(screen.getByRole("form", { name: branching ? "Save branch option" : "Save root option" }));
 }
 
+function savedSnapshot(branching = false) {
+  return optionResponse(undefined, { parent_id: branching ? childId : null });
+}
+
 function savedResponse(branching = false) {
-  return Response.json(optionResponse(undefined, { parent_id: branching ? childId : null }), { status: 201 });
+  return Response.json(savedSnapshot(branching), { status: 201 });
 }
 
 describe("saved option query refresh", () => {
@@ -94,6 +98,7 @@ describe("saved option query refresh", () => {
     submit(branching);
 
     await screen.findByText(branching ? "Branch saved" : "Root option saved");
+    expect(client.getQueryData(optionKeys.detail(savedSnapshot(branching).id))).toEqual(savedSnapshot(branching));
     await waitFor(() => expect(load).toHaveBeenCalledTimes(2));
     expect(load.mock.calls[0][0].aborted).toBe(true);
     expect(load.mock.calls[1][0].aborted).toBe(false);
@@ -123,6 +128,8 @@ describe("saved option query refresh", () => {
     submit();
 
     await screen.findByText("Root option saved");
+    expect(client.getQueryData(optionKeys.detail(savedSnapshot().id))).toEqual(savedSnapshot());
+    expect(client.getQueryState(optionKeys.detail(savedSnapshot().id))?.isInvalidated).toBe(false);
     expect(screen.getByRole("button", { name: "Save Another Root Option" })).toBeEnabled();
     await waitFor(() => expect(reads.list).toHaveBeenCalledTimes(2));
     expect(screen.getByText("Saved roots: Original list")).toBeInTheDocument();
@@ -146,6 +153,7 @@ describe("saved option query refresh", () => {
     submit(true);
 
     await screen.findByText("Branch saved");
+    expect(client.getQueryData(optionKeys.detail(savedSnapshot(true).id))).toEqual(savedSnapshot(true));
     await screen.findByText("Saved roots: Updated list");
     await screen.findByText("Root history: Root with nested child");
     await screen.findByText("Child history: Child with descendant");
@@ -174,6 +182,7 @@ describe("saved option query refresh", () => {
     await act(async () => pending.resolve(savedResponse(branching)));
 
     await screen.findByText("Saved roots: Saved while receipt hidden");
+    expect(client.getQueryData(optionKeys.detail(savedSnapshot(branching).id))).toEqual(savedSnapshot(branching));
     expect(reads.list).toHaveBeenCalledTimes(2);
     expect(reads.rootTree).toHaveBeenCalledTimes(branching ? 2 : 1);
     expect(reads.childTree).toHaveBeenCalledTimes(branching ? 2 : 1);
@@ -193,6 +202,7 @@ describe("saved option query refresh", () => {
     submit(true);
 
     await screen.findByRole("alert");
+    expect(client.getQueryData(optionKeys.detail(savedSnapshot(true).id))).toBeUndefined();
     expect(reads.list).toHaveBeenCalledOnce();
     expect(reads.rootTree).toHaveBeenCalledOnce();
     expect(reads.childTree).toHaveBeenCalledOnce();

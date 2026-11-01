@@ -9,6 +9,10 @@ import styles from "./SavedOptionsExplorer.module.css";
 
 const pageSize = 50;
 
+interface SavedOptionsExplorerProps {
+  onOpenOption?: (id: string) => void;
+}
+
 function findNode(tree: OptionTree, id: string): OptionTree | undefined {
   if (tree.id === id) return tree;
   for (const child of tree.children) {
@@ -17,7 +21,7 @@ function findNode(tree: OptionTree, id: string): OptionTree | undefined {
   }
 }
 
-function TreePanel({ rootId }: { rootId: string }) {
+function TreePanel({ rootId, onOpenOption }: SavedOptionsExplorerProps & { rootId: string }) {
   const titleId = useId();
   const [selectedId, setSelectedId] = useState(rootId);
   const tree = useQuery({
@@ -39,14 +43,19 @@ function TreePanel({ rootId }: { rootId: string }) {
         {tree.isFetching && <p role="status">Refreshing decision tree…</p>}
         <div className={styles.treeAndSummary}>
           <OptionTreeList tree={tree.data} selectedId={selectedId} onSelect={setSelectedId} />
-          {selected ? <OptionSummary option={selected} /> : <p>Select a node to inspect its saved summary.</p>}
+          {selected ? <div className={styles.selectedOption}>
+            <OptionSummary option={selected} />
+            {onOpenOption && <button type="button" className={styles.openButton} onClick={() => onOpenOption(selected.id)}>
+              Open in Workspace
+            </button>}
+          </div> : <p>Select a node to inspect its saved summary.</p>}
         </div>
       </>}
     </section>
   );
 }
 
-export default function SavedOptionsExplorer() {
+export default function SavedOptionsExplorer({ onOpenOption }: SavedOptionsExplorerProps) {
   const titleId = useId();
   const rootsId = useId();
   const queryClient = useQueryClient();
@@ -73,7 +82,7 @@ export default function SavedOptionsExplorer() {
       <div className={styles.header}>
         <div>
           <h2 id={titleId}>Saved options</h2>
-          <p>Browse persisted decision histories and inspect saved summaries. Your editing workspace stays separate.</p>
+          <p>Browse persisted decision histories, then open a selected snapshot in the workspace. Browsing keeps your current draft.</p>
         </div>
         <button type="button" onClick={refresh} disabled={options.isFetching}>Refresh saved options</button>
       </div>
@@ -107,7 +116,7 @@ export default function SavedOptionsExplorer() {
           {options.isError && !options.data && <button type="button" disabled={options.isFetching} onClick={() => { void options.refetch(); }}>Retry saved options</button>}
         </section>
         {rootId === null ? <p className={styles.prompt}>Select a root option to browse its decision tree.</p>
-          : <TreePanel key={rootId} rootId={rootId} />}
+          : <TreePanel key={rootId} rootId={rootId} onOpenOption={onOpenOption} />}
       </div>
     </section>
   );

@@ -1,14 +1,12 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ApiError, previewMassing } from "../../api/api";
-import type { MassingPreviewResponse, OptionResponse } from "../../api/contracts";
+import { ApiError, getOption, previewMassing } from "../../api/api";
+import type { OptionResponse } from "../../api/contracts";
 import SaveOption from "../options/SaveOption";
-import SitePlan from "../visualization/SitePlan";
+import { optionKeys } from "../options/optionQueries";
 import ConfigurationForm from "./ConfigurationForm";
-import DetailedMetrics from "./DetailedMetrics";
-import Diagnostics from "./Diagnostics";
-import FeasibilitySummary from "./FeasibilitySummary";
-import PreferenceAssessments from "./PreferenceAssessments";
+import MassingResult from "./MassingResult";
+import SavedOptionSnapshot from "./SavedOptionSnapshot";
 import type { Configuration, ConfigurationDraft } from "./configuration";
 import { configurationDraftFromOption } from "./configuration";
 import shared from "./massing.module.css";
@@ -18,26 +16,6 @@ interface Submission {
   configuration: Configuration;
   draft: ConfigurationDraft;
   id: string;
-}
-
-function PreviewSummary({ result }: { result: MassingPreviewResponse }) {
-  return (
-    <>
-      <FeasibilitySummary feasibility={result.feasibility} />
-      <SitePlan
-        siteGeometry={result.site_geometry}
-        buildableGeometry={result.buildable_geometry}
-        selectedBuildableGeometry={result.selected_buildable_geometry}
-        footprintGeometry={result.footprint_geometry}
-      />
-      <DetailedMetrics result={result} />
-      <PreferenceAssessments result={result} />
-      <Diagnostics diagnostics={result.feasibility.diagnostics} />
-      <p className={styles.previewNote}>
-        Result from the last submitted configuration. All geometry and metrics are calculated by the backend.
-      </p>
-    </>
-  );
 }
 
 function PreviewError({ error }: { error: Error }) {
@@ -56,14 +34,18 @@ function PreviewError({ error }: { error: Error }) {
   );
 }
 
-function WorkspaceSession({ parent, focusOnMount, onCreateBranch, onStartRoot }: {
+function WorkspaceSession({ parent, focusOnMount, onCreateBranch, onStartRoot, onWorkChange }: {
   parent: OptionResponse | null;
   focusOnMount: boolean;
   onCreateBranch: (option: OptionResponse) => void;
   onStartRoot: () => void;
+  onWorkChange: (hasWork: boolean) => void;
 }) {
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [draftChanged, setDraftChanged] = useState(false);
+  // A submitted preview is work even at default inputs or after a save: the save
+  // recomputes independently. This also protects its name, receipt, and pending save.
+  const reportDirty = useCallback((dirty: boolean) => onWorkChange(dirty || submission !== null), [submission, onWorkChange]);
   const preview = useQuery({
     // The identity remains unique across remounts so unchanged inputs still trigger
     // an explicit new attempt. Changing keys cancels the observer's consumed signal;
@@ -102,6 +84,7 @@ function WorkspaceSession({ parent, focusOnMount, onCreateBranch, onStartRoot }:
           submittedDraft={submission?.draft}
           isGenerating={preview.isFetching}
           onDraftChange={setDraftChanged}
+          onDirtyChange={reportDirty}
           onSubmit={(configuration, draft) => setSubmission({
             configuration,
             draft,
@@ -136,7 +119,10 @@ function WorkspaceSession({ parent, focusOnMount, onCreateBranch, onStartRoot }:
               parent={parent ?? undefined}
               onCreateBranch={onCreateBranch}
             />
-            <PreviewSummary result={preview.data} />
+            <MassingResult result={preview.data} />
+            <p className={styles.previewNote}>
+              Result from the last submitted configuration. All geometry and metrics are calculated by the backend.
+            </p>
           </>
         )}
       </section>
@@ -144,17 +130,157 @@ function WorkspaceSession({ parent, focusOnMount, onCreateBranch, onStartRoot }:
   );
 }
 
-export default function MassingWorkspace() {
-  // Only an explicit receipt action selects a parent. Remounting the editor also
-  // isolates pending form validation and requests from the next parent/root session.
-  const [session, setSession] = useState<{ id: string; parent: OptionResponse | null }>({
-    id: "initial-root", parent: null,
+type WorkspaceTarget = { mode: "root" } | { mode: "saved" | "branch"; optionId: string };
+type Session = WorkspaceTarget & { id: string };
+interface Navigation {
+  requestId: string;
+  sourceSessionId: string;
+  target: WorkspaceTarget;
+  external: boolean;
+  needsConfirmation: boolean;
+}
+
+function useOptionSnapshot(optionId: string | null) {
+  return useQuery({
+    queryKey: optionKeys.detail(optionId),
+    queryFn: ({ signal }) => {
+      if (optionId === null) throw new Error("Select a saved option first.");
+      return getOption(optionId, signal);
+    },
+    enabled: optionId !== null,
+    staleTime: Infinity,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    networkMode: "always",
   });
-  return <WorkspaceSession
-    key={session.id}
-    parent={session.parent}
-    focusOnMount={session.id !== "initial-root"}
-    onCreateBranch={(parent) => setSession({ id: crypto.randomUUID(), parent })}
-    onStartRoot={() => setSession({ id: crypto.randomUUID(), parent: null })}
-  />;
+}
+
+function ReplacementConfirmation({ opening, destination, onKeepEditing, onReplace }: {
+  opening: boolean;
+  destination: string;
+  onKeepEditing: () => void;
+  onReplace: () => void;
+}) {
+  const keepEditing = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    keepEditing.current?.focus();
+    keepEditing.current?.scrollIntoView?.({ block: "center" });
+  }, []);
+  return <section className={styles.confirmation} aria-label="Replace workspace">
+    <h2>Replace the current workspace?</h2>
+    <p>{destination}</p>
+    <p>This replaces your draft, preview, and save receipt. Keep editing to retain them.</p>
+    <p>Any save already sent may still complete. Leaving does not cancel or roll back that save.</p>
+    <div className={styles.actions}>
+      <button ref={keepEditing} type="button" onClick={onKeepEditing}>Keep Editing</button>
+      <button type="button" onClick={onReplace}>{opening ? "Discard Draft and Open" : "Discard Draft and Continue"}</button>
+    </div>
+  </section>;
+}
+
+export default function MassingWorkspace({ openRequest = null }: {
+  openRequest?: { optionId: string; requestId: string } | null;
+}) {
+  const [session, setSession] = useState<Session>({ id: "initial-root", mode: "root" });
+  const hasWork = useRef(false);
+  const [navigation, setNavigation] = useState<Navigation | null>(null);
+  const activeSessionId = useRef(session.id);
+  const latestRequestId = useRef<string | null>(null);
+  const handledOpenRequest = useRef<string | null>(null);
+  const workspace = useRef<HTMLDivElement>(null);
+  // The form publishes RHF state before the navigation effect runs. Reading the
+  // latest signal avoids losing an edit batched with a successful GET response.
+  const reportWork = useCallback((work: boolean) => { hasWork.current = work; }, []);
+
+  const requestNavigation = useCallback((target: WorkspaceTarget, requestId: string = crypto.randomUUID(), external = false) => {
+    latestRequestId.current = requestId;
+    setNavigation({ requestId, target, external, sourceSessionId: activeSessionId.current, needsConfirmation: false });
+  }, []);
+  useEffect(() => {
+    if (openRequest === null || handledOpenRequest.current === openRequest.requestId) return;
+    handledOpenRequest.current = openRequest.requestId;
+    requestNavigation({ mode: "saved", optionId: openRequest.optionId }, openRequest.requestId, true);
+  }, [openRequest, requestNavigation]);
+
+  const currentNavigation = navigation !== null && navigation.sourceSessionId === session.id &&
+    (!navigation.external || openRequest?.requestId === navigation.requestId);
+  const requestedOptionId = currentNavigation && navigation.target.mode !== "root" ? navigation.target.optionId : null;
+  const requested = useOptionSnapshot(requestedOptionId);
+  const active = useOptionSnapshot(session.mode === "root" ? null : session.optionId);
+  const ready = currentNavigation && (navigation.target.mode === "root" || requested.isSuccess);
+
+  const commitNavigation = useCallback((next: Navigation) => {
+    // Keys isolate snapshot data; these identities additionally prevent a late
+    // navigation from replacing another editor or a newer explicit open request.
+    if (latestRequestId.current !== next.requestId || activeSessionId.current !== next.sourceSessionId) return;
+    const id = crypto.randomUUID();
+    activeSessionId.current = id;
+    latestRequestId.current = null;
+    hasWork.current = false;
+    setNavigation(null);
+    setSession({ ...next.target, id });
+  }, []);
+
+  useEffect(() => {
+    if (!ready || navigation === null || navigation.needsConfirmation) return;
+    if (hasWork.current) {
+      setNavigation((current) => current?.requestId === navigation.requestId
+        ? { ...current, needsConfirmation: true } : current);
+    } else commitNavigation(navigation);
+  }, [ready, navigation, commitNavigation]);
+
+  function cancelNavigation() {
+    latestRequestId.current = null;
+    setNavigation(null);
+    workspace.current?.querySelector<HTMLElement>("input:not(:disabled), h2[tabindex]")?.focus();
+  }
+
+  return <>
+    {currentNavigation && <div className={styles.navigation}>
+      {navigation.needsConfirmation && ready ? <ReplacementConfirmation
+        key={navigation.requestId}
+        opening={navigation.target.mode === "saved"}
+        destination={navigation.target.mode === "root" ? "Start a new root option."
+          : `${navigation.target.mode === "saved" ? "Open" : "Branch from"} ${requested.data?.name ?? "Unnamed option"} (${navigation.target.optionId}).`}
+        onKeepEditing={cancelNavigation}
+        onReplace={() => commitNavigation(navigation)}
+      /> : requested.isError ? <div className={styles.previewError} role="alert">
+        <h2>Could not open saved option</h2>
+        <p>Requested option: {requestedOptionId}</p>
+        <p>{requested.error.message}</p>
+        {requested.error instanceof ApiError && requested.error.error?.details.map((detail, index) =>
+          <p key={`${detail.path}-${index}`}>{detail.path}: {detail.message}</p>)}
+        <div className={styles.actions}>
+          <button type="button" onClick={() => { void requested.refetch(); }}>Retry opening option</button>
+          <button type="button" onClick={cancelNavigation}>Cancel opening</button>
+        </div>
+      </div> : <div className={styles.context}>
+        <p role="status">Loading saved option…</p>
+        <p>Requested option: {requestedOptionId}</p>
+        <button type="button" onClick={cancelNavigation}>Cancel opening</button>
+      </div>}
+    </div>}
+    <div ref={workspace}>
+      {session.mode === "root" ? <WorkspaceSession
+        key={session.id}
+        parent={null}
+        focusOnMount={session.id !== "initial-root"}
+        onWorkChange={reportWork}
+        onCreateBranch={(parent) => requestNavigation({ mode: "branch", optionId: parent.id })}
+        onStartRoot={() => requestNavigation({ mode: "root" })}
+      /> : active.data ? session.mode === "saved" ? <SavedOptionSnapshot
+        key={session.id}
+        option={active.data}
+        onCreateBranch={() => requestNavigation({ mode: "branch", optionId: session.optionId })}
+        onStartRoot={() => requestNavigation({ mode: "root" })}
+      /> : <WorkspaceSession
+        key={session.id}
+        parent={active.data}
+        focusOnMount
+        onWorkChange={reportWork}
+        onCreateBranch={(parent) => requestNavigation({ mode: "branch", optionId: parent.id })}
+        onStartRoot={() => requestNavigation({ mode: "root" })}
+      /> : <p role="status">Loading saved option…</p>}
+    </div>
+  </>;
 }

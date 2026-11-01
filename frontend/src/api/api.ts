@@ -152,6 +152,17 @@ export async function getOptionTree(rootId: string, signal?: AbortSignal): Promi
   return parsed.data;
 }
 
+export async function getOption(optionId: string, signal?: AbortSignal): Promise<OptionResponse> {
+  const validOptionId = optionMetadataSchema.shape.id.parse(optionId).toLowerCase();
+  const message = "Invalid saved option response.";
+  const data = await readOptions(`/api/v1/options/${encodeURIComponent(validOptionId)}`, message, signal);
+  const parsed = optionResponseSchema.safeParse(data);
+  if (!parsed.success || parsed.data.id.toLowerCase() !== validOptionId) {
+    throw new ApiError("malformed_response", message, { status: 200 });
+  }
+  return parsed.data;
+}
+
 async function readOptions(path: string, invalidMessage: string, signal?: AbortSignal): Promise<unknown> {
   signal?.throwIfAborted();
   let response: Response;
