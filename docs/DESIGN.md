@@ -1,27 +1,80 @@
-# Design note
+# Building Geometry Case Study — Design Note
 
-## Problem interpretation and MVP scope
+This prototype lets architects draw
+a site, apply planning constraints, inspect a generated building in 2D and 3D, and save, branch and compare design
+options.
 
-Early-stage massing turns a site boundary and planning constraints into a buildable
-volume. The [assignment](../README.md) asks for that calculation, visualization and
-persisted options that let an architect explore alternatives through a decision tree.
-The schema, API, construction algorithm and rendering approach are design choices.
+**Try it locally:** `docker compose up --build` → <http://localhost:5173>. **API reference:** [FastAPI OpenAPI](http://localhost:8000/docs) · **Setup:**
+[Frontend README](../frontend/README.md).
 
-The delivered prototype supports one planar site and one connected building per
-option. Users can draw a site; set setback, height, floor-count, coverage and footprint
-limits; add floor/area preferences or a minimum GFA target; and preview the result.
-They can save a root, branch alternatives, reopen history and compare saved results.
-The backend owns geometry, metrics and feasibility; the frontend presents the same
-result in an SVG plan and interactive 3D view. Delivering both views is a scope choice,
-not an employer requirement.
+**Live demo:** [Building Geometry Explorer](https://building-geometry-demo.onrender.com/)
 
-The prototype models early-stage massing rather than architectural layouts or
-regulatory compliance. Uniform repeated floor plates define GFA without circulation,
-usable-area or facade deductions. Coordinates are local metres, not longitude/latitude.
-Authentication, multi-user permissions, automatic suggestions, global optimization,
-multiple buildings and production hosting are outside this delivery.
+Three decisions shape the system:
 
-## Architecture and domain model
+- **One source of truth.** FastAPI and Shapely own geometry, numerical metrics and feasibility. SVG and Three.js render
+  the same server-produced result.
+- **History is immutable.** PostgreSQL stores complete JSONB snapshots. Branching creates a child rather than editing a
+  previous decision.
+- **Failure is explicit.** Deterministic, bounded construction returns a measured result without claiming global
+  optimality. Failed search differs from proven hard infeasibility.
+
+![2D workspace showing the site boundary, setback footprint and computed massing metrics.](assets/workspace-2d.png)
+
+*Figure 1. Hosted 2D preview of the 40 × 25 m example: 3 m setback, 646 m² footprint, four floors and 2,584 m² GFA. Setback, selected region and footprint coincide in this case.*
+
+## Product walkthrough and scope
+
+The core workflow is **site → constraints → preview → save → branch → tree → compare**. Choose the rectangle, L-shaped
+or notched preset, or draw a custom exterior boundary. Advanced GeoJSON input also supports polygon holes. Configuration
+changes remain drafts until another preview is requested. Save a root, branch a revised configuration, then use the
+saved tree to reopen or compare alternatives without recalculating their historical results.
+
+| Included | Outside the current scope |
+| --- | --- |
+| One planar Polygon site, optional holes, local metre coordinates | Geographic coordinates and surveying transformations |
+| One connected building per option | Multiple buildings or independent floor stacks |
+| Setback, height, floors, coverage, footprint caps, preferences, minimum GFA target | Detailed zoning, code compliance and room layouts |
+| SVG plan, interactive 3D, metrics and diagnostics | Photorealistic modeling or architectural editing |
+| Immutable saves, branches, tree navigation and two-option comparison | Authentication, shared editing, automatic suggestions and global optimization |
+
+### A reproducible example
+
+A 40 × 25 m site has area 1,000 m². A 3 m setback leaves a 34 × 19 m footprint: 646 m². With 3.5 m floor-to-floor
+spacing, a 24 m height cap and a six-floor limit permit at most six floors.
+
+For a minimum GFA target of 2,000 m², the algorithm chooses the smallest sufficient floor count: three floors yield
+1,938 m², while four yield 2,584 m² at 14 m height. Both the theoretical upper GFA bound and the demonstrated capacity
+of the generated footprint are 3,876 m² in this case. The [preview request below](#example-target-driven-preview) reproduces the calculation.
+
+![Interactive 3D view of the computed floor stack with height and floor-count readouts.](assets/massing-3d.png)
+
+*Figure 2. The same hosted preview in real WebGL2: four repeated 3.5 m floors, 14 m total height. Orbit and reset-to-fit were exercised.*
+
+## Why SVG and interactive 3D?
+
+SVG is the primary inspection view. It exposes the relationship between the site boundary, setbacks, selected component,
+footprint and holes. For this small set of vector paths, SVG supports direct inspection and accessible descriptions
+without custom Canvas redraw and hit-testing logic.
+
+3D shows how that footprint becomes a volume through floor stacking and height. React Three Fiber integrates Three.js
+with React's component lifecycle and saved-option selection, keeping scene synchronization within the existing UI
+architecture.
+
+| Alternative | Trade-off for this prototype |
+| --- | --- |
+| SVG only | Precise plan inspection, but less direct communication of height and volume. |
+| Canvas 2D | A candidate for dense scenes, with additional redraw, hit-testing and accessibility work. |
+| Raw Three.js | Low-level control, with an additional imperative scene-synchronization and cleanup layer. |
+
+Two rendering pipelines add a lazy-loaded 3D bundle, triangulation and camera handling, GPU-resource cleanup, WebGL2
+fallbacks and fixture-based correspondence tests. Both consume one backend result. A 2D-only solution would be
+appropriate when browser coverage, accessibility or measured performance makes WebGL2 unsuitable; the domain and API
+would remain usable with the SVG plan and metrics.
+
+## Architecture and domain boundaries
+
+The FastAPI, async psycopg pool, raw parameterized SQL, PostgreSQL and Vite/React stack is retained. The Python domain
+is independent of transport and persistence. There is no ORM or browser-side massing engine.
 
 ```mermaid
 flowchart LR
@@ -49,374 +102,317 @@ flowchart LR
     HTTP -.->|JSON response| UI
 ```
 
-The scaffold's FastAPI, asynchronous psycopg pool, raw parameterized SQL,
-PostgreSQL and Vite/React remain. Shapely/GEOS supplies topology and offsets;
-React Three Fiber/Three.js supplies interactive 3D. There is no ORM or client-side
-massing engine.
+`app.geometry` owns validation, canonicalization, setbacks and footprint construction. `app.massing` owns floor
+limits, preferences, targets, feasibility and measured results. Application services orchestrate computation and
+snapshot creation. HTTP schemas own the external contract, while repositories own parameterized SQL and transactions.
+CPU-bound computation runs outside the async event loop. Preview performs no PostgreSQL reads or writes.
 
-| Decision | Rationale | Trade-off |
-| --- | --- | --- |
-| Shapely/GEOS for geometry | Reuse established topology, polygon validation and offsets, including holes and concavity. | Floating-point and engine-version behavior still need explicit invariants and regression coverage. |
-| One connected building | Largest-component selection gives each option an unambiguous footprint and floor stack. | Disconnected buildable land can remain unused. |
-| Deterministic bounded construction | Fixed searches give repeatable candidates with bounded iterations. | Orientation and topology can cause undershoot; no optimality guarantee. |
-| Immutable PostgreSQL JSONB snapshots | Reopen and compare complete historical calculations without recomputation. | Duplicate data and limited normalized analytics; historical schema changes need a migration policy. |
-| SVG 2D plus interactive Three.js 3D | A plan exposes boundaries and dimensions; 3D explains floor stacking and height. | Two display pipelines need correspondence tests, complexity limits and WebGL fallbacks. |
-| TanStack Query plus local React state | Keep remote snapshots in one cache and interaction state with its owning component. | Navigation and session boundaries need explicit coordination; drafts do not survive reload. |
-
-`app.geometry` owns validation, canonicalization, setbacks and footprint construction.
-`app.massing` owns floor limits, preferences, targets, feasibility and measured
-results. Application use cases map domain results into transport-independent
-snapshots; FastAPI owns Pydantic contracts and error translation. Repositories own
-SQL and transactions. CPU-bound generation runs in worker threads; database I/O
-uses the existing async pool. Preview computation itself performs no database work.
-
-| Domain concept | Contract |
+| Concept | Contract and responsibility |
 | --- | --- |
-| Site | Valid, positive-area Polygon, optionally with holes; finite XY coordinates. |
-| Hard constraints | Non-negative setback; positive floor spacing; height and/or floor cap; optional coverage and footprint caps. |
+| Site | Valid, positive-area GeoJSON-style Polygon with finite XY coordinates and optional holes. |
+| Hard constraints | Non-negative `setback_m`, positive `floor_to_floor_m`, at least one of `max_height_m` or `max_floors`, optional coverage/footprint caps. |
 | Preferences | Optional exact positive floor count and desired positive footprint area, subordinate to hard limits. |
-| Target | Optional non-negative minimum GFA, distinct from hard constraints. |
-| Result | Complete setback context, hard bounds, demonstrated generated capacity, actual geometry/metrics, assessments and diagnostics. |
-| Option | Immutable configuration/result snapshot with UUID, optional parent, versions and creation time. |
+| Target | Optional non-negative minimum `gfa_target_m2`; missing it does not automatically invalidate a building. |
+| Massing result | Site/buildable/selected geometry, hard bounds, generated capacity, actual geometry and metrics, feasibility and diagnostics. |
+| Option | UUID, optional parent/name, configuration, result, schema/algorithm metadata and creation timestamp. |
 
-The domain calls its area limit `max_footprint_area_m2`; HTTP calls it
-`max_footprint_m2`, with explicit mapping at the application boundary. Coverage is
-footprint area divided by original site area; holes subtract from every measured
-polygon area. Total buildable area includes all setback components, while selected
-buildable area describes only the component used for the building.
+The HTTP footprint cap is `max_footprint_m2`, mapped to `max_footprint_area_m2` in the domain.
 
-Actual `height_m = floor_count * floor_to_floor_m` and
-`gfa_m2 = footprint_area_m2 * floor_count`. One floor-plate Polygon plus count and
-spacing represents repeated floors compactly; the backend does not serialize meshes.
-A missing building has null actual geometry and metrics, never fabricated zero values.
+### Correctness invariants
 
-### End-to-end example
+- Every successful footprint is a valid, positive-area Polygon, exactly covered by the selected buildable component and
+  within every supplied area cap. Boundary contact is permitted by `covers`.
+- Area subtracts holes. Total buildable area includes all setback components; selected area measures the component
+  chosen for one building. Coverage divides actual footprint area by original site area.
+- `height_m = floor_count * floor_to_floor_m` and `gfa_m2 = footprint_area_m2 * floor_count`. One floor-plate Polygon represents repeated floors; the API does not
+  serialize meshes.
+- Hard upper bound, demonstrated generated capacity and actual selected result describe different quantities. An area
+  bound does not prove a footprint can be constructed at that exact area.
+- With no valid building, actual geometry, floor count, height and GFA are `null`. Available site metrics
+  and limits remain present.
 
-A 40 × 25 m site with a 3 m setback leaves a 34 × 19 m footprint: 646 m².
-At 3.5 m floor spacing, a 24 m height cap permits six floors; the explicit six-floor
-cap leaves that maximum unchanged. A minimum GFA target of 2,000 m² selects four
-floors: three provide 1,938 m², while four provide 2,584 m² at 14 m height.
-The target is met; the hard and generated GFA capacities remain 3,876 m².
+## Geometry algorithm and feasibility
 
-The user can inspect the same result in 2D/3D and save it as a root option. Changing
-constraints or preferences in a branch draft produces a new child on save; the
-parent's configuration and computed result remain unchanged.
+### Input validation and setbacks
 
-## Geometry and feasibility approach
+Shapely/GEOS supplies polygon validity, offsets, holes and concavity, avoiding a custom topology implementation.
+Clipper2 would introduce integer scaling and binding choices; using PostGIS would couple preview computation to database
+infrastructure. These remain alternatives if the operating requirements change.
 
-### Validation and setbacks
+Rings must be explicitly closed, contain at least three distinct vertices and form a positive-area valid Polygon.
+Self-intersections, degeneracy, numeric strings, booleans and direct MultiPolygon sites are rejected. Canonicalization
+normalizes orientation, ring order and exact duplicate neighbours without repair or rounding.
 
-Site input must contain explicitly closed rings with at least three distinct points,
-finite numeric XY positions, positive area and valid GEOS topology. Self-intersections,
-degenerate rings, booleans, numeric strings and direct MultiPolygon sites are rejected.
-Inputs are not snapped, repaired or silently closed. Canonicalization removes only
-exact consecutive duplicates, normalizes ring starts/order and orients exterior rings
-counter-clockwise and holes clockwise, without decimal rounding.
+Positive setbacks use `site.buffer(-setback_m, join_style="mitre", mitre_limit=5)`. Zero setback preserves the canonical site. Split results retain the complete
+Polygon/MultiPolygon for display, while construction selects its largest positive component with deterministic
+tie-breaking. Exact `site.covers(buildable)` and `selected.covers(footprint)` checks protect containment.
 
-Shapely is pinned to 2.2.0. GEOS is bundled with wheels; source builds may link a
-different version. Snapshot metadata records runtime engine versions because topology
-and near-collapse behavior can vary between versions.
+### Hard bounds and constructive search
 
-Positive setbacks use `site.buffer(-setback_m, join_style="mitre", mitre_limit=5)`.
-Zero setback preserves the canonical input directly. Empty results remain empty;
-split results preserve the complete Polygon/MultiPolygon and select its largest
-positive-area Polygon. Ties use bounding box then canonical coordinates. This is a
-single-building choice, with retained/discarded area and split diagnostics exposed.
-Every returned setback must satisfy strict `site.covers(buildable)`.
+Let `N` be the minimum of the supplied floor cap and height-derived floor count when both apply. Let
+`U` be the minimum of selected buildable area, original site area times the optional coverage cap, and
+the optional footprint cap. Then `U * N` is the theoretical GFA upper bound for this single-building,
+repeated-plate model.
 
-### Area caps and bounded footprint construction
+If the selected component fits under `U`, use it directly. Otherwise, bounded inward-buffer search
+retains a valid, connected candidate within the cap. Only a positive buffer result with material undershoot enables
+optional axis-aligned half-plane clipping in four directions. Clipping replaces the buffer result only for a material
+area gain. Every returned candidate must satisfy validity, exact containment and the hard cap. The search is
+deterministic and bounded, with no global optimality guarantee.
 
-Let `N` be the maximum permitted floor count and `U` the footprint hard upper bound:
+`generated_footprint_area_m2 * N` is the default footprint's demonstrated capacity. Preferences can select a different actual footprint
+or floor count. Failure to construct a positive footprint while buildable area and floor allowance remain positive
+returns `generation_failed`; it does not prove geometric impossibility.
 
-- `N` is the smaller supplied floor-count cap and height-derived count.
-- `U` is the minimum of selected buildable area, original site area times any
-  coverage cap, and any explicit maximum footprint area.
-- `U * N` is the theoretical GFA upper bound under this model.
+Floor preferences are exact choices. After empty-region and zero-floor checks, a preferred count above
+`N` returns `422 PREFERENCE_EXCEEDS_HARD_LIMIT`. Area preferences search toward `min(requested, U)` and expose requested,
+effective and actual values, including approximation or clamping. Failed preferred-area construction never silently
+substitutes the default footprint. Without a floor preference, a positive GFA target selects the smallest sufficient
+floor count on the measured actual footprint, bounded by `N`. If no permitted count meets the target, it uses `N`
+and reports the shortfall. An absent or zero target also uses `N`.
 
-When the selected Polygon fits `U`, return it directly, preserving holes and vertices.
-Otherwise search mitred inward buffers of the original selected component. A finite
-bracket is expanded at most eight times, followed by at most 48 binary-search steps.
-Retain the largest measured, valid, connected candidate at or below the cap.
+### Four distinct result states
 
-A positive buffer result with material area undershoot enables an optional clipping
-fallback. Four fixed directions retain lower/upper X or Y half-planes, bounded by
-the selected component's extent. Each uses at most 48 intersections; midpoint
-stagnation ends the search. Positive Polygon parts are selected deterministically;
-GeometryCollection boundary lines/points do not become building geometry.
-Clipping replaces buffering only for an area gain above the area comparison tolerance.
-A satisfactory buffer result needs no clipping; if no positive buffer candidate is
-found, the outcome remains `generation_failed`.
-
-GEOS intersections on slanted boundaries can be valid yet fail exact containment
-because of floating-point rounding. Such an optional clipping candidate is rejected
-and its search direction ends; reliable prior candidates and the valid buffer result
-remain available. Every returned footprint must still satisfy exact
-`selected.covers(footprint)` and measured area at or below the hard cap. Invalid
-constructed topology and unexpected GEOS errors remain internal errors, not ordinary
-input rejection. No broad exception handler or geometry repair masks those failures.
-
-The heuristic improves the supplied notched and dumbbell cases, but axis-aligned
-clipping is orientation-dependent and may undershoot on connected multi-lobe sites.
-Neither buffering nor clipping proves optimality or geometric impossibility.
-`generated_footprint_area_m2 * N` is demonstrated generated capacity, separate from
-`U * N`; actual preferences may produce a third, different result. Construction
-component counts and undershoot remain domain metadata, not new API metrics.
-
-### Floors, preferences and targets
-
-Height capacity uses the exact rational quotient of stored binary64 height and floor
-spacing, then floors it. No epsilon admits an over-height floor; floor-count integers
-never pass through float. For example, stored `36.0` and `3.6` permit nine floors:
-ten exact copies of the stored spacing exceed the stored height. This numerical
-policy is an implementation choice; exact decimal semantics would need a new contract.
-
-Supplied floor preferences must be positive integers and area preferences finite
-positive numbers. Structurally invalid values return `422 INVALID_PREFERENCE` before
-generation. For structurally valid preferences, empty buildable geometry or zero
-permitted floors returns `200 infeasible`, even when the preferred floor count
-exceeds capacity. Only after those hard-infeasibility checks does a floor preference
-above `N` return `422 PREFERENCE_EXCEEDS_HARD_LIMIT`.
-
-Preferred area searches for `min(requested, U)` using the same construction. Its
-assessment preserves requested, effective and actual area, signed difference and
-any approximation/clamping diagnostic. Failure to construct the preferred area
-does not silently substitute the default.
-
-Without an explicit floor preference, an absent/zero target uses `N`; a positive
-target selects the minimum permitted count meeting it on the measured actual
-footprint. An explicit floor preference remains unchanged when it misses a target.
-The same target predicate governs floor selection and final assessment.
-
-| Feasibility status | Meaning | Hard constraints satisfied |
+| Status | Meaning | Hard constraints satisfied? |
 | --- | --- | --- |
-| `feasible` | Positive valid building; target met or absent. | `true` |
-| `feasible_target_unmet` | Positive valid building; desired GFA missed. | `true` |
-| `infeasible` | Empty setback region or zero permitted floors. | `false` |
-| `generation_failed` | Construction found no valid positive footprint; impossibility unproven. | `null` |
+| `feasible` | A valid positive building exists; target met or absent. | `true` |
+| `feasible_target_unmet` | A valid building exists, but GFA is below target. | `true` |
+| `infeasible` | Setback leaves no positive buildable region, or limits permit zero floors. | `false` |
+| `generation_failed` | Search found no valid positive footprint; impossibility remains unproven. | `null` |
 
-Empty buildable geometry takes precedence over zero permitted floors. Both skip
-construction and retain useful context. Supplied targets without a building are
-`not_evaluated`; absent targets are `not_requested`.
+Missed targets are classified as `TARGET_EXCEEDS_UPPER_BOUND`, `TARGET_BEYOND_GENERATED_CAPACITY`, then
+`TARGET_UNMET_WITH_PREFERENCES`, in that order. Capacity-dependent diagnoses are withheld when generated capacity is
+unknown, so an unmet target within the hard bound can have a null diagnostic code. An absent target is `not_requested`;
+a target without a building is `not_evaluated`. All four domain states return
+preview HTTP 200 and can be saved as diagnostic snapshots. Invalid input returns HTTP 422.
 
-An unmet target is classified, in order, as `TARGET_EXCEEDS_UPPER_BOUND`,
-`TARGET_BEYOND_GENERATED_CAPACITY`, or `TARGET_UNMET_WITH_PREFERENCES`.
-The second case explicitly leaves room for another construction to succeed.
-Unknown generated capacity remains null; it is not treated as zero or hard infeasibility.
+Numerical comparisons never relax containment or area caps. Height-derived floors use the exact quotient of stored
+binary64 operands without a positive epsilon. Required metrics must be finite; unrepresentable results raise
+`NUMERICAL_RANGE_ERROR`. [Footprint construction](../backend/app/geometry/footprints.py), [floor limits](../backend/app/massing/floors.py) and their regression tests preserve these distinctions.
+Detailed budgets and tolerances appear in the appendix.
 
-### Numerical policy
+## Persistence and option history
 
-Area comparison tolerance is `max(1e-8, 1e-9 * max(site_area_m2, 1))` square metres.
-It governs material improvements and preference comparisons, not positive-area
-filtering, strict containment or permission to exceed area caps. GFA tolerance
-propagates area tolerance through floor capacity and is conservatively capped at
-`1e-9 * comparison_scale_m2`, so large counts cannot hide material shortfalls.
+Saving recomputes from submitted inputs, then inserts the canonical configuration, computed result, diagnostics and
+version metadata. Reopening and comparing retrieve stored results without rerunning geometry. Self-contained JSONB
+snapshots simplify historical reads at the cost of duplication and limited normalized analytics.
 
-Required metrics must remain finite reportable numbers. Exact stored-float-by-integer
-multiplication preserves large floor counts until conversion; unrepresentable metrics
-or positive coverage underflow produce `NUMERICAL_RANGE_ERROR`, not infeasibility.
-Only NumPy floating-point overflow/invalid arithmetic in the shared inward-buffer
-call becomes an invalid-site error. Unexpected GEOS exceptions still propagate.
-Near-collapse GEOS output may differ from ideal mathematical erosion; valid tiny
-components are retained without a minimum-area cutoff or custom repair.
+| `options` field group | Stored content |
+| --- | --- |
+| Identity | `id` (UUID), nullable `parent_id`, optional `name`, `created_at` |
+| Versioning | `schema_version`, `algorithm_version` including runtime Shapely/GEOS versions |
+| Configuration | `site_geometry`, `hard_constraints`, `preferences`, `targets` (JSONB) |
+| Outcome | `result` (JSONB), `feasibility_status` checked against the result |
+| Access paths | Indexes on `parent_id` and `(created_at, id)`; no dedicated feasibility-status index |
 
-## Persistence and decision-tree relationships
+The Docker entrypoint applies numbered SQL migrations before starting Uvicorn workers. Direct local startup requires
+`uv run app migrate`. A PostgreSQL advisory lock and transaction serialize migration history checks and pending changes.
+SHA-256 checksums detect edits to applied files. The schema and queries live in
+[the initial migration](../backend/app/sql/migrations/001_create_options.sql) and [option repository](../backend/app/persistence/options.py).
 
-### Stored versus derived
+A branch inherits its parent's site and replaces the complete constraints, preferences and targets configuration.
+Omitted preferences/targets become empty defaults. Every save creates a new UUID, leaving parents and siblings
+unchanged. A recursive SQL query loads a selected subtree, with children ordered by `(created_at, id)`. Comparison reads
+exactly two distinct snapshots in request order. Numeric differences are right minus left, or `null` if
+either is unavailable.
 
-Saving recomputes on the server and stores the canonical site, complete constraints,
-preferences, targets and complete result as JSONB. Results are derived during saving,
-then historical facts during reading: reopening or comparing never reruns generation.
-Self-contained snapshots favor simple reliable reads over normalized analytics.
-Schema version 1 and algorithm policy `massing-v3` plus Shapely/GEOS versions identify
-interpretation. Older `massing-v1`/`massing-v2` snapshots remain readable unchanged;
-new branches record the current algorithm.
+![Saved-option tree navigation and a comparison of two stored design alternatives.](assets/options-tree-comparison.png)
 
-The `options` table contains UUID identity, nullable parent foreign key/name,
-configuration/result JSONB, versions, indexed feasibility status and creation time.
-A check keeps the indexed status consistent with the result. Parent deletion is
-restricted; indexes support parent lookup and creation-time/UUID listing.
-The public API has no update or delete operation. Immutability is enforced through
-application writes, not database permissions against arbitrary direct SQL.
+*Figure 3. Composite of two real hosted views: a saved six-floor root and its three-floor child, then their stored
+comparison. The six-floor root is a separate saved configuration without a GFA target. Figures 1 and 2 show the
+four-floor GFA-target preview. The footprint remains 646 m²; height changes from 21 to 10.5 m and GFA from 3,876 to 1,938 m².*
 
-A branch inherits the saved parent's site and replaces its complete constraints,
-preferences and targets. Omitted preferences/targets use empty defaults rather than
-merging parent values. Each save inserts a new UUID; parents, siblings and ancestors
-remain unchanged. Parent lookup and insertion do not hold a transaction across CPU
-work; the immutable API and foreign key protect supported operations.
-
-```mermaid
-flowchart TD
-    Root["Root: six-floor capacity, target selects four"] --> A["Child A: three-floor cap"]
-    Root --> B["Child B: preferred five floors"]
-    A --> C["Nested child: revised GFA target"]
-```
-
-Each node is a separate stored snapshot; arrows are parent links, not updates.
-Creating the nested child leaves its ancestors and sibling branch unchanged.
-
-Tree retrieval uses one recursive SQL query for summary metadata and metrics, then
-assembles nested children ordered by ascending `(created_at, id)`. Any child may be
-the selected subtree root, retaining its stored parent ID. Ancestors, siblings and
-unrelated roots are excluded. Supported insert-only parent links cannot form cycles.
-Summary listing uses newest-first `(created_at, id)` with limit/offset pagination.
-
-Comparison reads exactly two distinct saved IDs in request order, including unrelated
-roots. Complete snapshots accompany explicit input, metric, feasibility, target and
-diagnostic pairs. Changed flags use exact stored equality; numeric differences are
-right minus left, or null if either value is missing. Site comparison is structural
-JSON equality, not geometric equivalence. Comparisons make no writes.
-
-Numbered SQL migrations run explicitly before server workers start. A transaction
-advisory lock serializes migration execution; SHA-256 checksums verify applied history.
-Pending files and ledger entries commit atomically. Applied migrations are immutable.
-The Compose database uses a named persistent volume; application restarts retain it.
+Schema version 1 and current `massing-v3` policy plus Shapely/GEOS versions record calculation provenance. They do
+not implement a general historical schema migration or version-dispatch layer. The public API has no update/delete
+route; immutability depends on supported application writes, not restrictions on arbitrary direct SQL.
 
 ## API contract
 
-All paths below are relative to `/api/v1`. `/docs` and `/openapi.json` provide the
-complete typed contracts and executable preview example.
+All routes below are relative to `/api/v1`. OpenAPI contains complete typed schemas and executable examples.
 
-| Method and path | Behavior |
+| Method | Route | Purpose |
+| --- | --- | --- |
+| GET | `/health` | Process health, not database readiness |
+| POST | `/massing/preview` | Validate and calculate a transient result |
+| POST | `/options` | Recompute and save a root (`201`, `Location`) |
+| POST | `/options/{id}/branches` | Inherit site; recompute and save a child (`201`) |
+| GET | `/options` | Newest-first summaries; limit default 50/max 200, offset default 0 |
+| GET | `/options/{id}` | Retrieve an immutable snapshot |
+| GET | `/options/tree?root_id={uuid}` | Retrieve a selected subtree |
+| POST | `/options/compare` | Compare two distinct ordered `option_ids` |
+
+### Example: target-driven preview
+
+Request — `POST /api/v1/massing/preview`:
+
+```json
+{
+  "site": {
+    "type": "Polygon",
+    "coordinates": [[[0, 0], [40, 0], [40, 25], [0, 25], [0, 0]]]
+  },
+  "hard_constraints": {
+    "setback_m": 3,
+    "floor_to_floor_m": 3.5,
+    "max_height_m": 24,
+    "max_floors": 6
+  },
+  "targets": { "gfa_target_m2": 2000 }
+}
+```
+
+Response — HTTP 200, **selected fields only**:
+
+```json
+{
+  "metrics": {
+    "site_area_m2": 1000,
+    "footprint_area_m2": 646,
+    "floor_count": 4,
+    "height_m": 14,
+    "gfa_m2": 2584,
+    "gfa_upper_bound_m2": 3876,
+    "generated_gfa_capacity_m2": 3876
+  },
+  "feasibility": {
+    "status": "feasible",
+    "hard_constraints_satisfied": true,
+    "target_assessment": {
+      "requested_m2": 2000,
+      "actual_m2": 2584,
+      "shortfall_m2": null,
+      "status": "met",
+      "diagnostic_code": null
+    }
+  }
+}
+```
+
+The full response includes normalized configuration, the original site, buildable region, selected component,
+generated and actual footprints, repeated floor plate, setback metadata, preferences and diagnostics.
+The [backend README](../backend/README.md) includes this preview example and setup.
+
+Validation errors use `{ "error": { "code": "...", "message": "...", "details": [{ "path": "...", "message": "..." }] } }`. Invalid domain inputs and numerical range return section-specific 422 codes;
+malformed requests use `INVALID_REQUEST`. Unknown options return `404 OPTION_NOT_FOUND`; absent branch parents use
+`PARENT_OPTION_NOT_FOUND`; invalid comparisons use `INVALID_COMPARISON`. Validation avoids echoing submitted payloads, but GEOS
+topology messages can contain coordinates. Unhandled internal failures remain outside this structured error contract.
+
+## Frontend state and rendering
+
+| Concern | Owner | Reason |
+| --- | --- | --- |
+| Form values, validation and dirty state | React Hook Form + Zod | Drafts remain separate from saved snapshots |
+| Preview/options/cache lifecycle | TanStack Query | Central server-state cache and request identity |
+| Active section, tree selection, display controls | Local React state | No global store needed for this UI |
+| Geometry, area, height, floors, GFA, feasibility | Backend | 2D/3D represent one authoritative result |
+
+Draft edits retain the last submitted view with a stale-draft notice. Pending or failed replacement previews clear stale
+successful views. Saves recompute and do not automatically retry because replay can create duplicate options. Opening a
+saved snapshot protects unsaved work with an explicit replacement step. Branching starts a new draft with an inherited
+read-only site.
+
+SVG draws the site, all setback components, selected area, actual footprint and holes under one aspect-preserving frame.
+Three.js uses the same backend floor plate, count, spacing and height with an instanced extrusion, orbit controls and
+reset-to-fit. Display coordinate conversion does not change authoritative geometry. Complexity, precision and
+consistency guards reject unsupported display without changing domain feasibility. WebGL2 failure offers SVG where that
+geometry meets SVG limits; metrics and history remain available. See [renderer correspondence tests](../frontend/src/features/visualization/MassingVisualization.renderer.test.tsx) and [frontend smoke steps](../frontend/README.md#quick-manual-smoke-test).
+
+## Edge-case behavior
+
+| Case | Expected behavior | Result / evidence |
+| --- | --- | --- |
+| Concave or L-shaped site | Preserve concavity and exact containment. | Geometry regressions |
+| Split setback | Preserve full MultiPolygon; select largest component and report discarded area. | `BUILDABLE_REGION_SPLIT` |
+| Setback collapses region | Keep context, with no invented building. | `infeasible`, `EMPTY_BUILDABLE_REGION` |
+| Height permits zero floors | Never construct an over-height floor. | `infeasible`, `ZERO_PERMITTED_FLOORS` |
+| Self-intersecting/degenerate site | Reject invalid topology without repair. | `422 INVALID_SITE_GEOMETRY` |
+| Preferred floors exceed viable hard cap | Reject the discrete preference after hard-infeasibility checks. | `422 PREFERENCE_EXCEEDS_HARD_LIMIT` |
+| Requested area exceeds cap | Disclose clamping and actual area. | `PREFERENCE_CLAMPED_TO_HARD_CAP` |
+| Target exceeds upper bound | Retain a valid building when available, with unmet target. | `feasible_target_unmet`, `TARGET_EXCEEDS_UPPER_BOUND` |
+| Target exceeds generated capacity but not hard bound | Leave room for a better construction. | `TARGET_BEYOND_GENERATED_CAPACITY` |
+| Positive region but no footprint constructed | Keep unknown generated capacity `null`. | `generation_failed`, `FOOTPRINT_NOT_GENERATED` |
+| Display exceeds budget / WebGL2 unavailable | Show a bounded fallback or accessible explanation; retain backend result. | Frontend renderer tests |
+
+## Verification
+
+[CI run 41404253802](https://github.com/Aleks2580/building-geometry-case-study/actions/runs/41404253802) on [commit `0dac0fc`](https://github.com/Aleks2580/building-geometry-case-study/commit/0dac0fc1ea0b5c2e25485e502d221ea0e1238b0c) (2 November 2026) completed four successful jobs:
+
+| Job | Executed checks and result |
 | --- | --- |
-| `GET /health` | Process health response; not a database-readiness probe. |
-| `POST /massing/preview` | Validate and compute configuration; `200` for all domain statuses. |
-| `POST /options` | Recompute and insert immutable root; `201` with `Location`. |
-| `POST /options/{id}/branches` | Inherit parent site, recompute replacement configuration; `201`. |
-| `GET /options` | Summary array; default limit 50, maximum 200, offset default 0. |
-| `GET /options/{id}` | Complete saved snapshot without recomputation. |
-| `GET /options/tree?root_id={uuid}` | Selected summary and recursive `children`; leaves use `[]`. |
-| `POST /options/compare` | Exactly two distinct ordered `option_ids`; snapshots and comparison. |
+| `lint` | `uv run ruff format --check .`, `uv run ruff check .`, `uv run pyright` succeeded |
+| `test` | `uv run pytest --cov=app --cov-report=term-missing` with PostgreSQL: 692 passed; reported total coverage 91% |
+| `frontend` | `npm ci`, both typechecks, lint, tests and both builds succeeded; 1,009 tests across 49 files |
+| `docker-smoke` | Compose startup, HTTP health, rectangular/concave preview, save, branch, retrieval, tree and comparison succeeded |
 
-Preview/root bodies require `site` and `hard_constraints`; branch bodies require
-`hard_constraints` and forbid site/parent/result fields. Preferences and targets
-default to empty objects; null objects and unknown fields are invalid. Optional scalar
-fields may be null. Save names are optional, trimmed, 1–200 characters when supplied,
-and cannot contain NUL. Repeated saves intentionally create separate options.
+These results describe the linked revision. The documentation changes were also checked locally on 3 November 2026:
 
-Responses distinguish original site, complete buildable region, selected component,
-generated default footprint, actual footprint and repeated floor plate. Metrics keep
-hard upper bounds, generated capacity and actual results separate. Setback summaries,
-preference assessments, feasibility and structured diagnostics accompany geometry.
-All four domain statuses can be saved, including null-building diagnostic snapshots.
+| Local check | Result |
+| --- | --- |
+| Backend: `env -u TEST_DATABASE_URL PYTHONDONTWRITEBYTECODE=1 .venv/bin/pytest -p no:cacheprovider` | 597 passed, 95 database tests skipped; no database created or migrated |
+| Backend: `.venv/bin/ruff check .`, `.venv/bin/ruff format --check .`, `.venv/bin/pyright` | Passed; 65 files formatted, zero type errors |
+| Frontend: `npm run typecheck`, `npm run typecheck:renderer-test`, `npm run lint`, `npm run test` | Passed; 1,009 tests across 49 files |
+| Frontend: `npm run build`, `npm run build:renderer-test` | Passed; Vite reported large-chunk warnings |
 
-Handled validation and option-not-found errors use
-`{error: {code, message, details: [{path, message}]}}` without submitted values or
-exception contexts. Invalid geometry, constraints, preferences, targets,
-excessive floor preferences and numerical range use section-specific `422` codes;
-malformed requests use `INVALID_REQUEST`. Missing saved IDs use `404 OPTION_NOT_FOUND`;
-missing branch parents use `PARENT_OPTION_NOT_FOUND`. Comparison validation uses
-`INVALID_COMPARISON`. Internal geometry failures are not mislabeled as validation.
-Compose and the sample environment disable FastAPI debug. Unhandled HTTP 500
-responses hide tracebacks but remain outside this structured JSON error contract.
+Commands ran from their respective app directories using existing dependencies. Local coverage was not collected.
+The standalone harness build does not establish browser execution of its full resource/context-loss checks.
 
-## 2D/3D frontend architecture
+In a clean unauthenticated browser, the hosted preview API and SVG/WebGL2 views matched the JSON example.
+Orbit and reset-to-fit worked with the four-floor result. The screenshots capture actual application views.
+Saved root/child navigation, comparison and reopening after browser reload were exercised separately. The original
+root's complete API snapshot was identical before and after branching.
 
-TanStack Query owns remote previews and immutable snapshots; React Hook Form + Zod
-owns configuration drafts. Local React state owns navigation, selections and display
-controls. No Zustand store or duplicate result model is needed. Preview is explicit;
-draft edits update only the separate site outline. Pending/failed preview attempts
-remove stale successful results. Saving recomputes rather than trusting a preview.
+CI's Compose smoke covers persisted HTTP workflows. It does not prove real GPU rendering or survival across an
+explicit database restart. Local Compose startup, database integration tests and a database restart were not run.
+[Frontend smoke steps](../frontend/README.md#quick-manual-smoke-test) describe broader manual checks.
 
-The Workspace, Saved Options and Compare sections preserve their interaction state
-while hidden. Opening a saved option retrieves its exact UUID before replacing work;
-unsaved/invalid drafts, previews, name drafts and pending saves require explicit
-replacement. A branch starts a distinct draft with inherited read-only site and needs
-a fresh preview. Query keys and session identity isolate cancellation and late responses.
-Save retries are disabled because automatic replay could create duplicate snapshots;
-a lost success response remains uncertain until saved history is inspected.
+## Assumptions, trade-offs and limitations
 
-The SVG plan renders original site, complete setback, selected component and actual
-footprint from one backend result. Even-odd paths preserve holes and all MultiPolygon
-components. Shared original-site framing keeps layers comparable. Optional dimensions
-measure original coordinates; they never change geometry, metrics or requests.
-
-SVG display supports at most 10,000 coordinate positions across the rendered layers,
-including holes, components, repeated ring closures and coincident layers. Budget
-checks precede path construction and annotation work.
-A separate 250-edge measurement budget bounds dimension layout while preserving the
-plan. These are conservative renderer limits, not backend input or feasibility limits;
-no geometry is truncated, simplified or omitted to fit. Unsupported display shows an
-accessible explanation while metrics, diagnostics, save, branch and compare remain usable.
-Draft outlines and drawing display paths apply the same guard before expensive SVG
-work. Drawing counts its point markers and reserves the two-position cursor segment,
-so about 5,000 exterior points exhaust its budget before a plain outline would.
-
-The lazy-loaded 3D viewer uses the same actual footprint, floor plate, count, spacing
-and height. Backend XY maps to Three.js XZ with Y up; centering and uniform scaling
-preserve proportions while improving Float32 precision. Three.js triangulates holes;
-one instanced extrusion represents repeated floors. Orbit, zoom and reset-to-fit are
-display controls only. Missing buildings retain available site/setback context.
-
-3D limits are 512 floors, 20,000 ring vertices across supplied layers (excluding
-closing duplicates), and 500,000 extruded triangles across floor instances. Precision,
-structural and height-consistency guards reject unsupported display without altering
-results. WebGL2 failure/context loss and renderer errors show an explicit fallback;
-SVG fallback still obeys its own budget. View/option changes dispose previous renderer
-resources; comparison mounts one selected saved option at a time and makes no
-preview/save request when switching representations.
-
-## Testing and numerical correctness
-
-Backend tests cover fixture and analytical cases, holes, concavity, split/empty
-setbacks, invalid topology, strict containment, strict caps, deterministic selection,
-serialization, exact floor limits and target/preference outcomes. Slanted concave
-public-preview regressions and a small seeded collection guard clipping numerics.
-Independent contained witnesses protect notched/dumbbell improvements; a multi-lobe
-counterexample preserves the distinction between heuristic capacity and hard bounds.
-Unexpected-error and genuinely out-of-bounds cases protect the invariant boundary.
-
-PostgreSQL integration tests create isolated disposable databases. They cover locked
-migrations, immutable saves/branches, ordering, null statuses, unchanged parents,
-subtree retrieval and read-only comparison. They skip without `TEST_DATABASE_URL`;
-a configured unreachable server fails. Browser reload never substitutes for DB evidence.
-
-Frontend verification covers TypeScript checks, lint, complete Vitest suite, production
-and renderer-harness builds, form/state races, saved workflows, geometry layers,
-holes, budget boundaries, dimension guards and safe fallback. Real-browser checks
-establish 2D/3D interaction and WebGL cleanup; jsdom cannot establish GPU behavior.
-The Compose CI smoke job checks startup, migrations, HTTP readiness, preview,
-persistence, branching, retrieval and comparison. Exact commands/results belong in the
-review report rather than a permanent assertion that every future build passes.
-
-## Assumptions, trade-offs and known limitations
-
-- Largest-component selection and fixed bounded searches favor predictable behavior
-  over optimal site utilization. Heuristic undershoot is not proof of infeasibility.
-- Binary64 geometry has scale/near-collapse limitations; valid backend geometry may
-  exceed SVG/WebGL budgets or display precision. Backend results remain authoritative.
-- Repeated plates omit setbacks varying by storey, podiums, circulation and code rules.
-- JSONB snapshots duplicate data and have no historical schema migration tooling.
-- Two Uvicorn workers and per-worker pools are suitable for this demo; generation is
-  bounded per search but concurrency/admission limits are not production controls.
-- Whole-subtree reads, recursive serialization and offset pagination target small
-  histories. Extreme decision-tree depth/size and concurrent inserts need bounded
-  traversal, pagination and measured limits before wider use.
-- Saves have no idempotency key. Authentication, authorization, shared editing and
-  production secrets/deployment hardening are outside this local prototype.
-- Docker retains Python 3.12, Node 20 and PostgreSQL 16 base lines. Lockfiles plus
-  pinned uv and `npm ci` improve dependency reproduction; base tags are not digest-pinned.
+- One building with repeated plates supports early massing, omitting storey-specific setbacks, podiums, circulation,
+  usable-area deductions and code compliance.
+- Deterministic construction respects hard constraints for returned geometry but can leave usable area unfilled on
+  complex multi-lobed sites.
+- Floating-point geometry and GEOS versions can affect near-collapse behavior. Exact invariants and regressions reduce
+  risk without eliminating numerical limits.
+- A valid backend result can exceed display budgets or precision. Display failure does not change feasibility.
+- JSONB snapshots duplicate data and have no automated historical schema migration. Whole-subtree reads and offset
+  pagination target small histories.
+- The demo has no save idempotency key, authentication, multi-user authorization, production concurrency limits or
+  uptime guarantees. Public reachability does not establish production readiness.
 
 ## Prioritized roadmap
 
-These are proposed product extensions, not delivered features or additional employer
-requirements. The order improves local exploration first; shared deployment requires
-the safeguards in priority 6 regardless of feature progress.
+1. **Option management and version-aware diffs.** Add renaming, archiving and explicit revisions while preserving
+   historical calculations. Compare successive versions field by field with version interpretation, extending the
+   existing two-snapshot comparison. This first improves the daily exploration workflow.
+2. **Geometry quality and GFA/footprint optimization.** Benchmark concave and multi-lobed sites against independently
+   attainable footprints, then evaluate stronger construction and optimization strategies with explicit objectives.
+   Improve utilization before multiplying building-model complexity.
+3. **Performance from measurements.** Profile large polygons, deep trees and rendering. Add bounded traversal,
+   pagination, resource limits or background processing where measured request times and concurrency justify them.
+4. **Richer planning models.** Define site-specific zoning, varying floor plates and multiple buildings once the
+   one-building contracts are stable, including explicit allocation rules for disconnected regions.
+5. **Collaboration and deployment hardening.** Add authentication, authorization, tenant isolation, idempotent writes,
+   auditing, rate limits and recovery procedures before shared editing. These safeguards gate multi-user deployment
+   regardless of feature order.
 
-1. **Option management:** add renaming, archiving and explicit option/subtree deletion.
-   Define editable presentation metadata separately from calculation history; make
-   deletion scope visible, confirm destructive actions and preserve referential integrity.
-2. **Versioned editing:** reopen a saved configuration for revision and save a new
-   version or branch with explicit lineage. Extend the existing branch workflow;
-   never overwrite historical geometry, configuration or computed results.
-3. **Geometry optimization:** benchmark challenging concave and multi-lobed sites
-   against independently known attainable footprints, then evaluate better construction
-   strategies. Keep demonstrated capacity distinct from theoretical hard limits.
-4. **Performance and scalability:** profile large polygons and histories, then add
-   bounded tree navigation, pagination and resource limits. Introduce background
-   processing only when measured request times or concurrency justify it.
-5. **Richer massing models:** define contracts for site-specific zoning, multiple
-   building volumes and more realistic constraints before extending floor stacks
-   or allocating disconnected components.
-6. **Collaboration and production readiness:** add authentication, authorization,
-   auditability, idempotent saves and operational safeguards before shared deployment.
-   Establish tenant boundaries, deployment security and recovery procedures first.
+SVG 2D and interactive Three.js 3D are already implemented. Visualization follow-up should address observed usability,
+accessibility and performance issues.
+
+## Implementation appendix
+
+| Area | Current policy |
+| --- | --- |
+| Geometry engine | Shapely 2.2.0; runtime GEOS version recorded in option metadata |
+| Buffer search | At most 8 bracket expansions and 48 binary-search steps |
+| Optional clipping | Four axis-aligned directions, up to 48 intersections each; material gain required over a positive buffer result |
+| Area comparison | `max(1e-8, 1e-9 * max(site_area_m2, 1))` m²; no relaxation of caps or containment |
+| Height-derived floors | Floor the exact stored-binary64 quotient; no epsilon admits another floor |
+| SVG renderer | 10,000 rendered positions across layers; 250 combined site/footprint edges for dimensions |
+| 3D renderer | 512 floors, 20,000 non-closing ring vertices across supplied layers, 500,000 extrusion triangles across floor instances |
+| Snapshots | Schema 1; `massing-v3` plus Shapely/GEOS versions; no general historical version dispatcher |
+| Docker/CI baselines | Python 3.12, Node 20, PostgreSQL 16; Docker image tags are not digest-pinned |
+
+Area tolerance controls material improvements and comparisons, never positive-area filtering or exact containment. GFA
+tolerance propagates area tolerance through floor capacity and is conservatively capped relative to comparison scale.
+Floor limits use stored binary64 semantics: `36.0 / 3.6` permits nine exact stored-value floors. Finite reportable
+metrics are required, and unknown generated capacity remains `null`.
